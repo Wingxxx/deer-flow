@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from deerflow.config.app_config import get_app_config
 from deerflow.config.paths import get_paths
+from deerflow.runtime.user_context import get_effective_user_id
 from deerflow.sandbox.sandbox_provider import SandboxProvider, get_sandbox_provider
 from deerflow.uploads.manager import (
     PathTraversalError,
@@ -95,7 +96,7 @@ async def upload_files(
         uploads_dir = ensure_uploads_dir(thread_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    sandbox_uploads = get_paths().sandbox_uploads_dir(thread_id)
+    sandbox_uploads = get_paths().sandbox_uploads_dir(thread_id, user_id=get_effective_user_id())
     uploaded_files = []
 
     sandbox_provider = get_sandbox_provider()
@@ -176,7 +177,7 @@ async def list_uploaded_files(thread_id: str) -> dict:
     enrich_file_listing(result, thread_id)
 
     # Gateway additionally includes the sandbox-relative path.
-    sandbox_uploads = get_paths().sandbox_uploads_dir(thread_id)
+    sandbox_uploads = get_paths().sandbox_uploads_dir(thread_id, user_id=get_effective_user_id())
     for f in result["files"]:
         f["path"] = str(sandbox_uploads / f["filename"])
 
