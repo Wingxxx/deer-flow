@@ -167,36 +167,42 @@ services:
     restart: unless-stopped
 
   # ── Sandbox Provisioner (optional, Kubernetes mode) ────────────────────────
-  provisioner:
-    build:
-      context: ./provisioner
-      dockerfile: Dockerfile
-      args:
-        APT_MIRROR: ${APT_MIRROR:-}
-        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
-    container_name: deer-flow-provisioner
-    volumes:
-      - ~/.kube/config:/root/.kube/config:ro
-    environment:
-      - K8S_NAMESPACE=deer-flow
-      - SANDBOX_IMAGE=enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
-      - SKILLS_HOST_PATH=${DEER_FLOW_REPO_ROOT}/skills
-      - THREADS_HOST_PATH=${DEER_FLOW_HOME}/threads
-      - KUBECONFIG_PATH=/root/.kube/config
-      - NODE_HOST=host.docker.internal
-      - K8S_API_SERVER=https://host.docker.internal:26443
-    env_file:
-      - ../.env
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - deer-flow
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
+  # DISABLED (2026-04-17): Docker Desktop 9p bug causes ~/.kube/config to be recognized
+  # as a directory → RuntimeError → crash loop with restart: unless-stopped.
+  # Impact: Provisioner only activates when config.yaml has "provisioner_url: http://provisioner:8002".
+  #         Default config uses LocalContainerBackend, so disabling provisioner has zero impact.
+  # Future:  To re-enable K8s sandbox mode, uncomment this block, add kubeconfig mount,
+  #         and configure "provisioner_url" in config.yaml sandbox section.
+  # provisioner:
+  #   build:
+  #     context: ./provisioner
+  #     dockerfile: Dockerfile
+  #     args:
+  #       APT_MIRROR: ${APT_MIRROR:-}
+  #       PIP_INDEX_URL: ${PIP_INDEX_URL:-}
+  #   container_name: deer-flow-provisioner
+  #   volumes:
+  #     - ~/.kube/config:/root/.kube/config:ro
+  #   environment:
+  #     - K8S_NAMESPACE=deer-flow
+  #     - SANDBOX_IMAGE=enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
+  #     - SKILLS_HOST_PATH=${DEER_FLOW_REPO_ROOT}/skills
+  #     - THREADS_HOST_PATH=${DEER_FLOW_HOME}/threads
+  #     - KUBECONFIG_PATH=/root/.kube/config
+  #     - NODE_HOST=host.docker.internal
+  #     - K8S_API_SERVER=https://host.docker.internal:26443
+  #   env_file:
+  #     - ../.env
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   networks:
+  #     - deer-flow
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 6
 networks:
   deer-flow:
     driver: bridge
