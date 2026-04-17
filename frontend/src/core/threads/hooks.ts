@@ -323,6 +323,35 @@ export function useThreadStream({
     }
   }, [thread.messages.length, optimisticMessages.length]);
 
+  // Aggressive cleanup of optimisticMessages to prevent memory buildup
+  const optimisticCleanupRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (optimisticCleanupRef.current) {
+      clearInterval(optimisticCleanupRef.current);
+    }
+
+    optimisticCleanupRef.current = setInterval(() => {
+      if (optimisticMessages.length > 10) {
+        setOptimisticMessages((prev) => {
+          if (prev.length > 10) {
+            console.warn(
+              `[deer-flow] Cleared ${prev.length - 1} stale optimistic messages`,
+            );
+            return prev.slice(-1);
+          }
+          return prev;
+        });
+      }
+    }, 30000);
+
+    return () => {
+      if (optimisticCleanupRef.current) {
+        clearInterval(optimisticCleanupRef.current);
+      }
+    };
+  }, [optimisticMessages.length]);
+
   const sendMessage = useCallback(
     async (
       threadId: string,

@@ -21,6 +21,7 @@ const config = {
     defaultLocale: "en",
   },
   devIndicators: false,
+  productionBrowserSourceMaps: false,
   async rewrites() {
     const rewrites = [];
     const langgraphURL = getInternalServiceURL(

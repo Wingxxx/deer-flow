@@ -63,6 +63,8 @@ services:
     networks:
       - deer-flow
     restart: unless-stopped
+    mem_limit: 512m
+    memswap_limit: 512m
 
   # ── Gateway API ────────────────────────────────────────────────────────────
   gateway:

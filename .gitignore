@@ -11,6 +11,11 @@ docker/.cache/
 ehthumbs.db
 Thumbs.db
 
+# SQLite databases (runtime state, do not commit)
+*.db
+*.db-shm
+*.db-wal
+
 # Python cache
 __pycache__/
 *.pyc

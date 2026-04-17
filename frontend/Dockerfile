@@ -47,4 +47,5 @@ RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"
 WORKDIR /app
 COPY --from=builder /app/frontend ./frontend
 EXPOSE 3000
+ENV NODE_OPTIONS="--max-old-space-size=384"
 CMD ["sh", "-c", "cd /app/frontend && pnpm start"]
