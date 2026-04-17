@@ -7,7 +7,7 @@
 Docker Desktop Windows 版存在宿主机与容器之间的网络隔离问题：
 - 容器内无法直接通过 `localhost` 或 `127.0.0.1` 访问宿主机服务
 - `host.docker.internal` 是 Docker Desktop 内置 DNS，指向宿主机 IP
-- 但错误配置 `extra_hosts` 会覆盖这个内置解析，导致 `host.docker.internal` 失效
+- Linux 环境下可能需要 `extra_hosts` 显式映射
 
 ---
 
@@ -15,14 +15,12 @@ Docker Desktop Windows 版存在宿主机与容器之间的网络隔离问题：
 
 ```
 宿主机（Windows）
-  ├── IP: 192.168.1.139（局域网）
   ├── RagFlow API Server :9380
   ├── RagFlow MCP Server  :9382
   │
   ▼ host.docker.internal（Docker Desktop 内置 DNS）
 Docker bridge 网络（deer-flow-dev_deer-flow-dev）
   ├── 网段: 192.168.200.0/24
-  ├── 网关: 192.168.200.1
   ├── deer-flow-nginx     :2026（入口）
   ├── deer-flow-frontend  :3000
   ├── deer-flow-gateway   :8001
@@ -33,28 +31,26 @@ Docker bridge 网络（deer-flow-dev_deer-flow-dev）
 
 ## 三、关键修改
 
-### 3.1 删除 extra_hosts 配置
+### 3.1 extra_hosts 配置（保留）
 
 **文件：** `deer-flow/docker/docker-compose-dev.yaml`
 
-**问题：** 原配置中 `extra_hosts: host.docker.internal:host-gateway` 覆盖了 Docker Desktop 内置 DNS，导致 `host.docker.internal` 无法解析到宿主机 IP。
+**说明：** `extra_hosts: host.docker.internal:host-gateway` 已在 gateway 和 langgraph 服务中配置。
+在 Windows Docker Desktop 环境下，`host.docker.internal` 由 Docker Desktop 内置提供，理论上不需要额外配置。
+但如果 `host.docker.internal` 解析失败（Connection refused），可尝试删除这两行。
 
-**修复：** 删除 gateway 服务和 langgraph 服务中的 `extra_hosts` 配置行，保持默认的 Docker 内置解析。
-
-**改动位置：**
 ```yaml
-# 修复前（gateway 服务）
+# gateway 服务 / langgraph 服务
 extra_hosts:
+  # For Linux: map host.docker.internal to host gateway
   - "host.docker.internal:host-gateway"
-
-# 修复后（删除这两行）
 ```
 
 ### 3.2 Docker 项目名隔离
 
 **文件：** `deer-flow/docker/docker-compose-dev.yaml`
 
-**问题：** 默认项目名 `deer-flow` 与 RagFlow 的 `docker_ragflow` 项目冲突，导致网络池重叠、容器互相影响。
+**问题：** 默认项目名 `deer-flow` 与 RagFlow 的 `docker_ragflow` 项目冲突。
 
 **修复：** 统一使用 `-p deer-flow-dev` 启动参数，与 RagFlow 完全隔离。
 
@@ -76,8 +72,6 @@ docker compose -f docker/docker-compose-dev.yaml -p deer-flow-dev up -d
 docker compose -f docker/docker-compose-dev.yaml -p deer-flow-dev restart nginx
 ```
 
-**预防：** upstream 服务重启后，记得重启 nginx。
-
 ### 3.4 9p 文件系统缓存问题
 
 **问题：** Docker Desktop 的 9p 文件系统挂载存在缓存 bug，宿主机上修改文件后，容器内可能仍看到旧状态。严重时 `config.yaml` 被识别为目录（`IsADirectoryError`）。
@@ -86,19 +80,25 @@ docker compose -f docker/docker-compose-dev.yaml -p deer-flow-dev restart nginx
 
 **修复步骤：**
 1. 从 `docker-compose-dev.yaml` 中移除 `../config.yaml:/app/config.yaml` 挂载
-2. 重启 langgraph 容器（此时容器内无 config.yaml，使用内置默认值）
-3. 恢复挂载（可能需要等 9p 缓存过期）
+2. 重启 langgraph 容器
+3. 恢复挂载
 4. 再次重启 langgraph
 
-### 3.5 provisioner 服务移除
+### 3.5 provisioner 服务（已禁用）
 
 **文件：** `deer-flow/docker/docker-compose-dev.yaml`
 
-**问题：** provisioner 服务需要 Kubernetes kubeconfig，9p bug 导致 `/root/.kube/config` 被识别为目录，触发 `RuntimeError: Kubeconfig path is a directory` 崩溃循环。
+**原因：** Docker Desktop 9p bug 导致 `~/.kube/config` 被识别为目录，触发 `RuntimeError: Kubeconfig path is a directory` 崩溃循环。
 
-**影响：** provisioner 仅用于沙箱 Pod 管理，移除后不影响 DeerFlow Agent 核心功能（对话、检索、工具调用）。
+**当前状态：** provisioner 服务已注释禁用（`# provisioner:`）。
 
-**修复：** 从 `docker-compose-dev.yaml` 中永久删除 provisioner 服务定义。
+**影响：** provisioner 仅在 `config.yaml` 配置 `provisioner_url: http://provisioner:8002` 时激活。
+默认配置使用 `LocalContainerBackend`，禁用后对 DeerFlow Agent 核心功能无影响。
+
+**重新启用：**
+1. 取消 provisioner 服务注释
+2. 在 nginx.conf 中添加 provisioner 路由
+3. 在 `config.yaml` sandbox 部分添加 `provisioner_url: http://provisioner:8002`
 
 ---
 
@@ -106,7 +106,7 @@ docker compose -f docker/docker-compose-dev.yaml -p deer-flow-dev restart nginx
 
 | 文件 | 路径 | 说明 |
 |------|------|------|
-| docker-compose-dev.yaml | deer-flow/docker/ | 项目名改为 deer-flow-dev、移除 provisioner、修复 extra_hosts |
+| docker-compose-dev.yaml | deer-flow/docker/ | 项目名 deer-flow-dev、provisioner 已禁用 |
 | .env | deer-flow/ | UV_INDEX_URL、APT_MIRROR、DEEPSEEK_API_KEY、RAGFLOW_MCP_API_KEY |
 
 ---

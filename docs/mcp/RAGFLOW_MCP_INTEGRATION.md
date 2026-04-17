@@ -2,6 +2,13 @@
 
 > **WING** 2026-04-17
 
+> **⚠️ 当前状态：** `enabled: false`（已停用，2026-04-17）
+>
+> 重新启用：将 `extensions_config.json` 中 `ragflow.enabled` 改为 `true`，然后：
+> ```bash
+> docker compose -f docker/docker-compose-dev.yaml -p deer-flow-dev restart langgraph gateway
+> ```
+
 ## 一、对接架构
 
 ```
