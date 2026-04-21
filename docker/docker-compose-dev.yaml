@@ -126,6 +126,8 @@ services:
       - ../frontend/.env
     networks:
       - deer-flow-dev
+    mem_limit: 512m
+    memswap_limit: 512m
     restart: unless-stopped
 
   # Backend - Gateway API
@@ -150,6 +152,7 @@ services:
       - ../extensions_config.json:/app/extensions_config.json
       - ../skills:/app/skills
       - ../logs:/app/logs
+      - C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp:ro
       # Use a Docker-managed uv cache volume instead of a host bind mount.
       # On macOS/Docker Desktop, uv may fail to create symlinks inside shared
       # host directories, which causes startup-time `uv sync` to crash.
@@ -209,6 +212,7 @@ services:
       - ../extensions_config.json:/app/extensions_config.json
       - ../skills:/app/skills
       - ../logs:/app/logs
+      - C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp:ro
       # Use a Docker-managed uv cache volume instead of a host bind mount.
       # On macOS/Docker Desktop, uv may fail to create symlinks inside shared
       # host directories, which causes startup-time `uv sync` to crash.

@@ -147,6 +147,75 @@ init() {
     echo -e "${YELLOW}Next step: make docker-start${NC}"
 }
 
+# Auto-detect host IP and update ADS MCP configuration
+# This ensures ADS MCP can connect to services on the host machine from inside Docker
+detect_and_update_ads_host_ip() {
+    local config_file="$PROJECT_ROOT/extensions_config.json"
+    local ip=""
+
+    if [ ! -f "$config_file" ]; then
+        echo -e "${YELLOW}extensions_config.json not found, skipping ADS IP detection${NC}"
+        return
+    fi
+
+    # Check if ADS MCP is configured
+    if ! grep -q '"ads"' "$config_file" 2>/dev/null; then
+        echo -e "${BLUE}ADS MCP not configured, skipping IP detection${NC}"
+        return
+    fi
+
+    # Try to detect host IP (works on Linux, macOS, and Windows Docker)
+    # Method 1: Use ip route show default (Linux/macOS)
+    if [ -z "$ip" ] && command -v ip >/dev/null 2>&1; then
+        ip=$(ip route show default 2>/dev/null | awk '/default/ {print $3}' | head -1)
+    fi
+
+    # Method 2: Try to get IP from docker0 interface (Linux)
+    if [ -z "$ip" ] && command -v ip >/dev/null 2>&1; then
+        ip=$(ip -4 addr show docker0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
+    fi
+
+    # Method 3: Use hostname -I (common on Linux)
+    if [ -z "$ip" ] && command -v hostname >/dev/null 2>&1; then
+        ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    fi
+
+    # Method 4: Use ipconfig on Windows (Git Bash or MSYS)
+    if [ -z "$ip" ] && command -v ipconfig >/dev/null 2>&1; then
+        ip=$(ipconfig 2>/dev/null | grep -A1 "Default Gateway" | grep -oP '\d+\.\d+\.\d+\.\d+' | head -1)
+    fi
+
+    # Method 5: Use PowerShell to get default gateway (Windows native)
+    if [ -z "$ip" ] && command -v powershell >/dev/null 2>&1; then
+        ip=$(powershell -Command "(Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Select-Object -First 1).NextHop" 2>/dev/null)
+    fi
+
+    # Skip if no IP found
+    if [ -z "$ip" ]; then
+        echo -e "${YELLOW}Could not detect host IP, ADS MCP may not be able to reach host services${NC}"
+        return
+    fi
+
+    echo -e "${BLUE}Detected host IP: $ip${NC}"
+
+    # Update extensions_config.json with detected IP for ADS_API_BASE_URL
+    # Only update if it contains a placeholder or localhost
+    if grep -q "127.0.0.1\|localhost\|ADS_API_BASE_URL.*:.*\"" "$config_file" 2>/dev/null; then
+        # Use sed to update the ADS_API_BASE_URL value
+        # This handles both JSON formats with proper escaping
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS requires different sed syntax
+            sed -i '' "s|\"ADS_API_BASE_URL\": \"[^\"]*\"|\"ADS_API_BASE_URL\": \"http://${ip}:80\"|g" "$config_file"
+        else
+            # Linux sed
+            sed -i "s|\"ADS_API_BASE_URL\": \"[^\"]*\"|\"ADS_API_BASE_URL\": \"http://${ip}:80\"|g" "$config_file"
+        fi
+        echo -e "${GREEN}Updated ADS_API_BASE_URL to http://${ip}:80${NC}"
+    else
+        echo -e "${BLUE}ADS_API_BASE_URL already configured, skipping update${NC}"
+    fi
+}
+
 # Start Docker development environment
 # Usage: start [--gateway]
 start() {
@@ -232,6 +301,9 @@ start() {
         fi
     fi
 
+    # Auto-detect host IP and update ADS MCP configuration
+    detect_and_update_ads_host_ip
+
     # Set nginx routing for gateway mode (envsubst in nginx container)
     if $gateway_mode; then
         export LANGGRAPH_UPSTREAM=gateway:8001
@@ -312,6 +384,11 @@ restart() {
     echo "========================================"
     echo "  Restarting DeerFlow Docker Services"
     echo "========================================"
+    echo ""
+
+    # Auto-detect host IP and update ADS MCP configuration before restart
+    detect_and_update_ads_host_ip
+
     echo ""
     echo -e "${BLUE}Restarting containers...${NC}"
     cd "$DOCKER_DIR" && $COMPOSE_CMD restart

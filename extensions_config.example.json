@@ -1,5 +1,15 @@
 {
   "mcpServers": {
+    "ads": {
+      "enabled": true,
+      "type": "stdio",
+      "command": "node",
+      "args": ["/app/ads-mcp/dist/index.js"],
+      "env": {
+        "ADS_API_BASE_URL": "http://192.168.1.139:80"
+      },
+      "description": "ADS云桌面/广告派送系统/云桌面管理系统 - 支持终端列表查询、批量开关机、重启锁定、用户管理、镜像管理、策略管理、部门管理、VDI、虚拟桌面基础设施；常见别名：ads、ADS、云桌面、云桌面管理、终端管理、桌面虚拟化"
+    },
     "filesystem": {
       "enabled": false,
       "type": "stdio",
@@ -36,6 +46,15 @@
       ],
       "env": {},
       "description": "PostgreSQL database access"
+    },
+    "ragflow": {
+      "enabled": false,
+      "type": "sse",
+      "url": "http://host.docker.internal:9382/sse",
+      "headers": {
+        "Authorization": "Bearer $RAGFLOW_MCP_API_KEY"
+      },
+      "description": "RagFlow 企业知识库检索服务，支持跨数据集语义检索、分页、阈值过滤"
     }
   },
   "skills": {}
