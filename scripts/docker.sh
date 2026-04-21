@@ -149,20 +149,22 @@ init() {
 
 # Auto-detect host IP and update ADS MCP configuration
 # This ensures ADS MCP can connect to services on the host machine from inside Docker
+# ADS MCP reads its server URL from .ads-mcp/config.json, not from environment variables
 detect_and_update_ads_host_ip() {
-    local config_file="$PROJECT_ROOT/extensions_config.json"
+    # ADS MCP config file location (on host)
+    local ads_mcp_config="$PROJECT_ROOT/../ads-agent/mcp/.ads-mcp/config.json"
+
+    # Resolve to absolute path
+    ads_mcp_config="$(cd "$PROJECT_ROOT/.." && pwd)/ads-agent/mcp/.ads-mcp/config.json"
+
     local ip=""
 
-    if [ ! -f "$config_file" ]; then
-        echo -e "${YELLOW}extensions_config.json not found, skipping ADS IP detection${NC}"
+    if [ ! -f "$ads_mcp_config" ]; then
+        echo -e "${YELLOW}ADS MCP config not found at $ads_mcp_config, skipping IP detection${NC}"
         return
     fi
 
-    # Check if ADS MCP is configured
-    if ! grep -q '"ads"' "$config_file" 2>/dev/null; then
-        echo -e "${BLUE}ADS MCP not configured, skipping IP detection${NC}"
-        return
-    fi
+    echo -e "${BLUE}Using ADS MCP config: $ads_mcp_config${NC}"
 
     # Try to detect host IP (works on Linux, macOS, and Windows Docker)
     # Method 1: Use ip route show default (Linux/macOS)
@@ -198,21 +200,17 @@ detect_and_update_ads_host_ip() {
 
     echo -e "${BLUE}Detected host IP: $ip${NC}"
 
-    # Update extensions_config.json with detected IP for ADS_API_BASE_URL
-    # Only update if it contains a placeholder or localhost
-    if grep -q "127.0.0.1\|localhost\|ADS_API_BASE_URL.*:.*\"" "$config_file" 2>/dev/null; then
-        # Use sed to update the ADS_API_BASE_URL value
-        # This handles both JSON formats with proper escaping
+    # Update ADS MCP config.json ads.server.url with detected IP
+    # Always update the url field regardless of current value
+    if grep -q '"url":' "$ads_mcp_config" 2>/dev/null; then
         if [[ "$OSTYPE" == "darwin"* ]]; then
-            # macOS requires different sed syntax
-            sed -i '' "s|\"ADS_API_BASE_URL\": \"[^\"]*\"|\"ADS_API_BASE_URL\": \"http://${ip}:80\"|g" "$config_file"
+            sed -i '' 's|"url": "[^"]*"|"url": "http://'"$ip"':80"|g' "$ads_mcp_config"
         else
-            # Linux sed
-            sed -i "s|\"ADS_API_BASE_URL\": \"[^\"]*\"|\"ADS_API_BASE_URL\": \"http://${ip}:80\"|g" "$config_file"
+            sed -i 's|"url": "[^"]*"|"url": "http://'"$ip"':80"|g' "$ads_mcp_config"
         fi
-        echo -e "${GREEN}Updated ADS_API_BASE_URL to http://${ip}:80${NC}"
+        echo -e "${GREEN}Updated ADS MCP server URL to http://${ip}:80${NC}"
     else
-        echo -e "${BLUE}ADS_API_BASE_URL already configured, skipping update${NC}"
+        echo -e "${YELLOW}ADS MCP config missing url field, skipping update${NC}"
     fi
 }
 
