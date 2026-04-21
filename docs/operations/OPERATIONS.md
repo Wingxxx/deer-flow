@@ -197,14 +197,22 @@ deer-flow/
 cd deer-flow/docker
 docker compose up -d
 
-# 重建并启动
+# 重建并启动（网络重建，避免 502）
 docker compose up -d --build
 
 # 仅重建 frontend（仅前端变更时节省时间）
 docker compose up -d --build frontend
 
+# 仅重建 gateway（仅后端变更时）
+docker compose up -d --build gateway
+
 # 停止所有服务
 docker compose down
+
+# ⚠️ 禁止使用 restart：nginx 会缓存旧容器 IP 导致 502
+# 必须用 down + up 重建网络
+docker compose restart nginx  # ❌ 禁止！
+docker compose down && docker compose up -d  # ✅ 正确
 ```
 
 ### 监控
@@ -248,8 +256,167 @@ docker inspect deer-flow-frontend --format '{{.HostConfig.Memory}}'
 # 检查配置文件是否存在于容器内
 docker exec deer-flow-gateway ls -la /app/backend/config.yaml
 
-# 重启特定服务
+# 重启特定服务（⚠️ 不推荐，使用 down + up 代替）
 docker compose restart gateway
+```
+
+---
+
+## Frontend Next.js SSR 挂死（2026-04-21 新增）
+
+### 问题：所有需要 SSR 的路由（/workspace 等）返回 502 或卡死
+
+**症状**：
+- `http://localhost:2026/` 返回 200 OK（静态页面）
+- `http://localhost:2026/workspace` 返回 502 或 Internal Server Error
+- `curl localhost:3000/` 正常，但 `curl localhost:3000/workspace` 超时
+- `nc localhost 3000` 能连接，但 HTTP 请求无响应
+
+**根因**：Next.js 16.1.7 + Turbopack 在 Docker Alpine 环境下 SSR 时挂死
+
+| 路由类型 | 行为 | 原因 |
+|----------|------|------|
+| `/` | 200 OK | 静态 HTML，直接从文件系统返回 |
+| `/workspace` | 502/卡死 | Turbopack SSR 渲染 React 组件时挂死 |
+| `/workspace/chats/new` | 308 重定向 | redirect() 也被 Turbopack 阻塞 |
+
+**诊断方法**：
+```bash
+# 容器内测试 - 静态页面正常但 SSR 挂死
+docker exec deer-flow-frontend wget -qO- --timeout=5 http://localhost:3000/
+# → 返回 HTML ✅
+
+docker exec deer-flow-frontend wget -qO- --timeout=5 http://localhost:3000/workspace
+# → 超时 ❌
+```
+
+### 解决方案
+
+**方案 A（推荐）：使用 prod target + next start（生产模式）**
+
+原理：预编译的 .next 产物不依赖 Turbopack/Webpack dev server。
+
+修改 `docker-compose-dev.yaml`：
+```yaml
+frontend:
+  build:
+    context: ../
+    dockerfile: frontend/Dockerfile
+    target: prod  # ✅ 用 prod target（已预编译）
+  command: sh -c "pnpm start > /app/logs/frontend.log 2>&1"
+  mem_limit: 2g
+  memswap_limit: 2g
+```
+
+**方案 B：禁用 Turbopack（使用 webpack dev server）**
+
+修改 `frontend/package.json`：
+```json
+"dev": "next dev --webpack"
+```
+
+注意：`next dev`（不带参数）在 Next.js 16.1.7 中默认启用 Turbopack，需要显式 `--webpack`。
+
+---
+
+### 问题：512MB 内存运行 `pnpm build` 导致 OOM（Exit Code 137）
+
+**症状**：
+```
+Error: spawn ENOMEM
+Container exited with code 137 (OOM Killed)
+```
+
+**原因**：`pnpm build` 需要 1.5GB+ 内存，512MB 不足。
+
+**解决**：使用 prod target（已在镜像中预编译），无需在容器内 build。
+
+---
+
+### 问题：prod target 启动后 Internal Server Error（BETTER_AUTH_SECRET 缺失）
+
+**症状**：nginx → frontend 返回 200，但浏览器显示 Internal Server Error。
+
+**根因**：`frontend/.env` 中没有 `BETTER_AUTH_SECRET`，而 prod target 从 `frontend/.env` 读取。
+
+**解决**：修改 `docker-compose-dev.yaml` 的 env_file：
+```yaml
+frontend:
+  env_file:
+    - ../.env  # ✅ 指向根目录 .env（包含 BETTER_AUTH_SECRET）
+```
+
+---
+
+## ADS MCP 配置陷阱（2026-04-21 新增）
+
+### 问题：ADS MCP 有两层配置文件，修改一处不够
+
+**症状**：修改了 `extensions_config.json` 中的 `ADS_API_BASE_URL`，但 ADS MCP 仍然使用旧地址。
+
+**根因**：ADS MCP 有**独立的配置文件**：
+
+| 配置文件 | 路径（容器内） | 作用 |
+|----------|---------------|------|
+| `extensions_config.json` | `/app/extensions_config.json` | DeerFlow → MCP Server 的启动配置 |
+| `.ads-mcp/config.json` | `/app/ads-mcp/.ads-mcp/config.json` | ADS MCP 内部配置（API 地址、凭证） |
+
+ADS MCP **优先读取自己的内部配置**，忽略 `extensions_config.json` 中的 `env.ADS_API_BASE_URL`。
+
+**诊断**：
+```bash
+# 检查 MCP 内部配置
+docker exec deer-flow-gateway cat /app/ads-mcp/.ads-mcp/config.json
+```
+
+### 解决方案
+
+**方案 A：在 gateway 启动命令中 sed 替换（推荐）**
+
+修改 `docker-compose-dev.yaml` 的 gateway command：
+```yaml
+gateway:
+  command: sh -c "{ sed -i 's|http://127.0.0.1:80|https://192.168.1.54|g' /app/ads-mcp/.ads-mcp/config.json /app/ads-mcp/config.json && cd backend && ...; } > /app/logs/gateway.log 2>&1"
+```
+
+同时修改 ADS MCP 源目录的配置文件（永久生效）：
+```bash
+# 修改 Windows 源文件
+notepad "C:\Users\wing\Documents\Wing\git\ds2server\ds2server\ads-agent\mcp\.ads-mcp\config.json"
+```
+
+### 问题：ADS MCP 挂载为只读导致无法修改配置
+
+**症状**：`sed: couldn't open directory .ads-mcp: No such file or directory`
+
+**原因**：`docker-compose-dev.yaml` 中 ADS MCP 目录挂载为 `:ro`（只读）。
+
+**解决**：改为可读写：
+```yaml
+# 之前（只读）
+- C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp:ro
+
+# 现在（可读写）
+- C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp
+```
+
+---
+
+## nginx 重定向地址修复（2026-04-21 新增）
+
+### 问题：Next.js SSR redirect 返回 308，浏览器收到后无法访问
+
+**症状**：`/workspace` → `308 Redirect` → `Location: http://frontend:3000/workspace/chats/new` → 浏览器无法访问 Docker 内部地址。
+
+**根因**：nginx 收到 upstream 的 redirect 响应后，`Location` header 指向容器内地址，浏览器无法访问。
+
+**解决**：在 nginx.conf 中添加 `proxy_redirect`：
+```nginx
+location / {
+    proxy_pass http://frontend;
+    proxy_redirect http://frontend:3000 http://$host:$server_port;
+    # ...
+}
 ```
 
 ---

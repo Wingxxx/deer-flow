@@ -94,14 +94,15 @@ docker system prune -a --volumes -f
 
 **根因**：`docker-compose.yaml` 未设置 `mem_limit`，Dockerfile 未设置 `NODE_OPTIONS` 内存限制。
 
-**已修复**：
-- `docker-compose.yaml`：`mem_limit: 512m`
-- `Dockerfile`：`ENV NODE_OPTIONS="--max-old-space-size=384"`
+**已修复（2026-04-21 更新）**：
+- `docker-compose-dev.yaml`：`mem_limit: 2g`（2GB，生产模式 next start）
+- `Dockerfile`：`ENV NODE_OPTIONS="--max-old-space-size=768"`
+- **注意**：Next.js 16.1.7 dev server + Turbopack SSR 会挂死，使用 `target: prod` + `pnpm start` 代替
 
 验证命令：
 ```bash
 docker inspect deer-flow-frontend --format '{{.HostConfig.Memory}}'
-# 应显示：536870912（512MB 字节数）
+# 应显示：2147483648（2GB 字节数）
 ```
 
 ### 502 Bad Gateway / IsADirectoryError
@@ -127,6 +128,54 @@ PORT=2026
 ```
 
 **注意**：Docker Compose 会自动将这些主机路径映射到 docker-compose.yaml volumes 中定义的容器内路径。
+
+### ADS MCP 识别不到 + Errno 30
+
+**症状 1**：DeerFlow 无法识别 ADS MCP，LangGraph 日志中没有 `Configured MCP server: ads`。
+
+**根因**：ADS MCP 源码目录缺少 `dist/` 和 `node_modules/`（未执行 `npm run build`），容器挂载的是空目录。
+
+**排查**：
+```bash
+ls "C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp/dist/"
+ls "C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp/node_modules/"
+```
+
+**解决**：
+```bash
+cd "C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp"
+npm install && npm run build
+docker compose -f docker-compose-dev.yaml down && docker compose -f docker-compose-dev.yaml up -d
+```
+
+---
+
+**症状 2**：在 DeerFlow Web UI 中切换 ADS MCP 开关时报错：
+```
+Failed to update MCP configuration: [Errno 30] Read-only file system: '/app/backend/extensions_config.json'
+```
+
+**根因**：`docker/.env` 中的 `DEER_FLOW_EXTENSIONS_CONFIG_PATH=C:\Users\wing\...` 是 Windows 主机路径，在容器内不存在。`resolve_config_path()` 抛异常后被 `except Exception` 捕获，代码 fallback 失败导致 `Errno 30`。
+
+**解决**：在 `docker-compose-dev.yaml` 的 `environment` 中显式设置容器内路径，**覆盖** `.env` 中的 Windows 路径：
+
+```yaml
+gateway:
+  environment:
+    - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json  # 覆盖 .env
+  env_file:
+    - ../.env
+
+langgraph:
+  environment:
+    - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json  # 覆盖 .env
+  env_file:
+    - ../.env
+```
+
+**关键**：`environment` 中的变量会覆盖 `env_file` 中的同名变量。设置为容器内路径 `/app/extensions_config.json`（已通过 volume 挂载为可读写）。
+
+**重要更新（2026-04-21）**：ADS MCP 有两层配置文件，详见 `@./docs/mcp/ADS-MCP对接DeerFlow整合指南-实测版.md`
 
 ## 故障排查清单
 

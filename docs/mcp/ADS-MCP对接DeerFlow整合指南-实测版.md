@@ -271,22 +271,213 @@ AI 思考过程：
 
 ---
 
-## 八、故障排查
+## 八、故障排查（2026-04-21 新增）
 
-### 问题 1：`Cannot find module '@modelcontextprotocol/sdk'`
+### 问题 1：重启容器后 ADS MCP 识别不到
+
+**症状**：DeerFlow 无法识别 ADS MCP 相关内容，LangGraph 日志中没有 `Configured MCP server: ads`。
+
+**根本原因**：ADS MCP 源码目录缺少 `dist/` 和 `node_modules/`（未执行 `npm run build`），容器挂载的是空目录。
+
+**排查命令**：
+```bash
+# 检查 dist/ 是否存在
+ls "C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp/dist/"
+
+# 检查 node_modules/ 是否存在
+ls "C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp/node_modules/"
+```
+
+**解决方案**：
+```bash
+cd "C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp"
+npm install
+npm run build
+# 验证
+ls dist/index.js
+```
+
+### 问题 2：`Errno 30 Read-only file system` 无法切换 ADS MCP 开关
+
+**症状**：在 DeerFlow Web UI 中尝试关闭/开启 ADS MCP 开关时报错：
+```
+Failed to update MCP configuration: [Errno 30] Read-only file system: '/app/backend/extensions_config.json'
+```
+
+**根本原因**：**两层问题叠加**。
+
+#### 第一层：环境变量路径问题
+
+`docker/.env` 中的 `DEER_FLOW_EXTENSIONS_CONFIG_PATH` 设置为 Windows 主机路径：
+```env
+DEER_FLOW_EXTENSIONS_CONFIG_PATH=C:\Users\wing\Documents\Wing\emto\2026\2026.3\DeerFlow\deer-flow\extensions_config.json
+```
+
+这个 Windows 路径在容器内不存在，导致 `resolve_config_path()` 抛出 `FileNotFoundError`。
+
+#### 第二层：异常掩盖问题
+
+`update_mcp_configuration()` 的 `except Exception` 捕获了 `FileNotFoundError`，然后代码尝试 fallback 到 `/app/extensions_config.json` 写入，但由于某些原因写失败，OS 返回 `Errno 30`（只读错误）。
+
+**解决方案**：在 `docker-compose-dev.yaml` 中显式设置 `DEER_FLOW_EXTENSIONS_CONFIG_PATH` 为容器内路径，**覆盖** `.env` 中的 Windows 路径：
+
+```yaml
+gateway:
+  environment:
+    - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
+  env_file:
+    - ../.env  # .env 中的 Windows 路径会被上面的环境变量覆盖
+
+langgraph:
+  environment:
+    - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
+  env_file:
+    - ../.env
+```
+
+**关键理解**：
+- `env_file` 加载变量后，`environment` 中的同名变量会**覆盖** `env_file` 中的值
+- 设置为容器内路径 `/app/extensions_config.json`（已通过 volume 挂载为可读写）
+
+### 问题 3：ADS MCP 工具加载后没有出现在 Agent 中
+
+**原因**：MCP 工具是懒加载的，需要发送请求触发初始化。
+
+**解决**：在 DeerFlow Web UI 中发送一条消息。
+
+---
+
+### 旧故障排查（保留参考）
+
+### 旧问题 1：`Cannot find module '@modelcontextprotocol/sdk'`
 **原因**：只挂载了 `dist` 目录，没有挂载 `node_modules`
 **解决**：修改 volume 挂载为整个 MCP 目录
 
-### 问题 2：修改 volume 后 ADS MCP 仍然找不到
+### 旧问题 2：修改 volume 后 ADS MCP 仍然找不到
 **原因**：容器没有重建，volume 挂载未生效
 **解决**：执行 `docker compose up -d` 完全重建容器
 
-### 问题 3：MCP 工具加载后没有出现在 Agent 中
-**原因**：MCP 工具是懒加载的，需要发送请求触发初始化
-**解决**：在 DeerFlow Web UI 中发送一条消息
+---
+
+## 九、ADS MCP 维护清单
+
+### 每次修改配置后
+- [ ] 确认 ADS MCP `dist/` 和 `node_modules/` 存在
+- [ ] 重建容器：`docker compose -f docker-compose-dev.yaml down && docker compose -f docker-compose-dev.yaml up -d`
+- [ ] 验证日志：`docker logs deer-flow-langgraph --tail 30 | grep ads`
+
+### 每次 ADS MCP 升级后
+- [ ] 在 ADS MCP 源码目录执行 `npm run build`
+- [ ] 重建 DeerFlow 容器
+
+### 部署前检查
+- [ ] 确认 `docker-compose-dev.yaml` 中 `DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json` 已设置
+- [ ] 确认 ADS Server 地址可达（`curl http://192.168.1.54`）
+
+---
+
+## 十、ADS MCP 两层配置陷阱（2026-04-21 新增）
+
+### 核心问题：ADS MCP 有独立的内部配置文件
+
+ADS MCP Server 有**自己的配置文件**，会忽略 `extensions_config.json` 中的 `env.ADS_API_BASE_URL`。
+
+| 配置文件 | 容器内路径 | 用途 | 谁读取 |
+|----------|-----------|------|--------|
+| `extensions_config.json` | `/app/extensions_config.json` | DeerFlow 启动 MCP Server 的配置 | DeerFlow (gateway/langgraph) |
+| `ADS MCP 内部配置` | `/app/ads-mcp/.ads-mcp/config.json` | MCP Server 自己的 API 地址、凭证 | ADS MCP Server 本身 |
+
+### 症状
+
+修改了 `extensions_config.json` 中的 URL 后，ADS MCP 仍然连接旧地址。
+
+### 诊断方法
+
+```bash
+# 检查 ADS MCP 内部配置的 URL
+docker exec deer-flow-gateway cat /app/ads-mcp/.ads-mcp/config.json
+
+# 如果显示 "url": "http://127.0.0.1:80" 说明未生效
+```
+
+### 完整解决方案
+
+**第一步**：修改 `extensions_config.json`（DeerFlow 层配置）：
+```json
+{
+  "mcpServers": {
+    "ads": {
+      "enabled": true,
+      "type": "stdio",
+      "command": "node",
+      "args": ["/app/ads-mcp/dist/index.js"],
+      "env": {
+        "ADS_API_BASE_URL": "https://192.168.1.54"
+      },
+      "description": "ADS云桌面/广告派送系统..."
+    }
+  }
+}
+```
+
+**第二步**：修改 ADS MCP 源目录的内部配置（Windows 源文件）：
+```bash
+notepad "C:\Users\wing\Documents\Wing\git\ds2server\ds2server\ads-agent\mcp\.ads-mcp\config.json"
+```
+将 `"url": "http://127.0.0.1:80"` 改为 `"url": "https://192.168.1.54"`
+
+**第三步**：修改 `docker-compose-dev.yaml`（ADS MCP 挂载为可读写 + 启动时 sed 替换）：
+```yaml
+gateway:
+  volumes:
+    # ADS MCP 目录必须可读写（不能用 :ro）
+    - C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp
+  command: sh -c "{ sed -i 's|http://127.0.0.1:80|https://192.168.1.54|g' /app/ads-mcp/.ads-mcp/config.json /app/ads-mcp/config.json && cd backend && ...; } > /app/logs/gateway.log 2>&1"
+```
+
+**注意**：`langgraph` 服务的 ADS MCP 挂载可以是 `:ro`（只读），因为 gateway 会先修改。
+
+---
+
+## 十一、docker-compose-dev.yaml 当前 frontend 配置（2026-04-21 生效）
+
+```yaml
+frontend:
+  build:
+    context: ../
+    dockerfile: frontend/Dockerfile
+    target: prod  # ✅ 使用 prod target（预编译产物）
+    args:
+      PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
+      NPM_REGISTRY: ${NPM_REGISTRY:-}
+  container_name: deer-flow-frontend
+  command: sh -c "pnpm start > /app/logs/frontend.log 2>&1"
+  working_dir: /app/frontend
+  volumes:
+    - ../frontend/src:/app/frontend/src
+    - ../frontend/public:/app/frontend/public
+    - ../frontend/next.config.js:/app/frontend/next.config.js:ro
+    - ../logs:/app/logs
+    - ${PNPM_STORE_PATH:-~/.local/share/pnpm/store}:/root/.local/share/pnpm/store
+  environment:
+    - NODE_ENV=development
+    - WATCHPACK_POLLING=true
+    - CI=true
+    - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001
+    - DEER_FLOW_INTERNAL_LANGGRAPH_BASE_URL=http://langgraph:2024
+  env_file:
+    - ../.env  # ✅ 指向根目录 .env（包含 BETTER_AUTH_SECRET）
+  networks:
+    - deer-flow-dev
+  mem_limit: 2g      # ✅ 2GB（dev server + 编译需要）
+  memswap_limit: 2g
+  restart: unless-stopped
+```
 
 ---
 
 **WING**
 **2026-04-17 初稿**
 **2026-04-20 实际验证完成**
+**2026-04-21 问题修复：ADS MCP 两层配置 + Next.js SSR 挂死**
+**2026-04-21 文档更新：完整配置生效**

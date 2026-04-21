@@ -27,7 +27,7 @@ COPY frontend ./frontend
 FROM base AS dev
 RUN cd /app/frontend && pnpm install --frozen-lockfile
 EXPOSE 3000
-ENV NODE_OPTIONS="--max-old-space-size=384"
+ENV NODE_OPTIONS="--max-old-space-size=768"
 
 # ── Builder: install + compile Next.js ───────────────────────────────────────
 FROM base AS builder
