@@ -46,8 +46,14 @@ docs/
 
 ```bash
 # Docker（在 deer-flow/docker 目录）
+
+# ⚠️ 启动前必须检查：Docker 占用状态
+docker system df
+# 如果 Images 可回收率 > 80%，或 Build Cache > 10GB，先清理：
+docker system prune -a --volumes -f
+
 docker compose up -d              # 启动所有服务
-docker compose up -d --build       # 重建并启动
+docker compose up -d --build       # 重建并启动（⚠️ 会累积镜像，每次启动前先检查）
 docker compose up -d --build frontend  # 仅重建 frontend（节省时间）
 docker compose down               # 停止所有服务
 docker logs <容器名> --tail 50    # 查看日志
