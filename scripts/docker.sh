@@ -182,14 +182,16 @@ detect_and_update_ads_host_ip() {
         ip=$(hostname -I 2>/dev/null | awk '{print $1}')
     fi
 
-    # Method 4: Use ipconfig on Windows (Git Bash or MSYS)
+    # Method 4: Use ipconfig on Windows (Git Bash or MSYS) - get host IP on LAN interface
+    # NOTE: We use "Wireless" or "Ethernet" adapter pattern, NOT Default Gateway
     if [ -z "$ip" ] && command -v ipconfig >/dev/null 2>&1; then
-        ip=$(ipconfig 2>/dev/null | grep -A1 "Default Gateway" | grep -oP '\d+\.\d+\.\d+\.\d+' | head -1)
+        # Try to get the host's actual LAN IP (192.168.x.x pattern), not gateway
+        ip=$(ipconfig 2>/dev/null | grep -E "IPv4|以太网" -A1 2>/dev/null | grep -oP '\d+\.\d+\.\d+\.\d+' | grep '^192\.168\.' | head -1)
     fi
 
-    # Method 5: Use PowerShell to get default gateway (Windows native)
+    # Method 5: Use PowerShell to get host LAN IP (Windows native) - fallback
     if [ -z "$ip" ] && command -v powershell >/dev/null 2>&1; then
-        ip=$(powershell -Command "(Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Select-Object -First 1).NextHop" 2>/dev/null)
+        ip=$(powershell -Command "\$idx = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Select-Object -First 1).InterfaceIndex; if (\$idx) { (Get-NetIPAddress -InterfaceIndex \$idx -AddressFamily IPv4 -ErrorAction SilentlyContinue | Select-Object -First 1).IPAddress }" 2>/dev/null)
     fi
 
     # Skip if no IP found

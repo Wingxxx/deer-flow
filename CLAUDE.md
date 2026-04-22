@@ -52,11 +52,22 @@ docker system df
 # 如果 Images 可回收率 > 80%，或 Build Cache > 10GB，先清理：
 docker system prune -a --volumes -f
 
-# 重启 DeerFlow（先检查再重启）
+# 重启 DeerFlow（永远不带 --build，因为 volume 已挂载代码目录）
 docker compose down
 docker compose up -d
-docker compose up -d --build       # 重建并启动（⚠️ 会累积镜像）
-docker compose up -d --build frontend  # 仅重建 frontend（节省时间）
+
+# ⚠️ 铁律：
+# 1. 禁止同时构建多镜像（gateway/langgraph/frontend 绝对不能一起 build）
+# 2. 除非主子明确说 "rebuild xxx"，否则只用 up -d 不带 --build
+docker compose up -d --build frontend   # 仅重建 frontend（修改了 Dockerfile / package.json / next.config.js 时）
+docker compose up -d --build gateway     # 仅重建 gateway（修改了 Dockerfile / pyproject.toml 时）
+docker compose up -d --build langgraph  # 仅重建 langgraph（修改了 Dockerfile / pyproject.toml 时）
+
+# 关于 volume 挂载：docker-compose-dev.yaml 已配置好代码目录挂载
+#   - frontend/src → /app/frontend/src   （Next.js 热更新）
+#   - backend/    → /app/backend/         （uvicorn --reload 热更新）
+# 所以改前端/后端代码不需要 rebuild！
+
 docker logs <容器名> --tail 50    # 查看日志
 docker stats --no-stream           # 查看资源使用
 
