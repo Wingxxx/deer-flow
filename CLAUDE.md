@@ -2,6 +2,36 @@
 
 本文件为 AI 编程助手（Claude Code、Codex、Cursor、Windsurf 等）提供 DeerFlow 项目指导。
 
+## ⚠️ 铁律：启动 DeerFlow 必须使用封装好的 make 命令
+
+**绝对禁止**自作主张使用 `uv run`、`python -m`、`./scripts/serve.sh` 等底层命令启动 DeerFlow。
+
+**唯一正确方式**：使用项目提供的 Makefile 封装命令：
+
+```bash
+# ✅ 本地开发启动（正确方式）
+make dev              # 启动所有本地开发服务
+make docker-start     # Docker 开发模式启动
+
+# ❌ 禁止使用以下方式（自作主张）
+uv run python ...     # 禁止
+python -m ...        # 禁止
+./scripts/serve.sh    # 禁止
+```
+
+**可用的 make 命令**：
+
+| 命令 | 用途 |
+|------|------|
+| `make dev` | 本地开发模式（热更新） |
+| `make dev-pro` | 本地开发 + Gateway 模式 |
+| `make start` | 本地生产模式 |
+| `make start-pro` | 本地生产 + Gateway 模式 |
+| `make docker-start` | Docker 开发模式启动 |
+| `make docker-stop` | Docker 开发模式停止 |
+| `make doctor` | 诊断配置和环境问题 |
+| `make check` | 检查依赖是否完整 |
+
 ## 项目概述
 
 DeerFlow 是一个基于 LangGraph 的 AI Super Agent 系统，采用全栈架构：

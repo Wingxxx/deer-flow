@@ -1,5 +1,22 @@
 # DeerFlow 运维与故障排查指南
 
+## ⚠️ 铁律：启动 DeerFlow 必须使用封装好的 make 命令
+
+**绝对禁止**自作主张使用 `uv run`、`python -m`、`./scripts/serve.sh` 等底层命令启动 DeerFlow。
+
+**唯一正确方式**：使用项目提供的 Makefile 封装命令：
+
+```bash
+# ✅ 本地开发启动（正确方式）
+make dev              # 启动所有本地开发服务
+make docker-start     # Docker 开发模式启动
+
+# ❌ 禁止使用以下方式（自作主张）
+uv run python ...     # 禁止
+python -m ...        # 禁止
+./scripts/serve.sh    # 禁止
+```
+
 ## 概述
 
 本文档包含 DeerFlow 生产/开发环境运行的运维知识和故障排查经验。
