@@ -411,10 +411,10 @@ notepad "C:\Users\wing\Documents\Wing\git\ds2server\ds2server\ads-agent\mcp\.ads
 **解决**：改为可读写：
 ```yaml
 # 之前（只读）
-- C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp:ro
+- /home/wing/wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp:ro
 
 # 现在（可读写）
-- C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp
+- /home/wing/wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp
 ```
 
 ---

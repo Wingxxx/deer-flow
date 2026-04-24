@@ -185,13 +185,13 @@ PORT=2026
 
 **排查**：
 ```bash
-ls "C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp/dist/"
-ls "C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp/node_modules/"
+ls "/home/wing/wing/git/ds2server/ds2server/ads-agent/mcp/dist/"
+ls "/home/wing/wing/git/ds2server/ds2server/ads-agent/mcp/node_modules/"
 ```
 
 **解决**：
 ```bash
-cd "C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp"
+cd "/home/wing/wing/git/ds2server/ds2server/ads-agent/mcp"
 npm install && npm run build
 docker compose -f docker-compose-dev.yaml down && docker compose -f docker-compose-dev.yaml up -d
 ```

@@ -90,12 +90,12 @@ async def get_mcp_tools() -> list[BaseTool]:
 langgraph:
   volumes:
     # ... existing volumes ...
-    - C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp:ro
+    - /home/wing/wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp:ro
 
 gateway:
   volumes:
     # ... existing volumes ...
-    - C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp:ro
+    - /home/wing/wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp:ro
 ```
 
 **⚠️ 关键点**：必须挂载**整个 MCP 目录**（包含 `node_modules`），而不是仅 `dist` 目录。因为 `dist/index.js` 依赖 `@modelcontextprotocol/sdk` npm 包。
@@ -282,15 +282,15 @@ AI 思考过程：
 **排查命令**：
 ```bash
 # 检查 dist/ 是否存在
-ls "C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp/dist/"
+ls "/home/wing/wing/git/ds2server/ds2server/ads-agent/mcp/dist/"
 
 # 检查 node_modules/ 是否存在
-ls "C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp/node_modules/"
+ls "/home/wing/wing/git/ds2server/ds2server/ads-agent/mcp/node_modules/"
 ```
 
 **解决方案**：
 ```bash
-cd "C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp"
+cd "/home/wing/wing/git/ds2server/ds2server/ads-agent/mcp"
 npm install
 npm run build
 # 验证
@@ -431,7 +431,7 @@ notepad "C:\Users\wing\Documents\Wing\git\ds2server\ds2server\ads-agent\mcp\.ads
 gateway:
   volumes:
     # ADS MCP 目录必须可读写（不能用 :ro）
-    - C:/Users/wing/Documents/Wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp
+    - /home/wing/wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp
   command: sh -c "{ sed -i 's|http://127.0.0.1:80|https://192.168.1.54|g' /app/ads-mcp/.ads-mcp/config.json /app/ads-mcp/config.json && cd backend && ...; } > /app/logs/gateway.log 2>&1"
 ```
 
