@@ -289,6 +289,16 @@ start() {
         fi
     fi
 
+    # Ensure BETTER_AUTH_SECRET exists in .env (required for Next.js prod mode).
+    if [ ! -f "$PROJECT_ROOT/.env" ] || ! grep -q "BETTER_AUTH_SECRET=" "$PROJECT_ROOT/.env" 2>/dev/null; then
+        local secret
+        secret=$(python3 -c "import secrets; print(secrets.token_hex(16))" 2>/dev/null) || \
+        secret=$(openssl rand -hex 16 2>/dev/null) || \
+        secret="fallback-secret-$(date +%s)"
+        echo "BETTER_AUTH_SECRET=$secret" >> "$PROJECT_ROOT/.env"
+        echo -e "${BLUE}Created BETTER_AUTH_SECRET in .env${NC}"
+    fi
+
     # Ensure extensions_config.json exists as a file before mounting.
     # Docker creates a directory when bind-mounting a non-existent host path.
     if [ ! -f "$PROJECT_ROOT/extensions_config.json" ]; then
@@ -309,6 +319,9 @@ start() {
         export LANGGRAPH_UPSTREAM=gateway:8001
         export LANGGRAPH_REWRITE=/api/
     fi
+
+    echo "Cleaning up old containers..."
+    cd "$DOCKER_DIR" && $COMPOSE_CMD down > /dev/null 2>&1 || true
 
     echo "Building and starting containers..."
     cd "$DOCKER_DIR" && $COMPOSE_CMD up --build -d --remove-orphans $services

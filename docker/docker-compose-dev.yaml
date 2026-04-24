@@ -97,17 +97,19 @@ services:
       - deer-flow-dev
     restart: unless-stopped
 
-  # Frontend - Next.js Development Server
+  # Frontend - Next.js Production Server
+  # Note: target=prod uses pre-built .next (no Turbopack SSR hang).
+  # Hot-reload is disabled, but SSR /workspace works correctly.
   frontend:
     build:
       context: ../
       dockerfile: frontend/Dockerfile
-      target: dev
+      target: prod
       args:
         PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
         NPM_REGISTRY: ${NPM_REGISTRY:-}
     container_name: deer-flow-frontend
-    command: sh -c "pnpm run dev > /app/logs/frontend.log 2>&1"
+    command: sh -c "pnpm start > /app/logs/frontend.log 2>&1"
     working_dir: /app/frontend
     volumes:
       - ../frontend/src:/app/frontend/src
