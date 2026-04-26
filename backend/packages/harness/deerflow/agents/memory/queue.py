@@ -70,6 +70,7 @@ class MemoryUpdateQueue:
                 thread_id=thread_id,
                 messages=messages,
                 agent_name=agent_name,
+                user_id=user_id,
                 correction_detected=correction_detected,
                 reinforcement_detected=reinforcement_detected,
                 user_id=user_id,
@@ -83,6 +84,7 @@ class MemoryUpdateQueue:
         thread_id: str,
         messages: list[Any],
         agent_name: str | None = None,
+        user_id: str | None = None,
         correction_detected: bool = False,
         reinforcement_detected: bool = False,
     ) -> None:
@@ -96,6 +98,7 @@ class MemoryUpdateQueue:
                 thread_id=thread_id,
                 messages=messages,
                 agent_name=agent_name,
+                user_id=user_id,
                 correction_detected=correction_detected,
                 reinforcement_detected=reinforcement_detected,
             )
@@ -109,6 +112,7 @@ class MemoryUpdateQueue:
         thread_id: str,
         messages: list[Any],
         agent_name: str | None,
+        user_id: str | None,
         correction_detected: bool,
         reinforcement_detected: bool,
     ) -> None:
@@ -122,6 +126,7 @@ class MemoryUpdateQueue:
             thread_id=thread_id,
             messages=messages,
             agent_name=agent_name,
+            user_id=user_id,
             correction_detected=merged_correction_detected,
             reinforcement_detected=merged_reinforcement_detected,
         )
