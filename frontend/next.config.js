@@ -24,10 +24,6 @@ const config = {
   productionBrowserSourceMaps: false,
   async rewrites() {
     const rewrites = [];
-    const langgraphURL = getInternalServiceURL(
-      "DEER_FLOW_INTERNAL_LANGGRAPH_BASE_URL",
-      "http://127.0.0.1:2024",
-    );
     const gatewayURL = getInternalServiceURL(
       "DEER_FLOW_INTERNAL_GATEWAY_BASE_URL",
       "http://127.0.0.1:8001",
@@ -36,11 +32,11 @@ const config = {
     if (!process.env.NEXT_PUBLIC_LANGGRAPH_BASE_URL) {
       rewrites.push({
         source: "/api/langgraph",
-        destination: langgraphURL,
+        destination: `${gatewayURL}/api`,
       });
       rewrites.push({
         source: "/api/langgraph/:path*",
-        destination: `${langgraphURL}/:path*`,
+        destination: `${gatewayURL}/api/:path*`,
       });
     }
 
@@ -67,8 +63,8 @@ const config = {
       // their own NEXT_PUBLIC_* env var toggle.
       //
       // NOTE: this must come AFTER the /api/langgraph rewrite above so that
-      // LangGraph routes are matched first when NEXT_PUBLIC_LANGGRAPH_BASE_URL
-      // is unset.
+      // LangGraph-compatible routes keep their public prefix while Gateway
+      // receives its native /api/* paths.
       rewrites.push({
         source: "/api/:path*",
         destination: `${gatewayURL}/api/:path*`,
