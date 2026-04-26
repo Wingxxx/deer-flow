@@ -98,12 +98,13 @@ def _format_conversation(messages: list[SuggestionMessage]) -> str:
     summary="Generate Follow-up Questions",
     description="Generate short follow-up questions a user might ask next, based on recent conversation context.",
 )
-async def generate_suggestions(thread_id: str, request: SuggestionsRequest) -> SuggestionsResponse:
-    if not request.messages:
+@require_permission("threads", "read", owner_check=True)
+async def generate_suggestions(thread_id: str, body: SuggestionsRequest, request: Request) -> SuggestionsResponse:
+    if not body.messages:
         return SuggestionsResponse(suggestions=[])
 
-    n = request.n
-    conversation = _format_conversation(request.messages)
+    n = body.n
+    conversation = _format_conversation(body.messages)
     if not conversation:
         return SuggestionsResponse(suggestions=[])
 
@@ -120,7 +121,7 @@ async def generate_suggestions(thread_id: str, request: SuggestionsRequest) -> S
     user_content = f"Conversation Context:\n{conversation}\n\nGenerate {n} follow-up questions"
 
     try:
-        model = create_chat_model(name=request.model_name, thinking_enabled=False)
+        model = create_chat_model(name=body.model_name, thinking_enabled=False)
         response = await model.ainvoke([SystemMessage(content=system_instruction), HumanMessage(content=user_content)], config={"run_name": "suggest_agent"})
         raw = _extract_response_text(response.content)
         suggestions = _parse_json_string_list(raw) or []
