@@ -1,0 +1,23 @@
+{
+  "ads": {
+    "server": {
+      "url": "http://192.168.1.139:80"
+    },
+    "credentials": {
+      "new": {
+        "username": "",
+        "password": ""
+      },
+      "default": {
+        "username": "admin",
+        "password": "Admin#123"
+      }
+    },
+    "token": {
+      "value": "",
+      "expires": 0,
+      "loginTime": 0,
+      "usedBy": "default"
+    }
+  }
+}
