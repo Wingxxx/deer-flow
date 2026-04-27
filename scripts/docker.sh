@@ -151,25 +151,55 @@ init() {
 # This ensures ADS MCP can connect to services on the host machine from inside Docker
 # ADS MCP reads its server URL from .ads-mcp/config.json, not from environment variables
 detect_and_update_ads_host_ip() {
-    # ADS MCP config file location (on host)
-    local ads_mcp_config="$PROJECT_ROOT/../ads-agent/mcp/.ads-mcp/config.json"
+    # ADS MCP config file location (on host) - 相对于 PROJECT_ROOT
+    local ads_mcp_dir="${PROJECT_ROOT}/ads-agent-mcp/.ads-mcp"
+    local ads_mcp_config="${ads_mcp_dir}/config.json"
 
-    # Resolve to absolute path
-    ads_mcp_config="$(cd "$PROJECT_ROOT/.." && pwd)/ads-agent/mcp/.ads-mcp/config.json"
+    # 如果目录不存在，创建目录
+    if [ ! -d "$ads_mcp_dir" ]; then
+        echo -e "${BLUE}Creating ADS MCP config directory: $ads_mcp_dir${NC}"
+        mkdir -p "$ads_mcp_dir"
+    fi
 
-    local ip=""
-
+    # 如果配置文件不存在，创建初始配置
     if [ ! -f "$ads_mcp_config" ]; then
-        echo -e "${YELLOW}ADS MCP config not found at $ads_mcp_config, skipping IP detection${NC}"
-        return
+        echo -e "${BLUE}Creating initial ADS MCP config: $ads_mcp_config${NC}"
+        cat > "$ads_mcp_config" << 'EOF'
+{
+  "ads": {
+    "server": {
+      "url": "http://127.0.0.1:80"
+    },
+    "credentials": {
+      "new": {
+        "username": "",
+        "password": ""
+      },
+      "default": {
+        "username": "admin",
+        "password": "Admin#123"
+      }
+    },
+    "token": {
+      "value": "",
+      "expires": 0,
+      "loginTime": 0,
+      "usedBy": "default"
+    }
+  }
+}
+EOF
     fi
 
     echo -e "${BLUE}Using ADS MCP config: $ads_mcp_config${NC}"
 
+    local ip=""
+
     # Try to detect host IP (works on Linux, macOS, and Windows Docker)
-    # Method 1: Use ip route show default (Linux/macOS)
+    # Method 1: Use ip route show default - get the SOURCE IP of the default route (Linux/macOS)
+    # NOTE: This gets the LAN IP (src), NOT the gateway IP (via)
     if [ -z "$ip" ] && command -v ip >/dev/null 2>&1; then
-        ip=$(ip route show default 2>/dev/null | awk '/default/ {print $3}' | head -1)
+        ip=$(ip route show default 2>/dev/null | awk '/default/ {for(i=1;i<=NF;i++) if($i=="src") print $(i+1); exit}' | head -1)
     fi
 
     # Method 2: Try to get IP from docker0 interface (Linux)

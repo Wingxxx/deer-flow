@@ -154,7 +154,7 @@ services:
       - ../extensions_config.json:/app/extensions_config.json
       - ../skills:/app/skills
       - ../logs:/app/logs
-      - /home/wing/wing/git/ds2server/ads-agent/mcp:/app/ads-mcp
+      - ../ads-agent-mcp:/app/ads-mcp
       # Use a Docker-managed uv cache volume instead of a host bind mount.
       # On macOS/Docker Desktop, uv may fail to create symlinks inside shared
       # host directories, which causes startup-time `uv sync` to crash.
@@ -215,7 +215,7 @@ services:
       - ../extensions_config.json:/app/extensions_config.json
       - ../skills:/app/skills
       - ../logs:/app/logs
-      - /home/wing/wing/git/ds2server/ads-agent/mcp:/app/ads-mcp:ro
+      - ../ads-agent-mcp:/app/ads-mcp
       # Use a Docker-managed uv cache volume instead of a host bind mount.
       # On macOS/Docker Desktop, uv may fail to create symlinks inside shared
       # host directories, which causes startup-time `uv sync` to crash.
