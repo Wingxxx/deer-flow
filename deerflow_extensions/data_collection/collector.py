@@ -1,7 +1,7 @@
 """Core training data collector for DeerFlow.
 
 Design principles:
-  - Async non-blocking: all writes are buffered and flushed in batches
+  - Thread-based non-blocking: all writes are buffered and flushed in background thread
   - Zero exception propagation: failures are logged and silently degraded
   - Process-level singleton: single collector instance shared across the process
 """
@@ -9,8 +9,8 @@ Design principles:
 import json
 import os
 import time
-import asyncio
 import logging
+import threading
 from datetime import datetime, timezone
 from collections import deque
 from typing import Any
@@ -46,8 +46,7 @@ class TrainingDataCollector:
         }
 
         self._buffer: deque[dict] = deque()
-        self._lock = asyncio.Lock()
-        self._flush_task: asyncio.Task | None = None
+        self._flush_thread: threading.Thread | None = None
         self._shutdown_flag = False
         self._current_daily_file: str | None = None
         self._current_daily_size: int = 0
@@ -106,7 +105,8 @@ class TrainingDataCollector:
         try:
             self._buffer.append(record)
             if len(self._buffer) >= self.buffer_size:
-                asyncio.ensure_future(self._flush())
+                t = threading.Thread(target=self._flush_sync)
+                t.start()
         except Exception as e:
             logger.warning("[DataCollection] Buffer append failed: %s", e)
 
@@ -235,18 +235,13 @@ class TrainingDataCollector:
     # Flush & lifecycle management
     # ------------------------------------------------------------------
 
-    async def _flush(self) -> None:
-        """Flush buffered records to the daily JSONL file.
-
-        On write failure, records are prepended back to the buffer head
-        to prevent data loss and preserve ordering.
-        """
+    def _flush_sync(self) -> None:
+        """Synchronous flush - can be called from any thread."""
         if not self._buffer:
             return
 
-        async with self._lock:
-            to_write = list(self._buffer)
-            self._buffer.clear()
+        to_write = list(self._buffer)
+        self._buffer.clear()
 
         if not to_write:
             return
@@ -261,13 +256,20 @@ class TrainingDataCollector:
 
             logger.debug("[DataCollection] Flushed %d records to %s", len(to_write), file_path)
 
-            # Rotate if file exceeds max size
             max_bytes = self.max_file_size_mb * 1024 * 1024
             if self._current_daily_size > max_bytes:
                 self._rotate_daily_file(file_path)
         except Exception as e:
             logger.error("[DataCollection] Flush failed: %s", e)
             self._buffer.extendleft(reversed(to_write))
+
+    async def _flush(self) -> None:
+        """Flush buffered records to the daily JSONL file.
+
+        On write failure, records are prepended back to the buffer head
+        to prevent data loss and preserve ordering.
+        """
+        self._flush_sync()
 
     def _rotate_daily_file(self, source_path: str) -> None:
         """Rotate the daily file to archive when it exceeds max_file_size_mb."""
@@ -285,17 +287,15 @@ class TrainingDataCollector:
             logger.warning("[DataCollection] Rotation failed: %s", e)
 
     def _start_periodic_flush(self) -> None:
-        """Start the background periodic flush task."""
-        async def _periodic() -> None:
+        """Start the background periodic flush task using a thread."""
+        def _periodic_sync() -> None:
             while not self._shutdown_flag:
-                await asyncio.sleep(self.flush_interval_sec)
-                await self._flush()
+                time.sleep(self.flush_interval_sec)
+                self._flush_sync()
 
-        try:
-            loop = asyncio.get_running_loop()
-            self._flush_task = loop.create_task(_periodic())
-        except RuntimeError:
-            logger.debug("[DataCollection] No running event loop; periodic flush disabled.")
+        self._flush_thread = threading.Thread(target=_periodic_sync, daemon=True)
+        self._flush_thread.start()
+        logger.debug("[DataCollection] Periodic flush thread started")
 
     async def shutdown(self) -> None:
         """Safely shut down the collector.
@@ -303,13 +303,9 @@ class TrainingDataCollector:
         Signals the periodic flush task to stop and performs a final flush.
         """
         self._shutdown_flag = True
-        if self._flush_task:
-            self._flush_task.cancel()
-            try:
-                await self._flush_task
-            except asyncio.CancelledError:
-                pass
-        await self._flush()
+        if hasattr(self, '_flush_thread') and self._flush_thread:
+            self._flush_thread.join(timeout=5)
+        self._flush_sync()
         logger.info("[DataCollection] Collector shutdown complete")
 
 
