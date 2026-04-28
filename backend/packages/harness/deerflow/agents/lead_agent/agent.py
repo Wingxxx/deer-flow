@@ -68,7 +68,10 @@ def _create_summarization_middleware(*, app_config: AppConfig | None = None) -> 
     # Prepare keep parameter
     keep = config.keep.to_tuple()
 
-    # Prepare model parameter
+    # Prepare model parameter.
+    # Bind "middleware:summarize" tag so RunJournal identifies these LLM calls
+    # as middleware rather than lead_agent (SummarizationMiddleware is a
+    # LangChain built-in, so we tag the model at creation time).
     if config.model_name:
         model = create_chat_model(name=config.model_name, thinking_enabled=False, app_config=app_config)
     else:

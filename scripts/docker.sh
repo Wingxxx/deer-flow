@@ -147,125 +147,6 @@ init() {
     echo -e "${YELLOW}Next step: make docker-start${NC}"
 }
 
-# Auto-detect host IP and update ADS MCP configuration
-# This ensures ADS MCP can connect to services on the host machine from inside Docker
-# ADS MCP reads its server URL from .ads-mcp/config.json, not from environment variables
-detect_and_update_ads_host_ip() {
-    # ADS MCP config file location (on host) - 相对于 PROJECT_ROOT
-    local ads_mcp_dir="${PROJECT_ROOT}/ads-agent-mcp/.ads-mcp"
-    local ads_mcp_config="${ads_mcp_dir}/config.json"
-
-    # 如果目录不存在，创建目录
-    if [ ! -d "$ads_mcp_dir" ]; then
-        echo -e "${BLUE}Creating ADS MCP config directory: $ads_mcp_dir${NC}"
-        mkdir -p "$ads_mcp_dir"
-    fi
-
-    # 如果配置文件不存在，创建初始配置
-    if [ ! -f "$ads_mcp_config" ]; then
-        echo -e "${BLUE}Creating initial ADS MCP config: $ads_mcp_config${NC}"
-        cat > "$ads_mcp_config" << 'EOF'
-{
-  "ads": {
-    "server": {
-      "url": "http://127.0.0.1:80"
-    },
-    "credentials": {
-      "new": {
-        "username": "",
-        "password": ""
-      },
-      "default": {
-        "username": "admin",
-        "password": "Admin#123"
-      }
-    },
-    "token": {
-      "value": "",
-      "expires": 0,
-      "loginTime": 0,
-      "usedBy": "default"
-    }
-  }
-}
-EOF
-    fi
-
-    echo -e "${BLUE}Using ADS MCP config: $ads_mcp_config${NC}"
-
-    local ip=""
-
-    # Try to detect host IP (works on Linux, macOS, and Windows Docker)
-    # Method 1: Use ip route show default - get the SOURCE IP of the default route (Linux/macOS)
-    # NOTE: This gets the LAN IP (src), NOT the gateway IP (via)
-    if [ -z "$ip" ] && command -v ip >/dev/null 2>&1; then
-        ip=$(ip route show default 2>/dev/null | awk '/default/ {for(i=1;i<=NF;i++) if($i=="src") print $(i+1); exit}' | head -1)
-    fi
-
-    # Method 2: Try to get IP from docker0 interface (Linux)
-    if [ -z "$ip" ] && command -v ip >/dev/null 2>&1; then
-        ip=$(ip -4 addr show docker0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1)
-    fi
-
-    # Method 3: Use hostname -I (common on Linux)
-    if [ -z "$ip" ] && command -v hostname >/dev/null 2>&1; then
-        ip=$(hostname -I 2>/dev/null | awk '{print $1}')
-    fi
-
-    # Method 4: Use ipconfig on Windows (Git Bash or MSYS) - get host IP on LAN interface
-    # NOTE: We use "Wireless" or "Ethernet" adapter pattern, NOT Default Gateway
-    if [ -z "$ip" ] && command -v ipconfig >/dev/null 2>&1; then
-        # Try to get the host's actual LAN IP (192.168.x.x pattern), not gateway
-        ip=$(ipconfig 2>/dev/null | grep -E "IPv4|以太网" -A1 2>/dev/null | grep -oP '\d+\.\d+\.\d+\.\d+' | grep '^192\.168\.' | head -1)
-    fi
-
-    # Method 5: Use PowerShell to get host LAN IP (Windows native) - fallback
-    if [ -z "$ip" ] && command -v powershell >/dev/null 2>&1; then
-        ip=$(powershell -Command "\$idx = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Select-Object -First 1).InterfaceIndex; if (\$idx) { (Get-NetIPAddress -InterfaceIndex \$idx -AddressFamily IPv4 -ErrorAction SilentlyContinue | Select-Object -First 1).IPAddress }" 2>/dev/null)
-    fi
-
-    # Skip if no IP found
-    if [ -z "$ip" ]; then
-        echo -e "${YELLOW}Could not detect host IP, ADS MCP may not be able to reach host services${NC}"
-        return
-    fi
-
-    echo -e "${BLUE}Detected host IP: $ip${NC}"
-
-    # Update ADS MCP config.json ads.server.url with detected IP
-    # Always update the url field regardless of current value
-    if grep -q '"url":' "$ads_mcp_config" 2>/dev/null; then
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' 's|"url": "[^"]*"|"url": "http://'"$ip"':80"|g' "$ads_mcp_config"
-        else
-            sed -i 's|"url": "[^"]*"|"url": "http://'"$ip"':80"|g' "$ads_mcp_config"
-        fi
-        echo -e "${GREEN}Updated ADS MCP server URL to http://${ip}:80${NC}"
-    else
-        echo -e "${YELLOW}ADS MCP config missing url field, skipping update${NC}"
-    fi
-
-    # Also update extensions_config.json (the env var consumed by the MCP process)
-    local extensions_config="${PROJECT_ROOT}/extensions_config.json"
-    if [ -f "$extensions_config" ]; then
-        python3 -c "
-import json
-path = '$extensions_config'
-with open(path) as f:
-    cfg = json.load(f)
-ads = cfg.get('mcpServers', {}).get('ads', {})
-env = ads.get('env', {})
-if 'ADS_API_BASE_URL' in env:
-    env['ADS_API_BASE_URL'] = 'http://$ip:80'
-    with open(path, 'w') as f:
-        json.dump(cfg, f, indent=2)
-    print('Updated ADS_API_BASE_URL in extensions_config.json')
-" 2>/dev/null && echo -e "${GREEN}Updated extensions_config.json ADS_API_BASE_URL to http://${ip}:80${NC}" || echo -e "${YELLOW}extensions_config.json ADS_API_BASE_URL not found or update failed, skipping${NC}"
-    else
-        echo -e "${YELLOW}extensions_config.json not found, skipping update${NC}"
-    fi
-}
-
 # Start Docker development environment
 start() {
     local sandbox_mode
@@ -327,16 +208,6 @@ start() {
         fi
     fi
 
-    # Ensure BETTER_AUTH_SECRET exists in .env (required for Next.js prod mode).
-    if [ ! -f "$PROJECT_ROOT/.env" ] || ! grep -q "BETTER_AUTH_SECRET=" "$PROJECT_ROOT/.env" 2>/dev/null; then
-        local secret
-        secret=$(python3 -c "import secrets; print(secrets.token_hex(16))" 2>/dev/null) || \
-        secret=$(openssl rand -hex 16 2>/dev/null) || \
-        secret="fallback-secret-$(date +%s)"
-        echo "BETTER_AUTH_SECRET=$secret" >> "$PROJECT_ROOT/.env"
-        echo -e "${BLUE}Created BETTER_AUTH_SECRET in .env${NC}"
-    fi
-
     # Ensure extensions_config.json exists as a file before mounting.
     # Docker creates a directory when bind-mounting a non-existent host path.
     if [ ! -f "$PROJECT_ROOT/extensions_config.json" ]; then
@@ -349,21 +220,6 @@ start() {
         fi
     fi
 
-<<<<<<< HEAD
-    # Auto-detect host IP and update ADS MCP configuration
-    detect_and_update_ads_host_ip
-
-    # Set nginx routing for gateway mode (envsubst in nginx container)
-    if $gateway_mode; then
-        export LANGGRAPH_UPSTREAM=gateway:8001
-        export LANGGRAPH_REWRITE=/api/
-    fi
-
-    echo "Cleaning up old containers..."
-    cd "$DOCKER_DIR" && $COMPOSE_CMD down > /dev/null 2>&1 || true
-
-=======
->>>>>>> 7bf618de (Refactor DeerFlow to use Gateway's LangGraph-compatible API)
     echo "Building and starting containers..."
     cd "$DOCKER_DIR" && $COMPOSE_CMD up --build -d --remove-orphans $services
     echo ""
@@ -434,11 +290,6 @@ restart() {
     echo "========================================"
     echo "  Restarting DeerFlow Docker Services"
     echo "========================================"
-    echo ""
-
-    # Auto-detect host IP and update ADS MCP configuration before restart
-    detect_and_update_ads_host_ip
-
     echo ""
     echo -e "${BLUE}Restarting containers...${NC}"
     cd "$DOCKER_DIR" && $COMPOSE_CMD restart

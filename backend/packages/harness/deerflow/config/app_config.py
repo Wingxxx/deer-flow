@@ -11,10 +11,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from deerflow.config.acp_config import load_acp_config_from_dict
 from deerflow.config.agents_api_config import AgentsApiConfig, load_agents_api_config_from_dict
 from deerflow.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
+from deerflow.config.database_config import DatabaseConfig
 from deerflow.config.extensions_config import ExtensionsConfig
 from deerflow.config.guardrails_config import GuardrailsConfig, load_guardrails_config_from_dict
 from deerflow.config.memory_config import MemoryConfig, load_memory_config_from_dict
 from deerflow.config.model_config import ModelConfig
+from deerflow.config.run_events_config import RunEventsConfig
 from deerflow.config.sandbox_config import SandboxConfig
 from deerflow.config.skill_evolution_config import SkillEvolutionConfig
 from deerflow.config.skills_config import SkillsConfig

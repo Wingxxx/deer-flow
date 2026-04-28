@@ -9,71 +9,63 @@
 #
 # Prerequisites:
 #   - Kubernetes cluster + kubeconfig are only required when using provisioner mode.
-#     DISABLED due to Docker Desktop 9p filesystem bug causing ~/.kube/config to be
-#     recognized as a directory, triggering RuntimeError crash loop (2026-04-17).
-#     To re-enable: uncomment the provisioner service below and in nginx.conf,
-#     then add "provisioner_url: http://provisioner:8002" to config.yaml sandbox section.
 #
 # Access: http://localhost:2026
 
 services:
   # ── Sandbox Provisioner ────────────────────────────────────────────────
-  # DISABLED (2026-04-17): Docker Desktop 9p bug causes ~/.kube/config to be recognized
-  # as a directory → RuntimeError → crash loop with restart: unless-stopped.
-  # Impact: Provisioner only activates when config.yaml has "provisioner_url: http://provisioner:8002".
-  #         Default config uses LocalContainerBackend, so disabling provisioner has zero impact.
-  # Future:  To re-enable K8s sandbox mode, uncomment this block, add kubeconfig mount,
-  #         and configure "provisioner_url" in config.yaml sandbox section.
-  # provisioner:
-  #   build:
-  #     context: ./provisioner
-  #     dockerfile: Dockerfile
-  #     args:
-  #       APT_MIRROR: ${APT_MIRROR:-}
-  #   container_name: deer-flow-provisioner
-  #   volumes:
-  #     - ~/.kube/config:/root/.kube/config:ro
-  #   environment:
-  #     - K8S_NAMESPACE=deer-flow
-  #     - SANDBOX_IMAGE=enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
-  #     # Host paths for K8s HostPath volumes (must be absolute paths accessible by K8s node)
-  #     # On Docker Desktop/OrbStack, use your actual host paths like /Users/username/...
-  #     # Set these in your shell before running docker-compose:
-  #     #   export DEER_FLOW_ROOT=/absolute/path/to/deer-flow
-  #     - SKILLS_HOST_PATH=${DEER_FLOW_ROOT}/skills
-  #     - THREADS_HOST_PATH=${DEER_FLOW_ROOT}/backend/.deer-flow/threads
-  #     # Production: use PVC instead of hostPath to avoid data loss on node failure.
-  #     # When set, hostPath vars above are ignored for the corresponding volume.
-  #     # USERDATA_PVC_NAME uses subPath (threads/{thread_id}/user-data) automatically.
-  #     # - SKILLS_PVC_NAME=deer-flow-skills-pvc
-  #     # - USERDATA_PVC_NAME=deer-flow-userdata-pvc
-  #     - KUBECONFIG_PATH=/root/.kube/config
-  #     - NODE_HOST=host.docker.internal
-  #     # Override K8s API server URL since kubeconfig uses 127.0.0.1
-  #     # which is unreachable from inside the container
-  #     - K8S_API_SERVER=https://host.docker.internal:26443
-  #   env_file:
-  #     - ../.env
-  #   extra_hosts:
-  #     - "host.docker.internal:host-gateway"
-  #   networks:
-  #     - deer-flow-dev
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 6
-  #     start_period: 15s
+  # Manages per-sandbox Pod + Service lifecycle in the host Kubernetes
+  # cluster via the K8s API.
+  # Backend accesses sandboxes directly via host.docker.internal:{NodePort}.
+  provisioner:
+    build:
+      context: ./provisioner
+      dockerfile: Dockerfile
+      args:
+        APT_MIRROR: ${APT_MIRROR:-}
+    container_name: deer-flow-provisioner
+    volumes:
+      - ~/.kube/config:/root/.kube/config:ro
+    environment:
+      - K8S_NAMESPACE=deer-flow
+      - SANDBOX_IMAGE=enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
+      # Host paths for K8s HostPath volumes (must be absolute paths accessible by K8s node)
+      # On Docker Desktop/OrbStack, use your actual host paths like /Users/username/...
+      # Set these in your shell before running docker-compose:
+      #   export DEER_FLOW_ROOT=/absolute/path/to/deer-flow
+      - SKILLS_HOST_PATH=${DEER_FLOW_ROOT}/skills
+      - THREADS_HOST_PATH=${DEER_FLOW_ROOT}/backend/.deer-flow/threads
+      # Production: use PVC instead of hostPath to avoid data loss on node failure.
+      # When set, hostPath vars above are ignored for the corresponding volume.
+      # USERDATA_PVC_NAME uses subPath (threads/{thread_id}/user-data) automatically.
+      # - SKILLS_PVC_NAME=deer-flow-skills-pvc
+      # - USERDATA_PVC_NAME=deer-flow-userdata-pvc
+      - KUBECONFIG_PATH=/root/.kube/config
+      - NODE_HOST=host.docker.internal
+      # Override K8S API server URL since kubeconfig uses 127.0.0.1
+      # which is unreachable from inside the container
+      - K8S_API_SERVER=https://host.docker.internal:26443
+    env_file:
+      - ../.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - deer-flow-dev
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
 
   # ── Reverse Proxy ──────────────────────────────────────────────────────
   # Routes API traffic to gateway and (optionally) provisioner.
   nginx:
     image: nginx:alpine
     container_name: deer-flow-nginx
-    network_mode: host
     ports:
-      - "0.0.0.0:2026:2026"
+      - "2026:2026"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf.template:ro
     command:
@@ -87,23 +79,21 @@ services:
     depends_on:
       - frontend
       - gateway
+    networks:
+      - deer-flow-dev
     restart: unless-stopped
 
-  # Frontend - Next.js Production Server
-  # Note: target=prod uses pre-built .next (no Turbopack SSR hang).
-  # Hot-reload is disabled, but SSR /workspace works correctly.
+  # Frontend - Next.js Development Server
   frontend:
     build:
       context: ../
       dockerfile: frontend/Dockerfile
-      target: prod
+      target: dev
       args:
         PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
         NPM_REGISTRY: ${NPM_REGISTRY:-}
     container_name: deer-flow-frontend
-    network_mode: host
-    command: sh -c "pnpm start > /app/logs/frontend.log 2>&1"
-    working_dir: /app/frontend
+    command: sh -c "cd frontend && pnpm run dev > /app/logs/frontend.log 2>&1"
     volumes:
       - ../frontend/src:/app/frontend/src
       - ../frontend/public:/app/frontend/public
@@ -111,15 +101,16 @@ services:
       - ../logs:/app/logs
       # Mount pnpm store for caching
       - ${PNPM_STORE_PATH:-~/.local/share/pnpm/store}:/root/.local/share/pnpm/store
+    working_dir: /app
     environment:
       - NODE_ENV=development
       - WATCHPACK_POLLING=true
       - CI=true
       - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001
     env_file:
-      - ../.env
-    mem_limit: 2g
-    memswap_limit: 2g
+      - ../frontend/.env
+    networks:
+      - deer-flow-dev
     restart: unless-stopped
 
   # Backend - Gateway API
@@ -134,8 +125,7 @@ services:
         UV_IMAGE: ${UV_IMAGE:-ghcr.io/astral-sh/uv:0.7.20}
         UV_INDEX_URL: ${UV_INDEX_URL:-https://pypi.org/simple}
     container_name: deer-flow-gateway
-    network_mode: host
-    command: sh -c "cd backend && (uv sync || (echo '[startup] uv sync failed; recreating .venv and retrying once' && uv venv --allow-existing .venv && uv sync)) && PYTHONPATH=/app uv run uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001 --reload --reload-include='*.yaml .env' > /app/logs/gateway.log 2>&1"
+    command: sh -c "{ cd backend && (uv sync || (echo '[startup] uv sync failed; recreating .venv and retrying once' && uv venv --allow-existing .venv && uv sync)) && PYTHONPATH=. uv run uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001 --reload --reload-include='*.yaml .env'; } > /app/logs/gateway.log 2>&1"
     volumes:
       - ../backend/:/app/backend/
       # Preserve the .venv built during Docker image build — mounting the full backend/
@@ -179,6 +169,11 @@ services:
       - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
     env_file:
       - ../.env
+    extra_hosts:
+      # For Linux: map host.docker.internal to host gateway
+      - "host.docker.internal:host-gateway"
+    networks:
+      - deer-flow-dev
     restart: unless-stopped
 
 volumes:

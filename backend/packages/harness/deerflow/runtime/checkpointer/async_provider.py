@@ -125,12 +125,17 @@ async def _async_checkpointer_from_database(db_config) -> AsyncIterator[Checkpoi
 @contextlib.asynccontextmanager
 async def make_checkpointer(app_config: AppConfig | None = None) -> AsyncIterator[Checkpointer]:
     """Async context manager that yields a checkpointer for the caller's lifetime.
-    Resources are opened on enter and closed on exit — no global state::
+    Resources are opened on enter and closed on exit -- no global state::
 
         async with make_checkpointer(app_config) as checkpointer:
             app.state.checkpointer = checkpointer
 
     Yields an ``InMemorySaver`` when no checkpointer is configured in *config.yaml*.
+
+    Priority:
+    1. Legacy ``checkpointer:`` config section (backward compatible)
+    2. Unified ``database:`` config section
+    3. Default InMemorySaver
     """
 
     if app_config is None:
@@ -140,14 +145,16 @@ async def make_checkpointer(app_config: AppConfig | None = None) -> AsyncIterato
     if app_config.checkpointer is not None:
         async with _async_checkpointer(app_config.checkpointer) as saver:
             yield saver
-        return
+            return
 
     # Unified database config
     db_config = getattr(app_config, "database", None)
     if db_config is not None and db_config.backend != "memory":
         async with _async_checkpointer_from_database(db_config) as saver:
             yield saver
-        return
+            return
 
-    async with _async_checkpointer(app_config.checkpointer) as saver:
-        yield saver
+    # Default: in-memory
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    yield InMemorySaver()

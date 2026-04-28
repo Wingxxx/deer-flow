@@ -152,25 +152,9 @@ clean: stop
 docker-init:
 	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh init
 
-# Docker Build proxy settings (for users behind firewall/GFW)
-# Set DOCKER_BUILD_PROXY to empty to disable proxy, or use a different port
-DOCKER_BUILD_PROXY ?= http://127.0.0.1:7897
-
-# Proxy wrapper: tries proxy first, falls back to no proxy on failure
-define PROXY_WRAPPER
-@$(if $(DOCKER_BUILD_PROXY),\
-  (HTTP_PROXY=$(DOCKER_BUILD_PROXY) HTTPS_PROXY=$(DOCKER_BUILD_PROXY) BUILDCTL_PROXY=$(DOCKER_BUILD_PROXY) BUILDCTL_HTTPS_PROXY=$(DOCKER_BUILD_PROXY) $(RUN_WITH_GIT_BASH) ./scripts/docker.sh start $(1) 2>&1 | tee /tmp/deerflow-docker-start.log; \
-  if grep -q "connection refused\|i/o timeout\|DeadlineExceeded" /tmp/deerflow-docker-start.log 2>/dev/null; then \
-    echo "Proxy failed, retrying without proxy..."; \
-    unset HTTP_PROXY HTTPS_PROXY BUILDCTL_PROXY BUILDCTL_HTTPS_PROXY; \
-    $(RUN_WITH_GIT_BASH) ./scripts/docker.sh start $(1); \
-  fi),\
-  $(RUN_WITH_GIT_BASH) ./scripts/docker.sh start $(1))
-endef
-
 # Start Docker development environment
 docker-start:
-	$(PROXY_WRAPPER)
+	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh start
 
 # Stop Docker development environment
 docker-stop:
