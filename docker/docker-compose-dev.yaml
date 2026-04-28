@@ -156,6 +156,7 @@ services:
       - ../logs:/app/logs
       - ../ads-agent-mcp:/app/ads-mcp
       - ../deerflow_extensions:/app/deerflow_extensions
+      - ../training_logs:/data/deerflow/training_logs
       # Use a Docker-managed uv cache volume instead of a host bind mount.
       # On macOS/Docker Desktop, uv may fail to create symlinks inside shared
       # host directories, which causes startup-time `uv sync` to crash.

@@ -244,6 +244,26 @@ EOF
     else
         echo -e "${YELLOW}ADS MCP config missing url field, skipping update${NC}"
     fi
+
+    # Also update extensions_config.json (the env var consumed by the MCP process)
+    local extensions_config="${PROJECT_ROOT}/extensions_config.json"
+    if [ -f "$extensions_config" ]; then
+        python3 -c "
+import json
+path = '$extensions_config'
+with open(path) as f:
+    cfg = json.load(f)
+ads = cfg.get('mcpServers', {}).get('ads', {})
+env = ads.get('env', {})
+if 'ADS_API_BASE_URL' in env:
+    env['ADS_API_BASE_URL'] = 'http://$ip:80'
+    with open(path, 'w') as f:
+        json.dump(cfg, f, indent=2)
+    print('Updated ADS_API_BASE_URL in extensions_config.json')
+" 2>/dev/null && echo -e "${GREEN}Updated extensions_config.json ADS_API_BASE_URL to http://${ip}:80${NC}" || echo -e "${YELLOW}extensions_config.json ADS_API_BASE_URL not found or update failed, skipping${NC}"
+    else
+        echo -e "${YELLOW}extensions_config.json not found, skipping update${NC}"
+    fi
 }
 
 # Start Docker development environment
