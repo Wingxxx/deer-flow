@@ -23,6 +23,13 @@ from app.gateway.routers import (
 )
 from deerflow.config.app_config import get_app_config
 
+# Data collection system (zero-injection, monkey-patch based)
+try:
+    from deerflow_extensions.data_collection.startup import install_data_collection
+    install_data_collection()
+except ImportError:
+    pass
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
