@@ -23,13 +23,6 @@ from app.gateway.routers import (
 )
 from deerflow.config.app_config import get_app_config
 
-# Data collection system (zero-injection, monkey-patch based)
-try:
-    from deerflow_extensions.data_collection.startup import install_data_collection
-    install_data_collection()
-except ImportError:
-    pass
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -38,6 +31,21 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+# Data collection system (zero-injection, monkey-patch based)
+import os as _os
+import sys as _sys
+_ext_path = _os.path.normpath(_os.path.join(_os.path.dirname(__file__), "..", "..", ".."))
+if _ext_path not in _sys.path:
+    _sys.path.insert(0, _ext_path)
+try:
+    from deerflow_extensions.data_collection.startup import install_data_collection
+    install_data_collection()
+    logger.info("[DataCollection] System installed successfully at startup")
+except ImportError:
+    logger.warning("[DataCollection] Package not found, data collection is disabled")
+except Exception as _e:
+    logger.warning(f"[DataCollection] Install failed: {_e}")
 
 
 @asynccontextmanager

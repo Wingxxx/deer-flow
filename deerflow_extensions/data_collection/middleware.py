@@ -4,7 +4,7 @@ from typing import Any
 
 from deerflow_extensions.data_collection.collector import get_collector
 
-from deerflow.agents.middlewares.base import AgentMiddleware
+from langchain.agents.middleware import AgentMiddleware
 
 logger = logging.getLogger(__name__)
 

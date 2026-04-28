@@ -1,4 +1,6 @@
 import logging
+import sys
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -6,11 +8,21 @@ logger = logging.getLogger(__name__)
 _installed = False
 
 
+def _ensure_package_path() -> None:
+    """Ensure deerflow_extensions is importable by adding its parent to sys.path."""
+    pkg_path = Path(__file__).resolve().parent.parent  # deerflow_extensions/
+    pkg_str = str(pkg_path)
+    if pkg_str not in sys.path:
+        sys.path.insert(0, pkg_str)
+
+
 def install_data_collection(config_path: str | None = None) -> None:
     global _installed
     if _installed:
         logger.warning("Data collection already installed, skipping")
         return
+
+    _ensure_package_path()
 
     try:
         import deerflow.agents.lead_agent.agent as agent_module

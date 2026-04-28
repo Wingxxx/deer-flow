@@ -61,9 +61,22 @@ docs/
 ├── changelog/        # 代码变更记录
 ├── operations/       # 运维与故障排查指南
 ├── plans/            # 技术方案计划
+│   ├── deerflow模型蒸馏私有化可行性分析方案.md
+│   ├── deerflow蒸馏数据采集体系设计.md
+│   └── deerflow蒸馏数据采集体系-spec.md
 ├── skills/           # Skill 相关文档
 └── pr-evidence/      # PR 测试截图
 ```
+
+## 扩展插件目录
+
+`deerflow_extensions/` 是独立插件目录（与 `backend/` 平级），存放零侵入扩展模块，不修改 DeerFlow 主干代码。
+
+| 插件 | 路径 | 说明 |
+|------|------|------|
+| 蒸馏数据采集系统 | `@./deerflow_extensions/data_collection/` | Agent全链路数据旁路采集，为蒸馏训练储备数据 |
+| README | `@./deerflow_extensions/data_collection/README.md` | 安装/使用/卸载说明 |
+| API文档 | `@./deerflow_extensions/data_collection/API.md` | 完整API参考 |
 
 | 文档 | 路径 | 说明 |
 |------|------|------|

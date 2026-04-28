@@ -8,7 +8,6 @@ Configuration source priority (highest to lowest):
 """
 
 import os
-import yaml
 from typing import Any
 
 
@@ -53,8 +52,9 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
     # Priority 1: Standalone YAML file
     if config_path and os.path.exists(config_path):
         try:
+            import yaml as _yaml
             with open(config_path, encoding="utf-8") as f:
-                external = yaml.safe_load(f) or {}
+                external = _yaml.safe_load(f) or {}
                 external_dc = external.get("data_collection", {})
                 if external_dc:
                     config.update(external_dc)
