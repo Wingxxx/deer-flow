@@ -2,7 +2,6 @@ import asyncio
 from unittest.mock import MagicMock
 
 import pytest
-
 from deerflow_extensions.data_collection.middleware import DataCollectionMiddleware
 
 
@@ -128,6 +127,133 @@ class TestMiddlewareWithNoneCollector:
         state = {"config": {}}
         result = await mw.aafter_agent(state)
         assert result is state
+
+
+class TestWrapToolCall:
+    def test_wrap_tool_call_correctly_extracts_tool_info(self, middleware, mock_collector):
+        mock_request = MagicMock()
+        mock_request.tool_call = {
+            "name": "bash",
+            "args": {"command": "ls -la"},
+            "id": "call_123",
+            "metadata": {"session_id": "test-session"},
+        }
+
+        def mock_handler(req):
+            return MagicMock(content="result")
+
+        middleware.wrap_tool_call(mock_request, mock_handler)
+
+        assert mock_collector.record_tool_call.call_count == 2
+
+        request_call = mock_collector.record_tool_call.call_args_list[0].kwargs
+        assert request_call["session_id"] == "test-session"
+        assert request_call["tool_name"] == "bash"
+        assert request_call["tool_params"] == {"command": "ls -la"}
+        assert request_call["call_id"] == "call_123"
+        assert request_call["phase"] == "request"
+
+        result_call = mock_collector.record_tool_call.call_args_list[1].kwargs
+        assert result_call["session_id"] == "test-session"
+        assert result_call["tool_name"] == "bash"
+        assert result_call["tool_params"] == {"command": "ls -la"}
+        assert result_call["call_id"] == "call_123"
+        assert result_call["phase"] == "result"
+        assert result_call["error"] is None
+
+    def test_wrap_tool_call_captures_multiple_tools(self, middleware, mock_collector):
+        tools = [
+            {"name": "read_file", "args": {"path": "/etc/hosts"}, "id": "call_1", "metadata": {}},
+            {"name": "write_file", "args": {"path": "/tmp/test", "content": "hello"}, "id": "call_2", "metadata": {}},
+            {"name": "bash", "args": {"command": "echo hi"}, "id": "call_3", "metadata": {}},
+        ]
+
+        for i, tool_spec in enumerate(tools):
+            mock_request = MagicMock()
+            mock_request.tool_call = tool_spec
+
+            def mock_handler(req):
+                return MagicMock(content=f"result_{i}")
+
+            middleware._step_counts["unknown"] = i
+            middleware.wrap_tool_call(mock_request, mock_handler)
+
+        assert mock_collector.record_tool_call.call_count == 6
+
+    def test_wrap_tool_call_with_missing_metadata(self, middleware, mock_collector):
+        mock_request = MagicMock()
+        mock_request.tool_call = {
+            "name": "bash",
+            "args": {"command": "pwd"},
+            "id": "call_456",
+        }
+
+        def mock_handler(req):
+            return MagicMock(content="result")
+
+        middleware.wrap_tool_call(mock_request, mock_handler)
+
+        call_args = mock_collector.record_tool_call.call_args_list[0].kwargs
+        assert call_args["session_id"] == "unknown"
+        assert call_args["tool_name"] == "bash"
+        assert call_args["tool_params"] == {"command": "pwd"}
+
+    def test_wrap_tool_call_with_empty_tool_call(self, middleware, mock_collector):
+        mock_request = MagicMock()
+        mock_request.tool_call = {}
+
+        def mock_handler(req):
+            return MagicMock(content="result")
+
+        middleware.wrap_tool_call(mock_request, mock_handler)
+
+        call_args = mock_collector.record_tool_call.call_args_list[0].kwargs
+        assert call_args["tool_name"] == "unknown"
+        assert call_args["tool_params"] == {}
+
+
+class TestWrapToolCallAsync:
+    @pytest.mark.anyio
+    async def test_awrap_tool_call_correctly_extracts_tool_info(self, middleware, mock_collector):
+        mock_request = MagicMock()
+        mock_request.tool_call = {
+            "name": "read_file",
+            "args": {"path": "/tmp/test.txt"},
+            "id": "async_call_123",
+            "metadata": {"session_id": "async-session"},
+        }
+
+        async def mock_handler(req):
+            return MagicMock(content="async result")
+
+        await middleware.awrap_tool_call(mock_request, mock_handler)
+
+        assert mock_collector.record_tool_call.call_count == 2
+
+        request_call = mock_collector.record_tool_call.call_args_list[0].kwargs
+        assert request_call["session_id"] == "async-session"
+        assert request_call["tool_name"] == "read_file"
+        assert request_call["tool_params"] == {"path": "/tmp/test.txt"}
+        assert request_call["call_id"] == "async_call_123"
+        assert request_call["phase"] == "request"
+
+    @pytest.mark.anyio
+    async def test_awrap_tool_call_with_none_collector(self):
+        mw = DataCollectionMiddleware()
+        mw.collector = None
+        mock_request = MagicMock()
+        mock_request.tool_call = {
+            "name": "bash",
+            "args": {},
+            "id": "call_none",
+        }
+
+        async def mock_handler(req):
+            return MagicMock(content="result")
+
+        result = await mw.awrap_tool_call(mock_request, mock_handler)
+        mock_result = await result
+        assert hasattr(mock_result, "content")
 
 
 class TestMiddlewareAsyncConcurrency:

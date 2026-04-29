@@ -3,7 +3,6 @@ import time
 from typing import Any
 
 from deerflow_extensions.data_collection.collector import get_collector
-
 from langchain.agents.middleware import AgentMiddleware
 
 logger = logging.getLogger(__name__)
@@ -157,10 +156,12 @@ class DataCollectionMiddleware(AgentMiddleware):
         call_id = ""
 
         try:
-            session_id = getattr(tool_call, "session_id", "unknown")
-            tool_name = getattr(tool_call, "name", "unknown")
-            tool_params = getattr(tool_call, "args", {})
-            call_id = getattr(tool_call, "id", "") or str(id(tool_call))
+            tc = getattr(tool_call, "tool_call", {}) or {}
+            metadata = tc.get("metadata", {}) or {}
+            session_id = metadata.get("session_id", "unknown")
+            tool_name = tc.get("name", "unknown")
+            tool_params = tc.get("args", {})
+            call_id = tc.get("id", "") or str(id(tool_call))
 
             self._tool_calls[session_id] = (
                 self._tool_calls.get(session_id, 0) + 1
@@ -218,10 +219,12 @@ class DataCollectionMiddleware(AgentMiddleware):
         call_id = ""
 
         try:
-            session_id = getattr(tool_call, "session_id", "unknown")
-            tool_name = getattr(tool_call, "name", "unknown")
-            tool_params = getattr(tool_call, "args", {})
-            call_id = getattr(tool_call, "id", "") or str(id(tool_call))
+            tc = getattr(tool_call, "tool_call", {}) or {}
+            metadata = tc.get("metadata", {}) or {}
+            session_id = metadata.get("session_id", "unknown")
+            tool_name = tc.get("name", "unknown")
+            tool_params = tc.get("args", {})
+            call_id = tc.get("id", "") or str(id(tool_call))
 
             self._tool_calls[session_id] = (
                 self._tool_calls.get(session_id, 0) + 1
