@@ -1,4 +1,5 @@
 import asyncio
+import os
 
 from langchain.tools import tool
 
@@ -7,6 +8,10 @@ from deerflow.config import get_app_config
 from deerflow.utils.readability import ReadabilityExtractor
 
 readability_extractor = ReadabilityExtractor()
+
+
+def _is_jina_api_configured() -> bool:
+    return bool(os.getenv("JINA_API_KEY"))
 
 
 @tool("web_fetch", parse_docstring=True)
@@ -20,6 +25,13 @@ async def web_fetch_tool(url: str) -> str:
     Args:
         url: The URL to fetch the contents of.
     """
+    if not _is_jina_api_configured():
+        return (
+            "[Skipped] web_fetch tool is disabled because JINA_API_KEY is not configured. "
+            "To enable, set the JINA_API_KEY environment variable. "
+            "Get a free key at https://jina.ai/reader"
+        )
+
     jina_client = JinaClient()
     timeout = 10
     config = get_app_config().get_tool_config("web_fetch")
