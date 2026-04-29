@@ -6,8 +6,36 @@ from deerflow_extensions.data_collection.collector import get_collector
 from deerflow_extensions.data_collection.config import load_config
 from deerflow_extensions.data_collection.role_parser import parse_messages
 from langchain.agents.middleware import AgentMiddleware
+from langgraph.runtime import Runtime
 
 logger = logging.getLogger(__name__)
+
+
+def _get_thread_id_from_state_or_runtime(state: dict, runtime: Runtime | None = None) -> str:
+    """Extract thread_id from state or runtime context.
+
+    Tries multiple sources to find thread_id:
+    1. runtime.context.get("thread_id") if runtime is available
+    2. state.get("config", {}).get("configurable", {}).get("thread_id")
+    3. get_config().get("configurable", {}).get("thread_id")
+
+    Returns "unknown" if no thread_id is found.
+    """
+    thread_id = "unknown"
+
+    if runtime is not None and runtime.context:
+        thread_id = runtime.context.get("thread_id") or "unknown"
+        if thread_id != "unknown":
+            return thread_id
+
+    if isinstance(state, dict):
+        config = state.get("config")
+        if isinstance(config, dict):
+            configurable = config.get("configurable")
+            if isinstance(configurable, dict):
+                thread_id = configurable.get("thread_id") or "unknown"
+
+    return thread_id
 
 
 class DataCollectionMiddleware(AgentMiddleware):
@@ -32,16 +60,12 @@ class DataCollectionMiddleware(AgentMiddleware):
         self._tool_calls: dict[str, int] = {}
         self._accumulated_tokens: dict[str, dict] = {}
 
-    def before_model(self, state: dict) -> dict:
+    def before_model(self, state: dict, runtime: Runtime | None = None) -> dict:
         if self.collector is None:
             return state
 
         try:
-            session_id = str(
-                state.get("config", {})
-                .get("configurable", {})
-                .get("thread_id", "unknown")
-            )
+            session_id = _get_thread_id_from_state_or_runtime(state, runtime)
             messages = state.get("messages", [])
 
             parsed = parse_messages(messages, mode=self.role_extract_mode)
@@ -73,19 +97,15 @@ class DataCollectionMiddleware(AgentMiddleware):
 
         return state
 
-    async def abefore_model(self, state: dict) -> dict:
-        return self.before_model(state)
+    async def abefore_model(self, state: dict, runtime: Runtime | None = None) -> dict:
+        return self.before_model(state, runtime)
 
-    def after_model(self, state: dict) -> dict:
+    def after_model(self, state: dict, runtime: Runtime | None = None) -> dict:
         if self.collector is None:
             return state
 
         try:
-            session_id = str(
-                state.get("config", {})
-                .get("configurable", {})
-                .get("thread_id", "unknown")
-            )
+            session_id = _get_thread_id_from_state_or_runtime(state, runtime)
             messages = state.get("messages", [])
             if not messages:
                 return state
@@ -143,8 +163,8 @@ class DataCollectionMiddleware(AgentMiddleware):
 
         return state
 
-    async def aafter_model(self, state: dict) -> dict:
-        return self.after_model(state)
+    async def aafter_model(self, state: dict, runtime: Runtime | None = None) -> dict:
+        return self.after_model(state, runtime)
 
     def wrap_tool_call(self, tool_call: Any, handler: Any) -> Any:
         if self.collector is None:
@@ -272,16 +292,12 @@ class DataCollectionMiddleware(AgentMiddleware):
 
         return result
 
-    def after_agent(self, state: dict) -> dict:
+    def after_agent(self, state: dict, runtime: Runtime | None = None) -> dict:
         if self.collector is None:
             return state
 
         try:
-            session_id = str(
-                state.get("config", {})
-                .get("configurable", {})
-                .get("thread_id", "unknown")
-            )
+            session_id = _get_thread_id_from_state_or_runtime(state, runtime)
             messages = state.get("messages", [])
             final_msg = messages[-1] if messages else None
 
@@ -318,5 +334,5 @@ class DataCollectionMiddleware(AgentMiddleware):
 
         return state
 
-    async def aafter_agent(self, state: dict) -> dict:
-        return self.after_agent(state)
+    async def aafter_agent(self, state: dict, runtime: Runtime | None = None) -> dict:
+        return self.after_agent(state, runtime)
