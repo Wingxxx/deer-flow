@@ -202,6 +202,67 @@ class DataCollectionMiddleware(AgentMiddleware):
 
         return result
 
+    async def awrap_tool_call(self, tool_call: Any, handler: Any) -> Any:
+        if self.collector is None:
+            return handler(tool_call)
+
+        session_id = "unknown"
+        tool_name = ""
+        tool_params = {}
+        call_id = ""
+
+        try:
+            session_id = getattr(tool_call, "session_id", "unknown")
+            tool_name = getattr(tool_call, "name", "unknown")
+            tool_params = getattr(tool_call, "args", {})
+            call_id = getattr(tool_call, "id", "") or str(id(tool_call))
+
+            self._tool_calls[session_id] = (
+                self._tool_calls.get(session_id, 0) + 1
+            )
+
+            self.collector.record_tool_call(
+                session_id=session_id,
+                step_number=self._step_counts.get(session_id, 0),
+                tool_name=tool_name,
+                tool_params=tool_params,
+                call_id=call_id,
+                phase="request",
+            )
+        except Exception as e:
+            logger.debug("[DataCollection] awrap_tool_call request error: %s", e)
+
+        start = time.monotonic()
+        error = None
+        result = None
+        try:
+            result = await handler(tool_call)
+        except Exception as e:
+            error = str(e)
+            raise
+        finally:
+            duration = (time.monotonic() - start) * 1000
+            try:
+                self.collector.record_tool_call(
+                    session_id=session_id,
+                    step_number=self._step_counts.get(session_id, 0),
+                    tool_name=tool_name,
+                    tool_params=tool_params,
+                    call_id=call_id,
+                    tool_result=(
+                        getattr(result, "content", None) if result else None
+                    ),
+                    error=error,
+                    duration_ms=duration,
+                    phase="result",
+                )
+            except Exception as e:
+                logger.debug(
+                    "[DataCollection] awrap_tool_call result error: %s", e
+                )
+
+        return result
+
     def after_agent(self, state: dict) -> dict:
         if self.collector is None:
             return state
