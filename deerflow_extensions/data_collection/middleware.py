@@ -3,6 +3,8 @@ import time
 from typing import Any
 
 from deerflow_extensions.data_collection.collector import get_collector
+from deerflow_extensions.data_collection.config import load_config
+from deerflow_extensions.data_collection.role_parser import parse_messages
 from langchain.agents.middleware import AgentMiddleware
 
 logger = logging.getLogger(__name__)
@@ -16,6 +18,13 @@ class DataCollectionMiddleware(AgentMiddleware):
         except Exception as e:
             logger.debug("[DataCollection] Failed to get collector: %s", e)
             self.collector = None
+
+        try:
+            config = load_config()
+            self.role_extract_mode = config.get("role_extract_mode", "auto")
+        except Exception as e:
+            logger.debug("[DataCollection] Failed to load config: %s", e)
+            self.role_extract_mode = "auto"
 
         self._step_counts: dict[str, int] = {}
         self._session_start: dict[str, float] = {}
@@ -35,19 +44,10 @@ class DataCollectionMiddleware(AgentMiddleware):
             )
             messages = state.get("messages", [])
 
-            user_query = ""
-            system_prompt = ""
-            history = []
-
-            for msg in messages:
-                role = getattr(msg, "type", "") or msg.get("role", "")
-                content = getattr(msg, "content", "") or msg.get("content", "")
-                if role == "system":
-                    system_prompt = content
-                elif role == "user":
-                    user_query = content
-                else:
-                    history.append({"role": role, "content": content})
+            parsed = parse_messages(messages, mode=self.role_extract_mode)
+            user_query = parsed["user_query"]
+            system_prompt = parsed["system_prompt"]
+            history = parsed["history"]
 
             self.collector.record_agent_input(
                 session_id=session_id,

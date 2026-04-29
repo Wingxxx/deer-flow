@@ -23,6 +23,7 @@ class TestDefaultConfig:
             "collect_tool_calls",
             "collect_intermediate_state",
             "collect_final_response",
+            "role_extract_mode",
         }
         assert set(DEFAULT_CONFIG.keys()) == expected_keys
 
@@ -37,6 +38,7 @@ class TestDefaultConfig:
         assert DEFAULT_CONFIG["collect_tool_calls"] is True
         assert DEFAULT_CONFIG["collect_intermediate_state"] is False
         assert DEFAULT_CONFIG["collect_final_response"] is True
+        assert DEFAULT_CONFIG["role_extract_mode"] == "auto"
 
 
 class TestLoadConfig:

@@ -64,6 +64,19 @@ Override individual settings without a YAML file:
 | `DATA_COLLECTION_OUTPUT_DIR` | output_dir | `/custom/path` |
 | `DATA_COLLECTION_BUFFER_SIZE` | buffer_size | `1000` |
 | `DATA_COLLECTION_FLUSH_INTERVAL` | flush_interval_sec | `10.0` |
+| `DATA_COLLECTION_ROLE_EXTRACT_MODE` | role_extract_mode | `auto` |
+
+### role_extract_mode configuration
+
+The `role_extract_mode` setting controls how user messages are identified from LangGraph message objects:
+
+| Mode | Description |
+|------|-------------|
+| `auto` (default) | Recognizes both `role="user"` and `type="human"` (LangGraph HumanMessage) |
+| `human` | Only recognizes `type="human"` (LangGraph HumanMessage format) |
+| `user` | Only recognizes `role="user"` (traditional format) |
+
+For most DeerFlow deployments, `auto` is recommended as it handles both LangGraph's HumanMessage and dict-style messages correctly.
 
 ### Configuration priority
 

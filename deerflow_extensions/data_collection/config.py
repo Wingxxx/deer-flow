@@ -22,6 +22,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "collect_tool_calls": True,
     "collect_intermediate_state": False,
     "collect_final_response": True,
+    "role_extract_mode": "auto",
 }
 
 _ENV_VAR_MAP: dict[str, tuple[str, callable]] = {
@@ -29,6 +30,7 @@ _ENV_VAR_MAP: dict[str, tuple[str, callable]] = {
     "DATA_COLLECTION_OUTPUT_DIR": ("output_dir", str),
     "DATA_COLLECTION_BUFFER_SIZE": ("buffer_size", int),
     "DATA_COLLECTION_FLUSH_INTERVAL": ("flush_interval_sec", float),
+    "DATA_COLLECTION_ROLE_EXTRACT_MODE": ("role_extract_mode", str),
 }
 
 
