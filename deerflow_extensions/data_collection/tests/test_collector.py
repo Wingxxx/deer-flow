@@ -172,7 +172,7 @@ class TestTrainingDataCollector:
         )
         assert len(collector._buffer) == 1
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_buffer_full_triggers_async_flush(self, collector):
         async def fake_flush():
             collector._buffer.clear()
@@ -229,7 +229,7 @@ class TestSingleton:
 
 
 class TestFlush:
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_flush_writes_to_file(self, collector):
         collector.record_agent_input(
             session_id="sess-1",
@@ -247,7 +247,110 @@ class TestFlush:
             content = f.read()
         assert "flush test" in content
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_flush_empty_buffer_does_nothing(self, collector):
         result = await collector._flush()
         assert result is None
+
+
+class TestThreadSafety:
+    def test_concurrent_record_writes_no_errors(self, collector):
+        import threading
+
+        collector._shutdown_flag = True
+
+        errors = []
+
+        def writer(session_prefix, count):
+            try:
+                for i in range(count):
+                    collector.record_agent_input(
+                        session_id=f"{session_prefix}-{i}",
+                        user_query=f"query-{i}",
+                        system_prompt="test",
+                        history_context=[],
+                    )
+            except Exception as e:
+                errors.append(e)
+
+        threads = [
+            threading.Thread(target=writer, args=(f"sess-{j}", 50))
+            for j in range(5)
+        ]
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(errors) == 0
+
+    def test_concurrent_record_and_flush(self, collector):
+        import threading
+        import time
+
+        errors = []
+
+        def writer(session_prefix, count):
+            try:
+                for i in range(count):
+                    collector.record_agent_input(
+                        session_id=f"{session_prefix}-{i}",
+                        user_query=f"query-{i}",
+                        system_prompt="test",
+                        history_context=[],
+                    )
+                    time.sleep(0.001)
+            except Exception as e:
+                errors.append(e)
+
+        def flusher():
+            try:
+                for _ in range(20):
+                    collector._flush_sync()
+                    time.sleep(0.005)
+            except Exception as e:
+                errors.append(e)
+
+        writer_thread = threading.Thread(target=writer, args=("sess-w", 100))
+        flush_thread = threading.Thread(target=flusher)
+
+        writer_thread.start()
+        flush_thread.start()
+
+        writer_thread.join()
+        flush_thread.join()
+
+        assert len(errors) == 0
+
+    def test_buffer_lock_prevents_concurrent_modification(self, collector):
+        import threading
+
+        collector._shutdown_flag = True
+        barrier = threading.Barrier(10)
+        errors = []
+
+        def writer(session_prefix):
+            try:
+                barrier.wait()
+                for i in range(100):
+                    collector.record_agent_input(
+                        session_id=f"{session_prefix}-{i}",
+                        user_query=f"query-{i}",
+                        system_prompt="test",
+                        history_context=[],
+                    )
+            except Exception as e:
+                errors.append(e)
+
+        threads = [
+            threading.Thread(target=writer, args=(f"sess-{j}",))
+            for j in range(10)
+        ]
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(errors) == 0

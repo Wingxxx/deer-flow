@@ -8,7 +8,7 @@
 class TrainingDataCollector(config: dict | None = None)
 ```
 
-Process-level singleton for async buffered writing of training data. All collection methods are non-blocking and exception-safe.
+Process-level singleton for async buffered writing of training data. All collection methods are non-blocking, exception-safe, and thread-safe. Uses `threading.Lock` to protect concurrent buffer access from multiple sessions.
 
 **Constructor parameters:**
 - `config` -- Optional config dict. Falls back to `load_config()` defaults.
@@ -125,9 +125,11 @@ Replace the global collector instance. Intended for testing and mock injection.
 class DataCollectionMiddleware(AgentMiddleware)
 ```
 
-DeerFlow agent middleware that hooks into the agent lifecycle at `before_model`, `after_model`, `wrap_tool_call`, and `after_agent` to drive all 6 collection points.
+DeerFlow agent middleware that hooks into the agent lifecycle at `before_model`, `abefore_model`, `after_model`, `aafter_model`, `wrap_tool_call`, `awrap_tool_call`, `after_agent`, and `aafter_agent` to drive all 6 collection points.
 
 Inherits from `deerflow.agents.middlewares.base.AgentMiddleware`. Automatically obtains the collector singleton via `get_collector()`.
+
+All middleware methods are fully thread-safe and support concurrent session execution. The async methods (`abefore_model`, `aafter_model`, `aafter_agent`) delegate to their sync counterparts to ensure consistent behavior.
 
 ---
 
@@ -183,6 +185,7 @@ Monkey-patch `deerflow.agents.lead_agent.agent._build_middlewares` to inject `Da
 - Idempotent: subsequent calls are no-ops.
 - Uses `try/except` internally -- if `deerflow` is not importable, the patch silently degrades.
 - `config_path` is forwarded to `load_config()` to check the `enabled` flag.
+- Only patches the agent module (not the client module) for minimal intrusion.
 
 ---
 

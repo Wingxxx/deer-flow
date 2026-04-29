@@ -74,6 +74,9 @@ class DataCollectionMiddleware(AgentMiddleware):
 
         return state
 
+    async def abefore_model(self, state: dict) -> dict:
+        return self.before_model(state)
+
     def after_model(self, state: dict) -> dict:
         if self.collector is None:
             return state
@@ -140,6 +143,9 @@ class DataCollectionMiddleware(AgentMiddleware):
             logger.debug("[DataCollection] after_model error: %s", e)
 
         return state
+
+    async def aafter_model(self, state: dict) -> dict:
+        return self.after_model(state)
 
     def wrap_tool_call(self, tool_call: Any, handler: Any) -> Any:
         if self.collector is None:
@@ -308,3 +314,6 @@ class DataCollectionMiddleware(AgentMiddleware):
             logger.debug("[DataCollection] after_agent error: %s", e)
 
         return state
+
+    async def aafter_agent(self, state: dict) -> dict:
+        return self.after_agent(state)

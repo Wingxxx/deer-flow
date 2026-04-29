@@ -26,7 +26,6 @@ def install_data_collection(config_path: str | None = None) -> None:
 
     try:
         import deerflow.agents.lead_agent.agent as agent_module
-        import deerflow.client as client_module
         from deerflow_extensions.data_collection.middleware import DataCollectionMiddleware
 
         original_build = agent_module._build_middlewares
@@ -42,9 +41,8 @@ def install_data_collection(config_path: str | None = None) -> None:
             return middlewares
 
         agent_module._build_middlewares = patched_build_middlewares
-        client_module._build_middlewares = patched_build_middlewares
         _installed = True
-        logger.info("[DataCollection] System installed via monkey-patch (agent + client)")
+        logger.info("[DataCollection] System installed via monkey-patch (agent only)")
 
     except ImportError:
         logger.warning(

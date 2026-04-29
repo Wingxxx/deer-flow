@@ -46,6 +46,7 @@ class TrainingDataCollector:
         }
 
         self._buffer: deque[dict] = deque()
+        self._buffer_lock = threading.Lock()
         self._flush_thread: threading.Thread | None = None
         self._shutdown_flag = False
         self._current_daily_file: str | None = None
@@ -103,10 +104,11 @@ class TrainingDataCollector:
         }
 
         try:
-            self._buffer.append(record)
-            if len(self._buffer) >= self.buffer_size:
-                t = threading.Thread(target=self._flush_sync)
-                t.start()
+            with self._buffer_lock:
+                self._buffer.append(record)
+                if len(self._buffer) >= self.buffer_size:
+                    t = threading.Thread(target=self._flush_sync)
+                    t.start()
         except Exception as e:
             logger.warning("[DataCollection] Buffer append failed: %s", e)
 
@@ -237,11 +239,12 @@ class TrainingDataCollector:
 
     def _flush_sync(self) -> None:
         """Synchronous flush - can be called from any thread."""
-        if not self._buffer:
-            return
+        with self._buffer_lock:
+            if not self._buffer:
+                return
 
-        to_write = list(self._buffer)
-        self._buffer.clear()
+            to_write = list(self._buffer)
+            self._buffer.clear()
 
         if not to_write:
             return
@@ -261,7 +264,8 @@ class TrainingDataCollector:
                 self._rotate_daily_file(file_path)
         except Exception as e:
             logger.error("[DataCollection] Flush failed: %s", e)
-            self._buffer.extendleft(reversed(to_write))
+            with self._buffer_lock:
+                self._buffer.extendleft(reversed(to_write))
 
     async def _flush(self) -> None:
         """Flush buffered records to the daily JSONL file.

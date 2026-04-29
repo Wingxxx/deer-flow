@@ -8,12 +8,12 @@ The system instruments the DeerFlow agent lifecycle at 6 collection points (P1-P
 
 | Point | Hook Location | Data Captured |
 |-------|--------------|---------------|
-| **P1** | `before_model` (middleware) | Agent input: user query, system prompt, history context, RAG context |
-| **P2** | `after_model` (middleware) | Model output: raw response, token usage, finish reason, thinking content |
-| **P3** | `wrap_tool_call` (before) | Tool invocation: tool name, parameters, call ID |
-| **P4** | `wrap_tool_call` (after) | Tool result: return value, error, latency |
-| **P5** | `after_model` (middleware) | Intermediate state: step count, message count, accumulated tokens |
-| **P6** | `after_agent` (middleware) | Final response: total duration, total LLM/tool calls, resolution status |
+| **P1** | `before_model` / `abefore_model` (middleware) | Agent input: user query, system prompt, history context, RAG context |
+| **P2** | `after_model` / `aafter_model` (middleware) | Model output: raw response, token usage, finish reason, thinking content |
+| **P3** | `wrap_tool_call` / `awrap_tool_call` (before) | Tool invocation: tool name, parameters, call ID |
+| **P4** | `wrap_tool_call` / `awrap_tool_call` (after) | Tool result: return value, error, latency |
+| **P5** | `after_model` / `aafter_model` (middleware) | Intermediate state: step count, message count, accumulated tokens |
+| **P6** | `after_agent` / `aafter_agent` (middleware) | Final response: total duration, total LLM/tool calls, resolution status |
 
 Records are buffered in memory (configurable via `buffer_size`) and flushed asynchronously to daily JSONL files. All exceptions are caught and logged at DEBUG level -- a collector failure will never crash the agent.
 
@@ -159,5 +159,7 @@ No other files are modified. The data collection directory and accumulated logs 
 - The monkey-patch (`install_data_collection`) must be called before any agent middleware chain is built -- importing at module level in `app.py` is the safest approach.
 - If the package is not installed, the `try/except ImportError` guarantees zero impact on DeerFlow operations.
 - Collected data lives on local disk; set up external backup/offload for production deployments.
+- The collector uses thread-safe buffering with `threading.Lock` to support concurrent writes from multiple sessions.
+- Middleware methods support both sync and async execution paths for full LangGraph compatibility.
 
 WING
