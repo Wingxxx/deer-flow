@@ -207,7 +207,7 @@ class TestTrainingDataCollector:
         )
         record = collector._buffer[0]
         assert "create_time" in record
-        assert record["create_time"].endswith("+00:00") or "T" in record["create_time"]
+        assert "T" in record["create_time"] and ("+" in record["create_time"] or "-" in record["create_time"][-6:])
 
 
 class TestSingleton:

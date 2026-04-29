@@ -99,7 +99,7 @@ class TrainingDataCollector:
 
         record = {
             "sample_type": sample_type,
-            "create_time": datetime.now(timezone.utc).isoformat(),
+            "create_time": datetime.now().astimezone().isoformat(),
             **data,
         }
 
