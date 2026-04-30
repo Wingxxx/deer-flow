@@ -5,35 +5,22 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-
-class JinaAPIKeyNotConfiguredError(Exception):
-    pass
+_api_key_warned = False
 
 
 class JinaClient:
-    def __init__(self):
-        self._api_key_warned = False
-
-    @property
-    def api_key(self) -> str | None:
-        return os.getenv("JINA_API_KEY")
-
     async def crawl(self, url: str, return_format: str = "html", timeout: int = 10) -> str:
-        if not self.api_key and not self._api_key_warned:
-            self._api_key_warned = True
-            logger.warning(
-                "JINA_API_KEY environment variable is not set. "
-                "web_fetch tool requires a Jina API key for reliable operation. "
-                "Please set JINA_API_KEY or disable the web_fetch tool in config.yaml. "
-                "Get your free API key at https://jina.ai/reader"
-            )
+        global _api_key_warned
         headers = {
             "Content-Type": "application/json",
             "X-Return-Format": return_format,
             "X-Timeout": str(timeout),
         }
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        if os.getenv("JINA_API_KEY"):
+            headers["Authorization"] = f"Bearer {os.getenv('JINA_API_KEY')}"
+        elif not _api_key_warned:
+            _api_key_warned = True
+            logger.warning("Jina API key is not set. Provide your own key to access a higher rate limit. See https://jina.ai/reader for more information.")
         data = {"url": url}
         try:
             async with httpx.AsyncClient() as client:
