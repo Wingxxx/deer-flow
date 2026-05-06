@@ -47,14 +47,11 @@
       "env": {},
       "description": "PostgreSQL database access"
     },
-    "ragflow": {
-      "enabled": false,
-      "type": "sse",
-      "url": "http://host.docker.internal:9382/sse",
-      "headers": {
-        "Authorization": "Bearer $RAGFLOW_MCP_API_KEY"
-      },
-      "description": "RagFlow 企业知识库检索服务，支持跨数据集语义检索、分页、阈值过滤"
+    "deeprag": {
+      "enabled": true,
+      "type": "http",
+      "url": "http://192.168.1.56:86/mcp",
+      "description": "DeepRAG 知识库检索 - 支持文件检索、搜索、同步等功能"
     }
   },
   "skills": {}
