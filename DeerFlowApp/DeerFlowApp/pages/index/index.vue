@@ -7,6 +7,7 @@
         <view class="error-icon">⚠️</view>
         <view class="error-title">无法连接服务器</view>
         <view class="error-desc">当前网络无法访问指定的服务器地址。请检查网络连接或修改服务器地址。</view>
+        <view v-if="webViewError" class="error-detail">{{ webViewError }}</view>
         <view class="url-card">
           <view class="url-label">当前地址</view>
           <view class="url-value">{{ currentUrl }}</view>
@@ -45,6 +46,11 @@
           <view>{{ testResult.message }}</view>
         </view>
 
+        <view v-if="testResult.type === 'fail'" class="log-actions">
+          <view class="btn btn-log" @click="viewScanLog">📋 查看日志</view>
+          <view class="btn btn-log-clear" @click="clearScanLog">🗑 清空日志</view>
+        </view>
+
         <view class="config-actions">
           <view class="btn btn-primary" :class="{ 'btn-disabled': saveDisabled }" @click="saveAndLoad">💾 保存并加载</view>
           <view class="btn btn-secondary" @click="restoreDefaultUrl">↩️ 恢复默认地址</view>
@@ -52,7 +58,6 @@
       </view>
     </view>
 
-    <view v-if="!showConfigPanel" class="settings-trigger" @click="openConfigPanel">⚙</view>
   </view>
 </template>
 
@@ -118,19 +123,23 @@ export default {
       saveDisabled: true,
       retryCount: 0,
       retryTimer: null,
-      scanning: false
+      scanning: false,
+      webViewError: ''
     }
   },
   onShow() {
     var configUrl = appConfig.serverUrl
-    var customUrl = uni.getStorageSync('df_custom_url')
-    var targetUrl = customUrl || configUrl
 
-    if (targetUrl !== this.webviewSrc) {
-      this.webviewSrc = targetUrl
-      this.currentUrl = targetUrl
+    if (configUrl !== this.webviewSrc) {
+      this.webviewSrc = configUrl
+      this.currentUrl = configUrl
       this.showWebView = true
       this.showErrorOverlay = false
+    }
+
+    this.createFloatBtn()
+    if (this.showConfigPanel) {
+      this.destroyFloatBtn()
     }
 
     if (!this._networkListenerRegistered) {
@@ -141,22 +150,70 @@ export default {
         }
       }.bind(this))
     }
-
-    // 清理旧的 df_server_url（v2 升级遗留兼容）
-    if (uni.getStorageSync('df_server_url')) {
-      uni.removeStorageSync('df_server_url')
-    }
   },
   onReady() {
+    this.createFloatBtn()
     setTimeout(this.injectFix, 1000)
   },
+  onHide() {
+    this.destroyFloatBtn()
+  },
   methods: {
+    createFloatBtn() {
+      if (typeof plus === 'undefined' || !plus.nativeObj) return
+      try {
+        this.destroyFloatBtn()
+        var self = this
+        var btn = new plus.nativeObj.View('settings-float-btn', {
+          top: '80%',
+          left: '82%',
+          width: '50px',
+          height: '50px'
+        }, [
+          {
+            tag: 'rect',
+            color: 'rgba(0,0,0,0.5)',
+            rect: { top: 0, left: 0, width: '100%', height: '100%' },
+            radius: '25px'
+          },
+          {
+            tag: 'font',
+            text: '⚙',
+            textStyles: {
+              size: '26px',
+              color: '#ffffff',
+              alignment: 'center',
+              verticalAlign: 'middle'
+            },
+            position: { top: 0, left: 0, width: '100%', height: '100%' }
+          }
+        ])
+        btn.addEventListener('click', function() {
+          self.openConfigPanel()
+        })
+        btn.show()
+        this._floatBtn = btn
+      } catch (e) {
+        this.writeLog('[Native] 创建悬浮按钮失败: ' + JSON.stringify(e))
+      }
+    },
+
+    destroyFloatBtn() {
+      try {
+        if (this._floatBtn) {
+          this._floatBtn.close()
+          this._floatBtn = null
+        }
+      } catch (e) {}
+    },
+
     onTitle(e) {
       uni.setNavigationBarTitle({ title: e.title })
     },
     onWebViewLoad(e) {
       this.showErrorOverlay = false
       this.showWebView = true
+      this.webViewError = ''
       this.retryCount = 0
       if (this.retryTimer) {
         clearTimeout(this.retryTimer)
@@ -164,52 +221,168 @@ export default {
       }
     },
     onWebViewError(e) {
+      var err = e.detail || e
+      var errStr = JSON.stringify(err)
+      this.webViewError = errStr
       this.showWebView = false
       this.showErrorOverlay = true
       this.currentUrl = this.webviewSrc
+      var log = '[WebView] 加载错误, URL: ' + this.webviewSrc + ', 详情: ' + errStr
+      this.writeLog(log)
     },
 
     openConfigPanel() {
+      this.destroyFloatBtn()
       this.inputUrl = this.webviewSrc
       this.urlHint = ''
       this.urlHintType = ''
       this.testResult = { type: '', message: '' }
       this.saveDisabled = true
       this.showConfigPanel = true
+      this.showWebView = false
     },
     closeConfigPanel() {
       this.showConfigPanel = false
+      this.showWebView = true
+      this.createFloatBtn()
+    },
+
+    writeLog(msg) {
+      try {
+        plus.io.requestFileSystem(plus.io.PRIVATE_DOC, function(fs) {
+          fs.root.getFile('df_scan_log.txt', { create: true }, function(entry) {
+            entry.createWriter(function(writer) {
+              writer.seek(writer.length)
+              var time = new Date().toLocaleString()
+              writer.write(time + ' ' + msg + '\n')
+            })
+          })
+        })
+      } catch (e) {}
+    },
+
+    viewScanLog() {
+      var self = this
+      try {
+        plus.io.requestFileSystem(plus.io.PRIVATE_DOC, function(fs) {
+          fs.root.getFile('df_scan_log.txt', { create: false }, function(entry) {
+            entry.file(function(file) {
+              var reader = new plus.io.FileReader()
+              reader.onloadend = function(e) {
+                var content = e.target.result || '(空)'
+                var msgs = content.split('\n').filter(function(l) { return l.trim().length > 0 })
+                var summary = msgs.join('\n')
+                plus.nativeUI.alert('扫码日志 (' + msgs.length + '条):\n\n' + (summary || '(无记录)'), '扫码日志')
+              }
+              reader.readAsText(file)
+            }, function() {
+              plus.nativeUI.alert('暂无日志记录', '扫码日志')
+            })
+          }, function() {
+            plus.nativeUI.alert('暂无日志记录', '扫码日志')
+          })
+        })
+      } catch (e) {
+        plus.nativeUI.alert('读取日志失败: ' + JSON.stringify(e), '扫码日志')
+      }
+    },
+
+    clearScanLog() {
+      var self = this
+      try {
+        plus.io.requestFileSystem(plus.io.PRIVATE_DOC, function(fs) {
+          fs.root.getFile('df_scan_log.txt', { create: false }, function(entry) {
+            entry.createWriter(function(writer) {
+              writer.truncate(0)
+              writer.onwriteend = function() {
+                plus.nativeUI.toast('日志已清空')
+              }
+            })
+          })
+        })
+      } catch (e) {
+        plus.nativeUI.toast('清空失败')
+      }
     },
 
     scanQRCode() {
       var self = this
-      if (self.scanning) return
+      if (self.scanning) {
+        plus.nativeUI.toast('扫码正在进行中...')
+        return
+      }
       self.scanning = true
 
-      uni.scanCode({
-        scanType: ['qrCode'],
-        success: function(res) {
-          self.scanning = false
-          var result = res.result
-          if (!result || result.length === 0) {
-            plus.nativeUI.toast('二维码内容无效，请扫描 DeerFlow 服务器地址')
-            return
+      var scanTimer = setTimeout(function() {
+        self.scanning = false
+        self.writeLog('[扫码] 超时释放 scanning')
+      }, 10000)
+
+      function releaseScan() {
+        clearTimeout(scanTimer)
+        self.scanning = false
+      }
+
+      var deviceInfo = ''
+      try {
+        deviceInfo = plus.device.model || plus.os.name || ''
+      } catch (e) {}
+      self.writeLog('[扫码] 开始, 设备: ' + deviceInfo + ', 平台: ' + (plus.os ? plus.os.name : ''))
+
+      try {
+        uni.scanCode({
+          scanType: ['qrCode'],
+          success: function(res) {
+            releaseScan()
+            self.writeLog('[扫码] 成功, 结果: ' + (res.result || ''))
+            var result = res.result
+            if (!result || result.length === 0) {
+              plus.nativeUI.toast('二维码内容无效，请扫描 DeerFlow 服务器地址')
+              return
+            }
+            self.processScannedUrl(result)
+          },
+          fail: function(err) {
+            releaseScan()
+            var msg = err.errMsg || ''
+            var detail = JSON.stringify(err)
+            self.writeLog('[扫码] 失败, message: ' + msg + ', 完整: ' + detail)
+
+            if (msg.indexOf('cancel') !== -1) {
+              return
+            }
+
+            var failMsg = ''
+            if (msg.indexOf('permission') !== -1) {
+              failMsg = '需要相机权限才能扫码，请在系统设置中开启'
+            } else {
+              failMsg = '扫码失败: ' + msg
+            }
+
+            plus.nativeUI.toast(failMsg)
+
+            if (self.showConfigPanel) {
+              self.testResult = { type: 'fail', message: failMsg + '\n\n完整错误:\n' + detail + '\n\n日志已保存至: df_scan_log.txt' }
+            } else {
+              self.openConfigPanel()
+              self.inputUrl = self.webviewSrc
+              self.testResult = { type: 'fail', message: failMsg + '\n\n完整错误:\n' + detail + '\n\n日志已保存至: df_scan_log.txt' }
+            }
           }
-          self.processScannedUrl(result)
-        },
-        fail: function(err) {
-          self.scanning = false
-          var msg = err.errMsg || ''
-          if (msg.indexOf('cancel') !== -1) {
-            return
-          }
-          if (msg.indexOf('permission') !== -1) {
-            plus.nativeUI.toast('需要相机权限才能扫码，请在系统设置中开启')
-          } else {
-            plus.nativeUI.toast('扫码失败: ' + msg)
-          }
+        })
+      } catch (e) {
+        releaseScan()
+        var detail = JSON.stringify(e)
+        self.writeLog('[扫码] scan 调用异常: ' + detail)
+        plus.nativeUI.toast('扫码异常: ' + (e.message || ''))
+        if (self.showConfigPanel) {
+          self.testResult = { type: 'fail', message: '扫码调用异常\n\n' + detail }
+        } else {
+          self.openConfigPanel()
+          self.inputUrl = self.webviewSrc
+          self.testResult = { type: 'fail', message: '扫码调用异常\n\n' + detail }
         }
-      })
+      }
     },
 
     processScannedUrl(url) {
@@ -236,25 +409,39 @@ export default {
       self.testResult = { type: 'loading', message: '正在验证服务器身份...' }
 
       uni.request({
-        url: url + '/health',
+        url: url.replace(/\/+$/, '') + '/health',
         method: 'GET',
         timeout: 5000,
         success: function(res) {
+          var responseStr = JSON.stringify(res.data)
+          var statusCode = res.statusCode || 0
+          self.writeLog('[health] 响应状态码: ' + statusCode + ', 数据: ' + responseStr)
+
+          var isValid = false
+
           if (res.data && res.data.service === 'deer-flow-gateway' && res.data.status === 'healthy') {
+            isValid = true
+          }
+
+          if (res.data && res.data.detail && res.data.detail.code === 'not_authenticated') {
+            isValid = true
+          }
+
+          if (statusCode === 401 || statusCode === 403) {
+            isValid = true
+          }
+
+          if (isValid) {
             self.inputUrl = url
             self.autoCompleteProtocol()
-
-            if (url !== appConfig.serverUrl) {
-              uni.setStorageSync('df_custom_url', url)
-            } else {
-              uni.removeStorageSync('df_custom_url')
-            }
 
             self.webviewSrc = url
             self.currentUrl = url
             self.showConfigPanel = false
             self.showErrorOverlay = false
             self.showWebView = true
+            self.webViewError = ''
+            self.createFloatBtn()
             self.retryCount = 0
             if (self.retryTimer) {
               clearTimeout(self.retryTimer)
@@ -267,7 +454,9 @@ export default {
               self.openConfigPanel()
               self.inputUrl = url
             }
-            self.testResult = { type: 'fail', message: '⛔ 该服务器不是 DeerFlow 网关，禁止使用' }
+            var msg = '⛔ 非 DeerFlow 服务器，禁止使用\n返回: ' + responseStr
+            self.testResult = { type: 'fail', message: msg }
+            self.writeLog('[health] 身份验证失败: ' + responseStr)
           }
         },
         fail: function(err) {
@@ -344,11 +533,27 @@ export default {
 
       var self = this
       uni.request({
-        url: url + '/health',
+        url: url.replace(/\/+$/, '') + '/health',
         method: 'GET',
         timeout: 5000,
         success: function(res) {
-          if (res.data && res.data.service === 'deer-flow-gateway' && res.data.status === 'healthy') {
+          var data = res.data
+          var statusCode = res.statusCode || 0
+          var isValid = false
+
+          if (data && data.service === 'deer-flow-gateway' && data.status === 'healthy') {
+            isValid = true
+          }
+
+          if (data && data.detail && data.detail.code === 'not_authenticated') {
+            isValid = true
+          }
+
+          if (statusCode === 401 || statusCode === 403) {
+            isValid = true
+          }
+
+          if (isValid) {
             self.testResult = { type: 'success', message: '✅ DeerFlow 服务器已验证 ✓' }
             self.saveDisabled = false
           } else {
@@ -375,18 +580,13 @@ export default {
       this.autoCompleteProtocol()
       url = this.inputUrl
 
-      // 只保存自定义 URL（与 config.js 默认不同的才存）
-      if (url !== appConfig.serverUrl) {
-        uni.setStorageSync('df_custom_url', url)
-      } else {
-        uni.removeStorageSync('df_custom_url')
-      }
-
       this.webviewSrc = url
       this.currentUrl = url
       this.showConfigPanel = false
       this.showErrorOverlay = false
       this.showWebView = true
+      this.webViewError = ''
+      this.createFloatBtn()
       this.retryCount = 0
 
       if (this.retryTimer) {
@@ -398,7 +598,6 @@ export default {
     },
 
     restoreDefaultUrl() {
-      uni.removeStorageSync('df_custom_url')
       this.inputUrl = appConfig.serverUrl
       this.urlHint = ''
       this.urlHintType = ''
@@ -409,6 +608,7 @@ export default {
     retryLoad() {
       this.showErrorOverlay = false
       this.showWebView = true
+      this.webViewError = ''
 
       var src = this.webviewSrc
       this.webviewSrc = ''
@@ -564,7 +764,21 @@ export default {
   color: #86868b;
   text-align: center;
   line-height: 1.6;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
+}
+.error-detail {
+  width: 100%;
+  font-size: 11px;
+  color: #ee0a24;
+  text-align: left;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: #fef0f0;
+  border-radius: 8px;
+  word-break: break-all;
+  max-height: 100px;
+  overflow-y: auto;
 }
 .url-card {
   width: 100%;
@@ -733,21 +947,6 @@ export default {
   box-sizing: border-box;
 }
 
-.settings-trigger {
-  position: fixed;
-  right: 10px;
-  bottom: 100px;
-  width: 44px;
-  height: 44px;
-  line-height: 44px;
-  text-align: center;
-  font-size: 24px;
-  background: rgba(0,0,0,0.5);
-  color: #fff;
-  border-radius: 50%;
-  z-index: 9999;
-}
-
 .btn-scan {
   text-align: center;
   padding: 14px;
@@ -757,6 +956,37 @@ export default {
   background: #e8f5e9;
   color: #2e7d32;
   border: 1.5px solid #a5d6a7;
+  box-sizing: border-box;
+}
+
+.log-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+.btn-log {
+  flex: 1;
+  text-align: center;
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  background: #f0f5ff;
+  color: #2b6cb0;
+  border: 1px solid #bee3f8;
+  box-sizing: border-box;
+}
+.btn-log-clear {
+  flex: 1;
+  text-align: center;
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  background: #fff5f5;
+  color: #c53030;
+  border: 1px solid #fed7d7;
   box-sizing: border-box;
 }
 </style>

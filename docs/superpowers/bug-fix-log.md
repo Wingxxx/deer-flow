@@ -72,91 +72,179 @@ onWebViewError() {
 ## Bug 2: config.js 修改后不生效（本地存储覆盖）
 
 **发现日期**: 2026-05-29
+**状态**: 已修复 → 最终方案: 彻底删除所有存储逻辑 ✅
+**涉及文件**: `DeerFlowApp/DeerFlowApp/pages/index/index.vue`
+
+### 现象
+修改 `config.js` 中的 `serverUrl` 后，App 依然访问旧地址。
+
+### 根因分析
+最初的问题是 `df_server_url` 存储永远覆盖 config.js。第一次修复为 `df_custom_url` 分离存储（v2 修复），但在后续迭代中**主子明确要求 config.js 为唯一权威来源**，禁止任何存储逻辑。
+
+### 最终方案（2026-05-29）
+**彻底删除所有 `getStorageSync` / `setStorageSync` / `removeStorageSync` 调用**：
+- `onShow()` 只读 config.js，不再读存储
+- 扫码成功直接加载 WebView，不持久化
+- 手动保存直接加载 WebView，不持久化
+- 恢复默认只回退输入框为 config.js，不操作存储
+- 清理旧 `df_server_url` 兼容代码也一并删除
+
+config.js 永为权威基准，扫码/手动输入的 URL 只在当前会话生效，重启 App 后回到 config.js。
+
+---
+
+## Bug 3: 扫码验证失败时错误信息被覆盖
+
+**发现日期**: 2026-05-29
 **状态**: 已修复 ✅
 **涉及文件**: `DeerFlowApp/DeerFlowApp/pages/index/index.vue`
 
 ### 现象
-修改 `config.js` 中的 `serverUrl` 端口（如从 `2026` 改为 `20261`）后，重装 App 或重新运行，依然访问旧端口。
+扫码后 `/health` 验证失败，报错信息一闪而过，用户只能看到面板打开但看不到详细的错误内容。
 
 ### 根因分析
-存储逻辑有 3 个问题：
+`processScannedUrl()` 中验证失败时，`self.testResult = { fail: ... }` 在 `self.openConfigPanel()` **之前**执行。而 `openConfigPanel()` 会清空 `testResult`，导致错误信息丢失。
 
-**问题 1：无条件覆盖**
 ```js
 // ❌ Bug 代码
-onShow() {
-  var saved = uni.getStorageSync('df_server_url')
-  this.webviewSrc = saved || appConfig.serverUrl  // saved 永远优先
-}
-saveAndLoad() {
-  uni.setStorageSync('df_server_url', url)   // 每次都存，包括默认值
-}
+self.testResult = { type: 'fail', message: '...' }  // 先设
+self.openConfigPanel()                                 // 后清 → 丢了！
 ```
 
-之前通过 ⚙ 保存过 URL（端口 `2026`）后，`df_server_url` 就永久存在了。此后不管 `config.js` 怎么改，`saved || configUrl` 都返回已保存的值，**config.js 的修改被彻底忽略**。
-
-**问题 2：键名语义不清**
-- `df_server_url` 同时存储「默认值」和「自定义值」，无法区分
-- 无法判断当前 URL 是来自 `config.js` 还是用户自定义
-
-**问题 3：恢复默认不清除存储**
-```js
-restoreDefaultUrl() {
-  this.inputUrl = appConfig.serverUrl  // 只改了输入框，没删存储
-  // 下次启动依然读取旧的存储值
-}
-```
-
-### 修复方案
-**分离默认值与自定义值**，config.js 永远作为权威基准：
-
+### 修复
+交换顺序，先开面板再设 testResult：
 ```js
 // ✅ 修复后
-onShow() {
-  var configUrl = appConfig.serverUrl        // 编译时默认值（权威基准）
-  var customUrl = uni.getStorageSync('df_custom_url')  // 用户自定义值
-  var targetUrl = customUrl || configUrl     // 有自定义用自定义，否则用默认
-
-  // 更新逻辑...
+if (self.showConfigPanel === false) {
+  self.openConfigPanel()
+  self.inputUrl = url
 }
+self.testResult = { type: 'fail', message: '...' }   // 面板开完再设
+```
 
-saveAndLoad() {
-  // 只有与 config.js 不同时才存自定义值
-  if (url !== appConfig.serverUrl) {
-    uni.setStorageSync('df_custom_url', url)
-  } else {
-    uni.removeStorageSync('df_custom_url')  // 和默认一样则清除
-  }
+---
+
+## Bug 4: 扫码相机无法自动识别二维码
+
+**发现日期**: 2026-05-29
+**状态**: 已修复 ✅
+**涉及文件**: `DeerFlowApp/DeerFlowApp/pages/index/index.vue`
+
+### 现象
+相机打开后能看到二维码，但不会自动识别。用户手动取消后，尝试从相册导入也返回 `cancel`。
+
+### 根因分析
+`uni.scanCode()` 在某些设备上扫码灵敏度偏低，相机预览持续但不触发 success。
+
+### 修复历程
+1. 尝试换成 `plus.barcode.scan()`（更底层的原生 API）→ 模拟器上完全崩溃
+2. 换回 `uni.scanCode()` → 保留日志 + 超时兜底 + 重复点击保护等改进
+
+### 最终方案
+回退到 `uni.scanCode()`，保留以下改进：
+- 10 秒超时自动释放 `scanning` 标志，防止按钮卡死
+- 重复点击时 toast "扫码正在进行中..."
+- 失败时记录完整错误对象到日志文件
+- 成功/失败都写入文件日志
+
+---
+
+## Bug 5: 悬浮按钮在模拟器上不可见/点不着
+
+**发现日期**: 2026-05-29
+**状态**: 已修复 ✅
+**涉及文件**: `DeerFlowApp/DeerFlowApp/pages/index/index.vue`
+
+### 现象
+真机上 ⚙ 悬浮按钮可见可用，但模拟器上完全看不见。
+
+### 根因分析
+`<web-view>` 是 uni-app 原生组件，渲染在独立的 Native 层，**完全覆盖 Vue DOM 层**。无论 CSS `z-index` 多高，Vue 渲染的按钮都在 WebView 之下。
+
+### 修复方案
+1. **废弃 Vue DOM 按钮**：删除模板中的 `.settings-trigger` 和对应 CSS
+2. **改用原生绘制层**：`plus.nativeObj.View` 创建原生圆形按钮，渲染在所有 Native 组件之上
+3. **Destroy/Create 策略**：点击按钮时 `destroyFloatBtn()` 彻底销毁，关闭面板时 `createFloatBtn()` 重新创建
+4. **配置面板打开时隐藏 WebView**：`openConfigPanel()` 设置 `showWebView = false`，让 Vue DOM 露出来
+5. **生命周期管理**：`onReady()` 创建、`onHide()` 销毁、`onShow()` 重建
+
+---
+
+## Bug 6: /health 端点需登录认证导致验证失败
+
+**发现日期**: 2026-05-29
+**状态**: 已修复 ✅
+**涉及文件**: `DeerFlowApp/DeerFlowApp/pages/index/index.vue`
+
+### 现象
+扫码后 `/health` 返回 `{"detail": {"code": "not_authenticated", "message": "Authentication required"}}`，原代码只认 `service === "deer-flow-gateway"`，不认认证错误，报「非 DeerFlow 服务器」。
+
+### 修复方案
+放宽验证条件，满足其一即视为有效：
+```js
+var isValid = false
+if (res.data && res.data.service === 'deer-flow-gateway' && res.data.status === 'healthy') {
+  isValid = true  // 标准健康检查
 }
-
-restoreDefaultUrl() {
-  uni.removeStorageSync('df_custom_url')    // 清除自定义记录
-  this.inputUrl = appConfig.serverUrl       // 显示默认值
+if (res.data && res.data.detail && res.data.detail.code === 'not_authenticated') {
+  isValid = true  // 需要登录——一定是 DeerFlow
+}
+if (statusCode === 401 || statusCode === 403) {
+  isValid = true  // 未认证/被拒绝——有 /health 端点
 }
 ```
 
-### 各场景验证
+---
 
-| 场景 | 行为 |
-|---|---|
-| `config.js`=`2026`，用户从未自定义 | 读取 `config.js` 的 `2026` |
-| 改 `config.js` 为 `20261`，从未自定义 | 读取新的 `20261` |
-| 用户自定义为 `8080` | 存 `df_custom_url=8080`，读 `8080` |
-| 用户改回默认值并保存 | 清除自定义记录，下次读 `config.js` |
-| 点「恢复默认地址」 | 清除自定义记录，显示 `config.js` 的值 |
-| 旧版升级（存在 `df_server_url`） | 自动清理旧键名 |
+## Bug 7: URL 末尾斜杠导致 /health 请求 404
 
-### 经验教训
-- 本地存储和配置文件应明确区分「默认值」和「用户自定义值」
-- config.js 应始终作为编译时的权威默认值
-- 「恢复默认」操作必须清除存储中的自定义值，而非仅修改 UI
-- 存储键名应语义清晰，避免歧义
+**发现日期**: 2026-05-29
+**状态**: 已修复 ✅
+**涉及文件**: `DeerFlowApp/DeerFlowApp/pages/index/index.vue`
+
+### 现象
+扫码结果 `http://192.168.1.56:2026/`（末尾带 `/`）拼 `/health` 后变为 `http://192.168.1.56:2026//health`（双斜杠）。内网 curl 测试可正常处理，但**手机上通过外网访问**时双斜杠被路由截断，返回 `{"detail":"Not Found"}`。
+
+### 修复
+```js
+// ✅ 修复后
+url: url.replace(/\/+$/, '') + '/health',
+```
+
+正则 `\/+$` 去掉 URL 末尾所有斜杠，保障三种格式都正确：
+```
+http://192.168.1.56:2026/   →  http://192.168.1.56:2026/health  ✅
+http://192.168.1.56:2026//  →  http://192.168.1.56:2026/health  ✅
+http://192.168.1.56:2026    →  http://192.168.1.56:2026/health  ✅
+```
+
+`processScannedUrl()` 和 `testConnection()` 两处都做了修复。
+
+---
+
+## 新增功能记录
+
+### 文件日志系统
+- 位置: `writeLog()` 方法
+- 文件: 手机 `PRIVATE_DOC` 目录下的 `df_scan_log.txt`
+- 记录内容: 扫码开始/成功/失败 + 设备信息 + 完整错误对象 + `/health` 响应状态码和数据 + WebView 加载错误详情
+- 查看方式: 配置面板失败时显示「📋 查看日志」按钮 + 「🗑 清空日志」按钮
+
+### WebView 错误详情显示
+- 错误页新增 `error-detail` 区域，WebView 加载失败时显示完整的错误对象（红色小字）
+- `webViewError` 变量存储错误详情，加载成功或重试时自动清空
+
+### /health 响应日志
+- 每次 /health 请求都会记录状态码和响应数据到日志文件，方便调试
 
 ---
 
 ## 通用教训
 
 1. **事件驱动优于定时轮询**：WebView 的生命周期事件已经足够覆盖所有状态变化
-2. **存储分层**：编译配置（config.js）vs 运行时配置（Storage）应有清晰优先级
-3. **幂等设计**：onShow 等高频回调应设计为幂等的，重复调用不产生副作用
-4. **升级兼容**：存储键名变更时需清理旧键名，避免遗留数据影响新版本
+2. **config.js 永为权威基准**：不设存储逻辑，编译时配置是唯一来源
+3. **原生 vs Vue 渲染**：`<web-view>` 是原生组件盖在 Vue DOM 之上，Vue 按钮会被遮住，必须用 `plus.nativeObj.View`
+4. **Destroy/Create 优于 Hide/Show**：Native 组件的 hide/show 状态不可靠，destroy/create 更稳定
+5. **双斜杠问题**：URL 拼接前必须先去除末尾斜杠，内网正常不等于外网正常
+6. **/health 验证放宽**：认证错误/拒绝访问也算 DeerFlow 服务器的特征
+7. **幂等设计**：onShow 等高频回调应设计为幂等的，重复调用不产生副作用
