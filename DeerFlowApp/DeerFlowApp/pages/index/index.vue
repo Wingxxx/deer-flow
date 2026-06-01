@@ -153,28 +153,36 @@ export default {
       try {
         this.destroyFloatBtn()
         var self = this
+
+        function circleImg(size, opacity) {
+          var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '">' +
+            '<circle cx="' + (size / 2) + '" cy="' + (size / 2) + '" r="' + (size / 2) + '" ' +
+            'fill="rgba(255,255,255,' + opacity + ')"/>' +
+            '</svg>'
+          return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+        }
+
         var btn = new plus.nativeObj.View('settings-float-btn', {
           top: '80%',
-          left: '82%',
-          width: '48px',
-          height: '48px'
+          left: '85%',
+          width: '44px',
+          height: '44px'
         }, [
           {
-            tag: 'rect',
-            color: 'rgba(255,255,255,0.55)',
-            rect: { top: 0, left: 0, width: '100%', height: '100%' },
-            radius: '24px'
+            tag: 'img',
+            src: circleImg(44, 0.7),
+            position: { top: 0, left: 0, width: '44', height: '44' }
           },
           {
             tag: 'font',
             text: '⚙',
             textStyles: {
-              size: '22px',
+              size: '20px',
               color: '#555555',
               alignment: 'center',
               verticalAlign: 'middle'
             },
-            position: { top: 0, left: 0, width: '100%', height: '100%' }
+            position: { top: 0, left: 0, width: '44', height: '44' }
           }
         ])
         btn.addEventListener('click', function() {
