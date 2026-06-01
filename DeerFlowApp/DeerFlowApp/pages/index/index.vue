@@ -1,7 +1,13 @@
 <template>
   <view>
+    <view v-if="isLoading" class="loading-splash">
+      <image class="loading-brand" src="/static/brand.png" mode="aspectFit"></image>
+      <view class="loading-spinner"></view>
+      <view class="loading-text">正在连接 DeerFlow 服务器...</view>
+    </view>
+
     <view :class="['webview-container', { 'webview-hidden': !showWebView }]">
-      <web-view v-show="showWebView" :src="webviewSrc" @title="onTitle" @load="onWebViewLoad" @error="onWebViewError"></web-view>
+      <web-view v-show="showWebView" :src="webviewSrc" @load="onWebViewLoad" @error="onWebViewError"></web-view>
     </view>
 
     <view v-show="showErrorOverlay" class="error-overlay">
@@ -103,6 +109,7 @@ export default {
   data() {
     return {
       webviewSrc: '',
+      isLoading: true,
       showWebView: true,
       showErrorOverlay: false,
       showConfigPanel: false,
@@ -122,8 +129,9 @@ export default {
     if (configUrl !== this.webviewSrc) {
       this.webviewSrc = configUrl
       this.currentUrl = configUrl
-      this.showWebView = true
+      this.showWebView = false
       this.showErrorOverlay = false
+      this.isLoading = true
     }
 
     this.createFloatBtn()
@@ -139,6 +147,8 @@ export default {
         }
       }.bind(this))
     }
+
+    this.checkServerConnection(configUrl)
   },
   onReady() {
     this.createFloatBtn()
@@ -148,6 +158,65 @@ export default {
     this.destroyFloatBtn()
   },
   methods: {
+    checkServerConnection(url) {
+      var self = this
+      var healthUrl = url.replace(/\/+$/, '') + '/health'
+
+      uni.getNetworkType({
+        success: function(netRes) {
+          var noNetwork = (netRes.networkType === 'none')
+          if (noNetwork) {
+            self.isLoading = false
+            self.showErrorOverlay = true
+            self.showWebView = false
+            self.webViewError = '📶 设备未连接网络，请检查 Wi-Fi 或移动数据'
+            self.currentUrl = url
+            return
+          }
+
+          uni.request({
+            url: healthUrl,
+            method: 'GET',
+            timeout: 5000,
+            success: function(res) {
+              self.isLoading = false
+              var isValid = false
+              if (res.data && res.data.service === 'deer-flow-gateway' && res.data.status === 'healthy') isValid = true
+              if (res.data && res.data.detail && res.data.detail.code === 'not_authenticated') isValid = true
+              if (res.statusCode === 401 || res.statusCode === 403) isValid = true
+
+              if (isValid) {
+                self.showWebView = true
+                self.showErrorOverlay = false
+                self.webViewError = ''
+              } else {
+                self.showWebView = false
+                self.showErrorOverlay = true
+                self.webViewError = '🔌 无法连接服务器（服务器地址错误或 DeerFlow 服务未启动）'
+                self.currentUrl = url
+              }
+            },
+            fail: function(err) {
+              self.isLoading = false
+              self.showWebView = false
+              self.showErrorOverlay = true
+              var msg = err.errMsg || ''
+              if (msg.indexOf('timeout') !== -1) {
+                self.webViewError = '🔌 连接超时（5秒），请检查服务器地址或网络'
+              } else {
+                self.webViewError = '🔌 无法连接服务器（' + msg + '）'
+              }
+              self.currentUrl = url
+            }
+          })
+        },
+        fail: function() {
+          self.isLoading = false
+          self.showWebView = true
+        }
+      })
+    },
+
     createFloatBtn() {
       if (typeof plus === 'undefined' || !plus.nativeObj) return
       try {
@@ -204,9 +273,6 @@ export default {
       } catch (e) {}
     },
 
-    onTitle(e) {
-      uni.setNavigationBarTitle({ title: e.title })
-    },
     onWebViewLoad(e) {
       this.showErrorOverlay = false
       this.showWebView = true
@@ -568,6 +634,16 @@ export default {
 
         var injectedFn = function() {
           var D = document
+          var meta = D.querySelector('meta[name=viewport]')
+          if (meta) {
+            meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'
+          } else {
+            var m = D.createElement('meta')
+            m.name = 'viewport'
+            m.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'
+            if (D.head) D.head.appendChild(m)
+          }
+
           if (D.__ok) return
           D.__ok = true
 
@@ -582,7 +658,9 @@ export default {
           }
 
           var cs = D.createElement('style')
-          cs.textContent = '*{pointer-events:auto!important}input,textarea,select,button,a{-webkit-user-select:text!important;user-select:text!important;touch-action:manipulation!important}'
+          cs.textContent = '*{pointer-events:auto!important;-webkit-text-size-adjust:none!important}' +
+            'html{touch-action:pan-y;-ms-touch-action:pan-y}' +
+            'input,textarea,select,button,a{-webkit-user-select:text!important;user-select:text!important;touch-action:manipulation!important}'
           cs.id = '__xs'
 
           function apply() {
@@ -648,6 +726,8 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top);
 }
 .webview-hidden {
   pointer-events: none;
@@ -885,5 +965,53 @@ export default {
   color: #c53030;
   border: 1px solid #fed7d7;
   box-sizing: border-box;
+}
+
+.loading-splash {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9997;
+  opacity: 0;
+  animation: loadingFadeIn 0.2s ease-out forwards;
+}
+
+.loading-brand {
+  width: 160px;
+  height: auto;
+  margin-bottom: 32px;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid #e5e5ea;
+  border-top-color: #007aff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 16px;
+}
+
+.loading-text {
+  font-size: 14px;
+  color: #86868b;
+  text-align: center;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes loadingFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 </style>

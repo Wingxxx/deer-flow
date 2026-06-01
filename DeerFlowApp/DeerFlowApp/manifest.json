@@ -15,7 +15,13 @@
             "alwaysShowBeforeRender" : true,
             "waiting" : true,
             "autoclose" : true,
-            "delay" : 0
+            "delay" : 0,
+            "android" : {
+                "backgroundColor" : "#ffffff"
+            },
+            "ios" : {
+                "backgroundColor" : "#ffffff"
+            }
         },
         /* 模块配置 */
         "modules" : {
@@ -23,6 +29,21 @@
         },
         /* 应用发布信息 */
         "distribute" : {
+            "icons" : {
+                "android" : {
+                    "hdpi" : "unpackage/res/icons/72x72.png",
+                    "xhdpi" : "unpackage/res/icons/96x96.png",
+                    "xxhdpi" : "unpackage/res/icons/144x144.png",
+                    "xxxhdpi" : "unpackage/res/icons/192x192.png"
+                },
+                "ios" : {
+                    "appstore" : "unpackage/res/icons/1024x1024.png",
+                    "iphone" : {
+                        "app@2x" : "unpackage/res/icons/120x120.png",
+                        "app@3x" : "unpackage/res/icons/180x180.png"
+                    }
+                }
+            },
             /* android打包配置 */
             "android" : {
                 "manifestPlugins" : {
