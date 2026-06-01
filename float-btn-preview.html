@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeerFlow 悬浮按钮设计预览</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Noto Sans SC', -apple-system, sans-serif;
+  background: #f2f2f7;
+  color: #1d1d1f;
+  padding: 40px 20px;
+}
+
+.page-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+.page-header h1 {
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.page-header p {
+  font-size: 14px;
+  color: #86868b;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+}
+
+.card-header {
+  padding: 16px 20px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.card-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.card-header .tag {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+.tag-clean { background: #e8f5e9; color: #2e7d32; }
+.tag-bold { background: #e3f2fd; color: #1565c0; }
+.tag-glass { background: #f3e5f5; color: #7b1fa2; }
+.tag-neon { background: #fff3e0; color: #e65100; }
+.tag-minimal { background: #f5f5f5; color: #616161; }
+.tag-brand { background: #e0f2f1; color: #00695c; }
+
+.phone-frame {
+  position: relative;
+  width: 240px;
+  height: 420px;
+  background: #f8f8fc;
+  border-radius: 30px;
+  margin: 20px auto;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06), 0 4px 20px rgba(0,0,0,0.08);
+}
+
+.phone-status-bar {
+  padding: 12px 20px 4px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #555;
+  font-weight: 600;
+}
+
+.phone-content {
+  position: relative;
+  height: calc(100% - 36px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+}
+
+.mock-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1d1d1f;
+  margin-bottom: 4px;
+}
+.mock-sub {
+  font-size: 11px;
+  color: #86868b;
+  text-align: center;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+.mock-card {
+  width: 100%;
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 13px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  font-size: 11px;
+  color: #555;
+  border: 1px solid #f0f0f0;
+}
+
+/* ===== 按钮位置容器 ===== */
+.btn-area {
+  position: absolute;
+  right: 14px;
+  bottom: 30px;
+}
+
+/* ===== 方案 A: 简约毛玻璃 ===== */
+.btn-glass {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.7);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08), 0 0 0 1px rgba(255,255,255,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.btn-glass:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(0,0,0,0.12); }
+
+/* ===== 方案 B: 绿色品牌胶囊 ===== */
+.btn-brand {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2e7d32, #43a047);
+  box-shadow: 0 4px 16px rgba(46,125,50,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.btn-brand:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(46,125,50,0.4); }
+
+/* ===== 方案 C: 深蓝专业 ===== */
+.btn-pro {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1a237e, #283593);
+  box-shadow: 0 4px 16px rgba(26,35,126,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.btn-pro:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(26,35,126,0.4); }
+
+/* ===== 方案 D: 微光圆环 ===== */
+.btn-ring {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #e0e0e0;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: #555;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  position: relative;
+}
+.btn-ring::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 60%, #007aff 60%, transparent 80%);
+  z-index: -1;
+}
+.btn-ring:hover { transform: scale(1.08); border-color: #007aff; box-shadow: 0 4px 16px rgba(0,122,255,0.15); }
+
+/* ===== 方案 E: 极简纯色 ===== */
+.btn-mini {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: rgba(255,255,255,0.9);
+  cursor: pointer;
+  transition: transform 0.2s, background 0.2s;
+}
+.btn-mini:hover { transform: scale(1.1); background: rgba(0,0,0,0.5); }
+
+/* ===== 方案 F: 灵动胶囊 ===== */
+.btn-capsule {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px 10px 14px;
+  border-radius: 50px;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.1);
+  cursor: pointer;
+  transition: transform 0.2s, background 0.2s;
+  white-space: nowrap;
+}
+.btn-capsule:hover { transform: scale(1.04); background: rgba(0,0,0,0.75); }
+.btn-capsule .icon { font-size: 18px; }
+.btn-capsule .label { font-size: 12px; color: rgba(255,255,255,0.9); font-weight: 500; }
+
+/* ===== 方案 G: 磨砂绿 ===== */
+.btn-frost {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(46,125,50,0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1.5px solid rgba(46,125,50,0.25);
+  box-shadow: 0 4px 16px rgba(46,125,50,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: #2e7d32;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.btn-frost:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(46,125,50,0.2); }
+
+/* ===== 方案 H: 纯粹小点 ===== */
+.btn-dot {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #1d1d1f;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.btn-dot:hover { transform: scale(1.12); box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+
+/* ===== 方案 I: 彩虹光晕 ===== */
+.btn-aura {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: #fff;
+  transition: transform 0.2s;
+}
+.btn-aura::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2, #f093fb, #f5576c);
+  z-index: 0;
+  transition: opacity 0.3s;
+}
+.btn-aura::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: #1d1d1f;
+  z-index: 1;
+}
+.btn-aura .icon { position: relative; z-index: 2; }
+.btn-aura:hover { transform: scale(1.08); }
+.btn-aura:hover::before { opacity: 0.85; }
+
+/* ===== 方案 J: 极简悬浮文字 ===== */
+.btn-float {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px 10px 14px;
+  border-radius: 50px;
+  background: rgba(255,255,255,0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.6);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  white-space: nowrap;
+}
+.btn-float:hover { transform: scale(1.04); box-shadow: 0 6px 28px rgba(0,0,0,0.1); }
+.btn-float .icon { font-size: 16px; }
+.btn-float .label { font-size: 12px; color: #1d1d1f; font-weight: 500; }
+
+.card-desc {
+  padding: 0 20px 18px;
+}
+.card-desc p {
+  font-size: 13px;
+  color: #86868b;
+  line-height: 1.6;
+}
+.card-desc .pros {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #2e7d32;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.card-desc .pros span {
+  background: #e8f5e9;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>悬浮按钮设计方案</h1>
+  <p>DeerFlow App · 右下角入口按钮 · 共 10 种风格</p>
+</div>
+
+<div class="grid">
+
+  <!-- A: 毛玻璃 -->
+  <div class="card">
+    <div class="card-header">
+      <h3>A · 简约毛玻璃</h3>
+      <span class="tag tag-glass">玻璃质感</span>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="phone-content">
+        <div class="mock-title">DeerFlow</div>
+        <div class="mock-sub">服务器运行中</div>
+        <div class="mock-card">http://192.168.1.56:2026/</div>
+      </div>
+      <div class="btn-area">
+        <div class="btn-glass">⚙</div>
+      </div>
+    </div>
+    <div class="card-desc">
+      <p>半透明毛玻璃材质，质感细腻，通透感强。能隐约看到背景内容，不显突兀。iOS 风格，适合浅色 UI。</p>
+      <div class="pros"><span>通透</span><span>细腻</span><span>不打扰</span></div>
+    </div>
+  </div>
+
+  <!-- B: 绿色品牌 -->
+  <div class="card">
+    <div class="card-header">
+      <h3>B · 品牌绿</h3>
+      <span class="tag tag-brand">品牌色</span>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="phone-content">
+        <div class="mock-title">DeerFlow</div>
+        <div class="mock-sub">服务器运行中</div>
+        <div class="mock-card">http://192.168.1.56:2026/</div>
+      </div>
+      <div class="btn-area">
+        <div class="btn-brand">⚙</div>
+      </div>
+    </div>
+    <div class="card-desc">
+      <p>DeerFlow 品牌绿色渐变，视觉突出，一眼可见。适合想让用户快速找到设置入口的场景。</p>
+      <div class="pros"><span>醒目</span><span>品牌统一</span><span>易发现</span></div>
+    </div>
+  </div>
+
+  <!-- C: 深蓝专业 -->
+  <div class="card">
+    <div class="card-header">
+      <h3>C · 深海蓝</h3>
+      <span class="tag tag-bold">专业感</span>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="phone-content">
+        <div class="mock-title">DeerFlow</div>
+        <div class="mock-sub">服务器运行中</div>
+        <div class="mock-card">http://192.168.1.56:2026/</div>
+      </div>
+      <div class="btn-area">
+        <div class="btn-pro">⚙</div>
+      </div>
+    </div>
+    <div class="card-desc">
+      <p>深蓝渐变，沉稳专业。色彩权威感强，适合企业级工具类 App，给人可靠印象。</p>
+      <div class="pros"><span>沉稳</span><span>专业</span><span>可靠</span></div>
+    </div>
+  </div>
+
+  <!-- D: 圆环 -->
+  <div class="card">
+    <div class="card-header">
+      <h3>D · 微光圆环</h3>
+      <span class="tag tag-minimal">精致</span>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="phone-content">
+        <div class="mock-title">DeerFlow</div>
+        <div class="mock-sub">服务器运行中</div>
+        <div class="mock-card">http://192.168.1.56:2026/</div>
+      </div>
+      <div class="btn-area">
+        <div class="btn-ring">⚙</div>
+      </div>
+    </div>
+    <div class="card-desc">
+      <p>白色按钮 + 动态圆环描边，白天/夜间模式都百搭。细节微光点缀，低调但精致。</p>
+      <div class="pros"><span>百搭</span><span>精致细节</span><span>自适应</span></div>
+    </div>
+  </div>
+
+  <!-- E: 极简纯色 -->
+  <div class="card">
+    <div class="card-header">
+      <h3>E · 极简纯色</h3>
+      <span class="tag tag-clean">干净</span>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="phone-content">
+        <div class="mock-title">DeerFlow</div>
+        <div class="mock-sub">服务器运行中</div>
+        <div class="mock-card">http://192.168.1.56:2026/</div>
+      </div>
+      <div class="btn-area">
+        <div class="btn-mini">⚙</div>
+      </div>
+    </div>
+    <div class="card-desc">
+      <p>最小尺寸的半透明灰色小点，几乎不引起注意。适合「需要时顺手可用，不使用时完全隐形」的场景。</p>
+      <div class="pros"><span>最小打扰</span><span>不显眼</span><span>轻盈</span></div>
+    </div>
+  </div>
+
+  <!-- F: 胶囊 -->
+  <div class="card">
+    <div class="card-header">
+      <h3>F · 灵动胶囊</h3>
+      <span class="tag tag-neon">醒目</span>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="phone-content">
+        <div class="mock-title">DeerFlow</div>
+        <div class="mock-sub">服务器运行中</div>
+        <div class="mock-card">http://192.168.1.56:2026/</div>
+      </div>
+      <div class="btn-area">
+        <div class="btn-capsule">
+          <span class="icon">⚙</span>
+          <span class="label">设置</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-desc">
+      <p>长胶囊形按钮，带有「设置」文字标签。深色毛玻璃背景，信息一目了然，点击区域更大。</p>
+      <div class="pros"><span>清晰</span><span>易点击</span><span>带文字</span></div>
+    </div>
+  </div>
+
+  <!-- G: 磨砂绿 -->
+  <div class="card">
+    <div class="card-header">
+      <h3>G · 磨砂绿</h3>
+      <span class="tag tag-brand">清新</span>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="phone-content">
+        <div class="mock-title">DeerFlow</div>
+        <div class="mock-sub">服务器运行中</div>
+        <div class="mock-card">http://192.168.1.56:2026/</div>
+      </div>
+      <div class="btn-area">
+        <div class="btn-frost">⚙</div>
+      </div>
+    </div>
+    <div class="card-desc">
+      <p>浅绿色磨砂玻璃材质，品牌色系但更柔和。既有品牌识别度，又保持半透明的轻盈感。</p>
+      <div class="pros"><span>品牌色</span><span>柔和</span><span>半透明</span></div>
+    </div>
+  </div>
+
+  <!-- H: 纯粹小点 -->
+  <div class="card">
+    <div class="card-header">
+      <h3>H · 纯粹小点</h3>
+      <span class="tag tag-minimal">极简</span>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="phone-content">
+        <div class="mock-title">DeerFlow</div>
+        <div class="mock-sub">服务器运行中</div>
+        <div class="mock-card">http://192.168.1.56:2026/</div>
+      </div>
+      <div class="btn-area">
+        <div class="btn-dot">⚙</div>
+      </div>
+    </div>
+    <div class="card-desc">
+      <p>36px 极小黑点，纯黑底色白色图标。几乎不占空间，适合需要最大化内容区域的应用。</p>
+      <div class="pros"><span>极小</span><span>不挡内容</span><span>自适应</span></div>
+    </div>
+  </div>
+
+  <!-- I: 彩虹光晕 -->
+  <div class="card">
+    <div class="card-header">
+      <h3>I · 彩虹光晕</h3>
+      <span class="tag tag-glass">吸睛</span>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="phone-content">
+        <div class="mock-title">DeerFlow</div>
+        <div class="mock-sub">服务器运行中</div>
+        <div class="mock-card">http://192.168.1.56:2026/</div>
+      </div>
+      <div class="btn-area">
+        <div class="btn-aura">
+          <span class="icon">⚙</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-desc">
+      <p>渐变色光晕外圈 + 深色中心，视觉冲击力强。适合个性鲜明、年轻化的风格取向。</p>
+      <div class="pros"><span>个性</span><span>吸睛</span><span>生动</span></div>
+    </div>
+  </div>
+
+  <!-- J: 悬浮文字 -->
+  <div class="card">
+    <div class="card-header">
+      <h3>J · 悬浮文字片</h3>
+      <span class="tag tag-clean">直观</span>
+    </div>
+    <div class="phone-frame">
+      <div class="phone-status-bar"><span>9:41</span><span>🔋</span></div>
+      <div class="phone-content">
+        <div class="mock-title">DeerFlow</div>
+        <div class="mock-sub">服务器运行中</div>
+        <div class="mock-card">http://192.168.1.56:2026/</div>
+      </div>
+      <div class="btn-area">
+        <div class="btn-float">
+          <span class="icon">⚙</span>
+          <span class="label">服务器设置</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-desc">
+      <p>白底毛玻璃长条按钮，「服务器设置」文字一目了然。适合希望用户立即理解按钮用途的场景。</p>
+      <div class="pros"><span>自解释</span><span>清晰</span><span>友好</span></div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

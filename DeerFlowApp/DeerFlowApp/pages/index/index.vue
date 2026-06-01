@@ -1,8 +1,10 @@
 <template>
   <view>
-    <web-view v-if="showWebView" :src="webviewSrc" @title="onTitle" @load="onWebViewLoad" @error="onWebViewError"></web-view>
+    <view :class="['webview-container', { 'webview-hidden': !showWebView }]">
+      <web-view v-show="showWebView" :src="webviewSrc" @title="onTitle" @load="onWebViewLoad" @error="onWebViewError"></web-view>
+    </view>
 
-    <view v-if="showErrorOverlay" class="error-overlay">
+    <view v-show="showErrorOverlay" class="error-overlay">
       <view class="error-content">
         <view class="error-icon">⚠️</view>
         <view class="error-title">无法连接服务器</view>
@@ -20,7 +22,7 @@
       </view>
     </view>
 
-    <view v-if="showConfigPanel" class="config-overlay">
+    <view v-if="showConfigPanel" class="config-overlay" :key="'config-' + configKey">
       <view class="config-mask" @click="closeConfigPanel"></view>
       <view class="config-panel">
         <view class="config-header">
@@ -29,9 +31,10 @@
         </view>
 
         <view class="form-group">
-          <view class="form-label">服务器地址</view>
-          <input class="form-input" type="text" :value="inputUrl" @input="onUrlInput" @blur="autoCompleteProtocol" placeholder="请输入服务器地址" />
-          <view v-if="urlHint" class="form-hint" :class="{ 'hint-warn': urlHintType === 'warn', 'hint-error': urlHintType === 'error' }">{{ urlHint }}</view>
+          <view class="form-label">当前服务器地址</view>
+          <view class="url-card">
+            <view class="url-value">{{ inputUrl || '（未设置）' }}</view>
+          </view>
         </view>
 
         <view class="form-group">
@@ -49,11 +52,6 @@
         <view v-if="testResult.type === 'fail'" class="log-actions">
           <view class="btn btn-log" @click="viewScanLog">📋 查看日志</view>
           <view class="btn btn-log-clear" @click="clearScanLog">🗑 清空日志</view>
-        </view>
-
-        <view class="config-actions">
-          <view class="btn btn-primary" :class="{ 'btn-disabled': saveDisabled }" @click="saveAndLoad">💾 保存并加载</view>
-          <view class="btn btn-secondary" @click="restoreDefaultUrl">↩️ 恢复默认地址</view>
         </view>
       </view>
     </view>
@@ -94,13 +92,6 @@ function isPublicDomain(url) {
   }
 }
 
-function isValidUrl(str) {
-  if (!str || str.length === 0) return false
-  if (str.indexOf(' ') !== -1) return false
-  if (/^https?:\/\//.test(str)) return true
-  return true
-}
-
 function autoProtocol(url) {
   if (!url) return url
   if (/^https?:\/\//i.test(url)) return url
@@ -117,14 +108,12 @@ export default {
       showConfigPanel: false,
       currentUrl: '',
       inputUrl: '',
-      urlHint: '',
-      urlHintType: '',
       testResult: { type: '', message: '' },
-      saveDisabled: true,
       retryCount: 0,
       retryTimer: null,
       scanning: false,
-      webViewError: ''
+      webViewError: '',
+      configKey: 0
     }
   },
   onShow() {
@@ -167,21 +156,21 @@ export default {
         var btn = new plus.nativeObj.View('settings-float-btn', {
           top: '80%',
           left: '82%',
-          width: '50px',
-          height: '50px'
+          width: '48px',
+          height: '48px'
         }, [
           {
             tag: 'rect',
-            color: 'rgba(0,0,0,0.5)',
+            color: 'rgba(255,255,255,0.55)',
             rect: { top: 0, left: 0, width: '100%', height: '100%' },
-            radius: '25px'
+            radius: '24px'
           },
           {
             tag: 'font',
             text: '⚙',
             textStyles: {
-              size: '26px',
-              color: '#ffffff',
+              size: '22px',
+              color: '#555555',
               alignment: 'center',
               verticalAlign: 'middle'
             },
@@ -233,13 +222,12 @@ export default {
 
     openConfigPanel() {
       this.destroyFloatBtn()
-      this.inputUrl = this.webviewSrc
-      this.urlHint = ''
-      this.urlHintType = ''
+      this.showErrorOverlay = false
       this.testResult = { type: '', message: '' }
-      this.saveDisabled = true
-      this.showConfigPanel = true
+      this.inputUrl = this.webviewSrc
       this.showWebView = false
+      this.configKey++
+      this.showConfigPanel = true
     },
     closeConfigPanel() {
       this.showConfigPanel = false
@@ -474,47 +462,6 @@ export default {
       })
     },
 
-    onUrlInput(e) {
-      var val = e.detail.value
-      this.inputUrl = val
-
-      if (!val || val.length === 0) {
-        this.urlHint = '请输入服务器地址'
-        this.urlHintType = 'error'
-        this.saveDisabled = true
-        this.testResult = { type: '', message: '' }
-        return
-      }
-
-      if (val.indexOf(' ') !== -1) {
-        this.urlHint = '地址格式不正确（不能包含空格）'
-        this.urlHintType = 'error'
-        this.saveDisabled = true
-        this.testResult = { type: '', message: '' }
-        return
-      }
-
-      if (/[\u4e00-\u9fa5]/.test(val)) {
-        this.urlHint = '地址格式不正确（不能包含中文）'
-        this.urlHintType = 'error'
-        this.saveDisabled = true
-        this.testResult = { type: '', message: '' }
-        return
-      }
-
-      var withProtocol = autoProtocol(val)
-      if (isPublicDomain(withProtocol)) {
-        this.urlHint = '您输入的似乎是一个公共网站地址。DeerFlow 服务器通常位于内网（如 192.168.x.x）'
-        this.urlHintType = 'warn'
-      } else {
-        this.urlHint = ''
-        this.urlHintType = ''
-      }
-
-      this.saveDisabled = true
-      this.testResult = { type: '', message: '' }
-    },
-
     autoCompleteProtocol() {
       if (this.inputUrl && !/^https?:\/\//i.test(this.inputUrl) && this.inputUrl.indexOf('://') === -1) {
         this.inputUrl = 'http://' + this.inputUrl
@@ -555,10 +502,8 @@ export default {
 
           if (isValid) {
             self.testResult = { type: 'success', message: '✅ DeerFlow 服务器已验证 ✓' }
-            self.saveDisabled = false
           } else {
             self.testResult = { type: 'fail', message: '⛔ 非 DeerFlow 服务器，禁止使用' }
-            self.saveDisabled = true
           }
         },
         fail: function(err) {
@@ -568,41 +513,8 @@ export default {
           } else {
             self.testResult = { type: 'fail', message: '❌ 无法连接，请检查地址或网络' }
           }
-          self.saveDisabled = true
         }
       })
-    },
-
-    saveAndLoad() {
-      if (this.saveDisabled) return
-
-      var url = this.inputUrl
-      this.autoCompleteProtocol()
-      url = this.inputUrl
-
-      this.webviewSrc = url
-      this.currentUrl = url
-      this.showConfigPanel = false
-      this.showErrorOverlay = false
-      this.showWebView = true
-      this.webViewError = ''
-      this.createFloatBtn()
-      this.retryCount = 0
-
-      if (this.retryTimer) {
-        clearTimeout(this.retryTimer)
-        this.retryTimer = null
-      }
-
-      plus.nativeUI.toast('已保存并加载: ' + url)
-    },
-
-    restoreDefaultUrl() {
-      this.inputUrl = appConfig.serverUrl
-      this.urlHint = ''
-      this.urlHintType = ''
-      this.testResult = { type: '', message: '' }
-      this.saveDisabled = true
     },
 
     retryLoad() {
@@ -722,6 +634,16 @@ export default {
 </script>
 
 <style>
+.webview-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+.webview-hidden {
+  pointer-events: none;
+}
 .error-overlay {
   position: fixed;
   top: 0;
@@ -786,6 +708,7 @@ export default {
   border-radius: 10px;
   padding: 10px 14px;
   margin-bottom: 16px;
+  box-sizing: border-box;
 }
 .url-label {
   font-size: 11px;
@@ -796,6 +719,7 @@ export default {
   font-size: 14px;
   color: #1d1d1f;
   word-break: break-all;
+  overflow-wrap: break-word;
 }
 .error-actions {
   width: 100%;
@@ -813,7 +737,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9998;
+  z-index: 9999;
 }
 .config-mask {
   position: absolute;
@@ -822,6 +746,7 @@ export default {
   right: 0;
   bottom: 0;
   background: rgba(0,0,0,0.4);
+  z-index: 0;
 }
 .config-panel {
   width: 85%;
@@ -831,6 +756,7 @@ export default {
   padding: 20px;
   position: relative;
   box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+  z-index: 1;
 }
 .config-header {
   display: flex;
@@ -864,32 +790,6 @@ export default {
   color: #555;
   margin-bottom: 6px;
 }
-.form-input {
-  width: 100%;
-  padding: 12px 14px;
-  border: 1.5px solid #e5e5ea;
-  border-radius: 10px;
-  font-size: 15px;
-  outline: none;
-  box-sizing: border-box;
-  background: #fff;
-  color: #1d1d1f;
-}
-.form-input:focus {
-  border-color: #007aff;
-}
-.form-hint {
-  font-size: 12px;
-  margin-top: 4px;
-  color: #86868b;
-}
-.hint-warn {
-  color: #f5a623;
-}
-.hint-error {
-  color: #ee0a24;
-}
-
 .test-result {
   margin-top: 6px;
   margin-bottom: 14px;
@@ -914,13 +814,6 @@ export default {
   border: 1px solid #e0e0e0;
 }
 
-.config-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 4px;
-}
-
 .btn {
   text-align: center;
   padding: 14px;
@@ -931,10 +824,6 @@ export default {
 .btn-primary {
   background: #007aff;
   color: #fff;
-}
-.btn-disabled {
-  background: #ccc;
-  color: #999;
 }
 .btn-secondary {
   background: #f5f5f7;
