@@ -161,6 +161,99 @@ DeerFlow 后端提供 `GET /health` 端点，用于 App 内的服务器身份验
 
 URL 拼接时需注意**去末尾斜杠**防双斜杠：`url.replace(/\/+$/, '') + '/health'`
 
+## 视觉定制
+
+### 1. App 图标
+
+**唯一源文件：** `static/app-icon.png`（1024×1024 正方形 PNG）
+
+**修改流程：**
+```
+① 替换 static/app-icon.png（脚本会自动居中裁剪为正方形）
+② 运行生成脚本：powershell -File generate-icons.ps1
+    → 自动生成 7 种尺寸到 unpackage/res/icons/
+③ 云打包（HBuilderX → 发行 → 原生App-云打包）
+```
+
+**注意：** `unpackage/` 在 `.gitignore` 中，不会提交。Git 只跟踪 `static/app-icon.png`。
+
+---
+
+### 2. 加载画面品牌图
+
+**源文件：** `static/brand.png`
+
+**修改流程：**
+```
+① 替换 static/brand.png
+② 云打包
+```
+
+**画面布局：**
+```
+┌──────────────────────────┐
+│                          │
+│       [brand.png]        │  ← 居中，最大宽度 160px
+│                          │
+│       ◌ (旋转圆圈)        │  ← CSS 旋转，24px，#007aff
+│  正在连接 DeerFlow...     │  ← 14px，#86868b
+│                          │
+└──────────────────────────┘
+```
+
+**相关代码：** `pages/index/index.vue` — 模板中 `.loading-brand` 的 `<image>` 标签，CSS 类名 `.loading-splash`、`.loading-brand`、`.loading-spinner`、`.loading-text`
+
+---
+
+### 3. 启动画面背景色
+
+**配置位置：** `manifest.json` → `app-plus.splashscreen`
+
+**当前值（白色，与加载画面无缝衔接）：**
+```json
+"splashscreen": {
+    "alwaysShowBeforeRender": true,
+    "autoclose": true,
+    "waiting": true,
+    "delay": 0,
+    "android": { "backgroundColor": "#ffffff" },
+    "ios": { "backgroundColor": "#ffffff" }
+}
+```
+
+**修改流程：**
+```
+① 改 manifest.json 中的 backgroundColor
+② 云打包
+```
+
+---
+
+### 4. 导航栏显隐
+
+**配置位置：** `pages.json` → `pages[0].style.navigationStyle`
+
+**当前（隐藏 — WebView 全屏沉浸，从状态栏下方开始）：**
+```json
+"style": {
+    "navigationBarTitleText": "DeerFlow",
+    "navigationStyle": "custom"
+}
+```
+
+**如需恢复（显示原生导航栏）：**
+```json
+"style": {
+    "navigationBarTitleText": "DeerFlow"
+    // 删除 "navigationStyle": "custom" 即可
+}
+```
+
+**注意：**
+- 隐藏导航栏时，`@title` 事件已移除，网页标题不会同步
+- 容器已添加 `padding-top: env(safe-area-inset-top)` 适配刘海屏
+- 隐藏后 WebView 完全全屏
+
 ## Important Notes
 - The actual app source lives under `DeerFlowApp/DeerFlowApp/` (HBuilderX creates a project subdirectory inside the parent folder)
 - The server URL is configured via **`config.js` only** — no persistent storage, edit before cloud build
