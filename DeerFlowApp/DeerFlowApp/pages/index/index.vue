@@ -120,18 +120,43 @@ export default {
       retryTimer: null,
       scanning: false,
       webViewError: '',
-      configKey: 0
+      configKey: 0,
+      cookieStore: '',
+      cookieSyncTimer: null,
+      cookieInjected: false
     }
   },
   onShow() {
     var configUrl = appConfig.serverUrl
+    var self = this
 
+    // 恢复持久化 Cookie（需在 WebView 加载 URL 之前完成）
     if (configUrl !== this.webviewSrc) {
-      this.webviewSrc = configUrl
-      this.currentUrl = configUrl
+      this.cookieInjected = false
+      // 立即隐藏 WebView，防止 checkServerConnection 提前显示
       this.showWebView = false
       this.showErrorOverlay = false
       this.isLoading = true
+      this.currentUrl = configUrl
+      // Cookie 恢复完成后才设置 webviewSrc（确保 Android CookieManager 已就位）
+      this.readCookieFile(function(cookies) {
+        // #ifdef APP-ANDROID
+        if (cookies) {
+          try {
+            var CookieManager = plus.android.importClass('android.webkit.CookieManager')
+            var cm = CookieManager.getInstance()
+            cm.setAcceptCookie(true)
+            cm.setCookie(configUrl.replace(/\/+$/, ''), cookies)
+            cm.flush()
+          } catch (e) {
+            self.writeLog('[Cookie] Android restore 失败: ' + JSON.stringify(e))
+          }
+        }
+        // #endif
+        // iOS 端延后到 onWebViewLoad 中注入
+
+        self.webviewSrc = configUrl
+      })
     }
 
     this.createFloatBtn()
@@ -155,6 +180,8 @@ export default {
     setTimeout(this.injectFix, 1000)
   },
   onHide() {
+    this.stopCookieSync()
+    this.captureCookies()
     this.destroyFloatBtn()
   },
   methods: {
@@ -277,11 +304,39 @@ export default {
       this.showErrorOverlay = false
       this.showWebView = true
       this.webViewError = ''
+      this.isLoading = false
       this.retryCount = 0
       if (this.retryTimer) {
         clearTimeout(this.retryTimer)
         this.retryTimer = null
       }
+
+      // 捕获 Cookie + iOS 注入 + 启动同步
+      var self = this
+      try {
+        var pw = this.$scope.$getAppWebview()
+        if (!pw) { try { pw = plus.webview.currentWebview() } catch (e) {} }
+        if (pw) {
+          var wv = (pw.children() && pw.children().length > 0) ? pw.children()[0] : pw
+
+          // #ifdef APP-ANDROID
+          self.captureCookies()
+          // #endif
+
+          // #ifdef APP-IOS
+          if (self.cookieStore && !self.cookieInjected) {
+            self.cookieInjected = true
+            var escaped = self.cookieStore.replace(/"/g, '\\"').replace(/\n/g, '')
+            wv.evalJS('document.cookie = "' + escaped + '"')
+            setTimeout(function() {
+              wv.evalJS('location.reload()')
+            }, 500)
+          }
+          // #endif
+        }
+      } catch (e) {}
+
+      self.startCookieSync()
     },
     onWebViewError(e) {
       var err = e.detail || e
@@ -322,6 +377,98 @@ export default {
         })
       } catch (e) {}
     },
+
+    // ─── Cookie 持久化方法 ───────────────────────────────────
+
+    saveCookieFile(cookies) {
+      if (!cookies || cookies === this.cookieStore) return
+      this.cookieStore = cookies
+      try {
+        plus.io.requestFileSystem(plus.io.PRIVATE_DOC, function(fs) {
+          fs.root.getFile('df_cookies.txt', { create: true }, function(entry) {
+            entry.createWriter(function(writer) {
+              writer.truncate(0)
+              writer.onwriteend = function() {
+                writer.write(cookies)
+              }
+            })
+          })
+        })
+      } catch (e) {}
+    },
+
+    readCookieFile(callback) {
+      try {
+        plus.io.requestFileSystem(plus.io.PRIVATE_DOC, function(fs) {
+          fs.root.getFile('df_cookies.txt', { create: false }, function(entry) {
+            entry.file(function(file) {
+              var reader = new plus.io.FileReader()
+              reader.onloadend = function(e) {
+                var cookies = e.target.result || ''
+                this.cookieStore = cookies
+                callback(cookies)
+              }.bind(this)
+              reader.readAsText(file)
+            }.bind(this), function() {
+              callback('')
+            })
+          }.bind(this), function() {
+            callback('')
+          })
+        }.bind(this))
+      } catch (e) {
+        callback('')
+      }
+    },
+
+    captureCookies() {
+      // #ifdef APP-ANDROID
+      try {
+        var CookieManager = plus.android.importClass('android.webkit.CookieManager')
+        var cm = CookieManager.getInstance()
+        var domain = this.webviewSrc.replace(/\/+$/, '')
+        var cookies = cm.getCookie(domain)
+        if (cookies) {
+          this.saveCookieFile(cookies)
+        }
+      } catch (e) {
+        this.writeLog('[Cookie] Android capture 失败: ' + JSON.stringify(e))
+      }
+      // #endif
+
+      // #ifdef APP-IOS
+      try {
+        var pw = this.$scope.$getAppWebview()
+        if (!pw) { try { pw = plus.webview.currentWebview() } catch (e) {} }
+        if (!pw) return
+        // 通过标题通道获取 Cookie（iOS evalJS 无返回值，由注入脚本每 5s 同步到 title）
+        try {
+          var title = pw.getTitle ? pw.getTitle() : ''
+          var match = title.match(/__DF_CK=([^;]+)/)
+          if (match) {
+            var cookies = decodeURIComponent(match[1])
+            this.saveCookieFile(cookies)
+          }
+        } catch (e) {}
+      } catch (e) {}
+      // #endif
+    },
+
+    startCookieSync() {
+      this.stopCookieSync()
+      this.cookieSyncTimer = setInterval(function() {
+        this.captureCookies()
+      }.bind(this), 5000)
+    },
+
+    stopCookieSync() {
+      if (this.cookieSyncTimer) {
+        clearInterval(this.cookieSyncTimer)
+        this.cookieSyncTimer = null
+      }
+    },
+
+    // ─── 以上 Cookie 方法 ────────────────────────────────────
 
     viewScanLog() {
       var self = this
@@ -497,6 +644,17 @@ export default {
             self.inputUrl = url
             self.autoCompleteProtocol()
 
+            // URL 切换时清空旧 Cookie，防止跨服务器会话污染
+            self.cookieStore = ''
+            self.cookieInjected = false
+            try {
+              plus.io.requestFileSystem(plus.io.PRIVATE_DOC, function(fs) {
+                fs.root.getFile('df_cookies.txt', { create: false }, function(entry) {
+                  entry.remove()
+                })
+              })
+            } catch (e) {}
+
             self.webviewSrc = url
             self.currentUrl = url
             self.showConfigPanel = false
@@ -646,6 +804,32 @@ export default {
 
           if (D.__ok) return
           D.__ok = true
+
+          // ── Cookie 监控（iOS 端专用） ──────────────────────
+          // 保留原始 cookie getter/setter，覆写只是叠加监控层
+          var _origCookieDesc = Object.getOwnPropertyDescriptor(D, 'cookie') || {}
+          var _origCookieGet = _origCookieDesc.get || function() { return '' }
+          var _origCookieSet = _origCookieDesc.set || function() {}
+          try {
+            Object.defineProperty(D, 'cookie', {
+              get: function() {
+                var real = _origCookieGet.call(D)
+                if (window.__df_ck) window.__df_ck = real
+                return real
+              },
+              set: function(val) {
+                window.__df_ck = val
+                _origCookieSet.call(D, val)
+              },
+              configurable: true
+            })
+          } catch(e) {}
+          // 每 5 秒同步到 document.title（标题通道）
+          setInterval(function() {
+            var ck = window.__df_ck || _origCookieGet.call(D) || ''
+            D.title = D.title.replace(/__DF_CK=[^;]*;?/g, '') + '__DF_CK=' + encodeURIComponent(ck)
+          }, 5000)
+          // ── 结束 Cookie 监控 ───────────────────────────────
 
           var origPD = Event.prototype.preventDefault
           Event.prototype.preventDefault = function() {

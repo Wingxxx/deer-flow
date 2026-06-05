@@ -239,6 +239,89 @@ http://192.168.1.56:2026    →  http://192.168.1.56:2026/health  ✅
 
 ---
 
+---
+
+## Bug 8: 冷启动后 WebView Session Cookie 丢失需要重新登录
+
+**发现日期**: 2026-06-03
+**状态**: 已修复 ✅
+**涉及文件**: `DeerFlowApp/DeerFlowApp/pages/index/index.vue`
+
+### 现象
+App 冷启动（进程被杀死后重新打开）后，WebView 加载 DeerFlow 页面需要重新登录。同一地址在桌面浏览器中关闭再打开仍保持登录状态。
+
+### 根因分析
+DeerFlow 后端使用 Session Cookie（无 `Expires`/`Max-Age` 属性）认证。App 冷启动时 WebView 实例重建，会话 Cookie 丢失，服务器视为新会话。
+
+| 平台 | 原因 |
+|------|------|
+| Android | 系统 WebView 进程回收，会话 Cookie 丢失 |
+| iOS | WKWebView 默认不持久化跨启动 Cookie；ITP 7 天自动清除 |
+
+### 修复方案
+Cookie 持久化三层架构：
+
+```
+onShow ──→ readCookieFile() ──→ CookieManager.setCookie() + flush() ──→ WebView loadUrl
+                                                                           │
+onWebViewLoad ──→ captureCookies() ──→ saveCookieFile()                  │
+                                                                           │
+定时器(5s) ──→ captureCookies() ──→ saveCookieFile() (捕获 SPA 内 Cookie 变化)
+                                                                           │
+onHide ──→ stopCookieSync() + 最后一次 captureCookies()
+```
+
+#### Android 端
+使用 `plus.android.importClass('android.webkit.CookieManager')` 原生 API：
+- `onShow()` 中在 WebView 加载 URL 之前恢复 Cookie
+- `CookieManager.setCookie(domain, cookies)` + `flush()` 刷入磁盘
+- `onWebViewLoad` 和定时器中通过 `getCookie(domain)` 捕获
+
+#### iOS 端
+WKWebView 不暴露原生 CookieManager，改用 JS 桥接：
+- `onWebViewLoad` 中通过 `evalJS('document.cookie = "..."')` 注入已保存 Cookie
+- 500ms 后 `location.reload()` 使 Cookie 生效（仅首次）
+- `cookieInjected` 标记防死循环
+- 注入的 JS 通过 `Object.defineProperty` 覆写 `document.cookie` 叠加监控层，保留原始 getter/setter
+- 标题通道：`window.__df_ck` 每 5s 同步到 `document.title`
+
+#### 文件存储
+Cookie 持久化到 `PRIVATE_DOC/df_cookies.txt`，纯文本格式，与扫码日志同存储域。
+
+#### URL 切换隔离
+扫码切换服务器地址时清空 `cookieStore` 和 `df_cookies.txt`，防止旧 Cookie 污染新地址。
+
+### 详细设计文档
+`docs/superpowers/specs/2026-06-03-webview-cookie-persistence-spec.md`
+
+### 已知限制
+- iOS 端无法读取 HttpOnly Cookie（`document.cookie` 限制），如发现持久化失败需服务器端去掉 HttpOnly 标志
+- iOS 端首次启动会有一个「加载 → 注入 → 刷新」的短暂闪烁
+- Apple ITP 可能在 7 天后自动清除 Cookie
+
+---
+
+## Bug 9: iOS 端 evalJS 无返回值
+
+**发现日期**: 2026-06-03
+**状态**: 已修复 ✅
+**涉及文件**: `DeerFlowApp/DeerFlowApp/pages/index/index.vue`
+
+### 现象
+iOS WKWebView 的 `evalJS()` 方法无法返回 JavaScript 执行结果，导致无法通过 `evalJS('document.cookie')` 获取 Cookie 值。
+
+### 根因分析
+`plus.webview.WebviewObject.evalJS()` 在 iOS 端是单向调用——注入脚本但不返回结果。这是 WKWebView 的安全设计。
+
+### 修复方案
+**文档标题通道**：在注入的监控脚本中，每 5 秒将 `window.__df_ck` 写入 `document.title`：
+```javascript
+D.title = D.title.replace(/__DF_CK=[^;]*;?/g, '') + '__DF_CK=' + encodeURIComponent(ck)
+```
+原生端通过 `pw.getTitle()` 正则匹配 `__DF_CK=` 标记获取 Cookie。
+
+---
+
 ## 通用教训
 
 1. **事件驱动优于定时轮询**：WebView 的生命周期事件已经足够覆盖所有状态变化

@@ -277,3 +277,33 @@ Bug fixes and design decisions are documented in [docs/superpowers/bug-fix-log.m
 - **Bug 5 — 悬浮按钮不可见**：Vue DOM 按钮被 WebView 原生层覆盖。已修复，改用 `plus.nativeObj.View` 原生绘制层。
 - **Bug 6 — /health 需登录导致验证失败**：not_authenticated 被当成无效。已修复，放宽验证条件。
 - **Bug 7 — URL 末尾斜杠导致 /health 404**：双斜杠被路由截断。已修复，`url.replace(/\/+$/, '')`。
+- **Bug 8 — 冷启动后 Session Cookie 丢失**：只需重新登录。已修复，Cookie 持久化三层架构（原生 CookieManager + iOS evalJS + 文件存储）。
+- **Bug 9 — iOS evalJS 无返回值**：无法通过 evalJS 读取 Cookie。已修复，文档标题通道（__DF_CK 标记）。
+
+## Cookie 持久化机制（2026-06-03 新增）
+
+### 存储文件
+- **路径**：`PRIVATE_DOC/df_cookies.txt`（纯文本，`;` 分隔的 Cookie 字符串）
+- **逻辑代码**：[pages/index/index.vue](file:///d:/Wing_D/emto/2026/2026.5/uni-app/DeerFlowApp/DeerFlowApp/pages/index/index.vue) — `methods` 中的 Cookie 管理方法
+
+### 双平台差异
+- **Android**：使用 `plus.android.importClass('android.webkit.CookieManager')`，在 `onShow` 中 URL 加载前通过 `setCookie()` + `flush()` 恢复
+- **iOS**：使用 `evalJS('document.cookie')` + `window.__df_ck` 全局变量监控，在 `onWebViewLoad` 后注入/捕获；通过 `document.title` 中的 `__DF_CK=` 标记回传 Cookie
+
+### 同步时序
+| 事件 | 操作 |
+|------|------|
+| `onShow` | 读取文件 → Android 端 `setCookie + flush` |
+| `onWebViewLoad` | Android 端 `getCookie` 捕获；iOS 端首次注入 + injectFix |
+| 定时器 (5s) | 轮询 Cookie 变化 |
+| `onHide` | 停止轮询 + 最后一次捕获 |
+| 扫码切换 URL | 清空 Cookie 文件 |
+
+### 已知限制
+- **iOS HttpOnly Cookie**：`document.cookie` 无法读取 HttpOnly Cookie，iOS 端持久化可能失效。内网场景可考虑服务器端去掉 HttpOnly 标志
+- **iOS 首刷闪烁**：首启加载→注入→reload 会产生短暂闪烁
+- **Apple ITP**：iOS 端 Cookie 可能在 7 天后被智能防跟踪清除
+- **文件回退**：Cookie 文件读取失败时静默回退，不阻塞 App 启动
+
+### 详细设计 & 暴力测试
+详见 [spec 文档](file:///d:/Wing_D/emto/2026/2026.5/uni-app/docs/superpowers/specs/2026-06-03-webview-cookie-persistence-spec.md) 第 5 章
