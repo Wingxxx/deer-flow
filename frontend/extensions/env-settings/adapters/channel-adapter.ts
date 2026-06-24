@@ -85,7 +85,7 @@ function mapProvider(
     id: p.provider,
     name: p.display_name,
     enabled: p.enabled,
-    running: p.configured && connectionStatus === "connected" && !p.unavailable_reason,
+    running: (p.connectable ?? false),
     configured: p.configured,
     connectionStatus,
     credentials: (p.credential_values as Record<string, string>) ?? {},
@@ -232,7 +232,11 @@ export async function verifyChannel(
       channel as Parameters<typeof configureChannelProvider>[0],
       credentials as ChannelRuntimeConfigValues,
     );
-    const connected = result.connection_status === "connected";
+    // POST 200 + connectable = credentials accepted and channel started.
+    // connection_status is unreliable for WebSocket channels in production
+    // (always "not_connected" without backend changes), so use connectable
+    // which reflects enabled + configured + no unavailable_reason.
+    const connected = result.connectable ?? false;
     // Roll back: clear the temp credentials we just wrote.
     await disconnectChannelProvider(
       channel as Parameters<typeof disconnectChannelProvider>[0],

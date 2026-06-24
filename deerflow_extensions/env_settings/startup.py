@@ -16,6 +16,11 @@ def install_env_settings(app=None):
 
         app.include_router(router)
 
+        # Register config.yaml auto-sync middleware (zero-invasion)
+        from deerflow_extensions.env_settings.config_sync import ChannelConfigSyncMiddleware
+
+        app.add_middleware(ChannelConfigSyncMiddleware)
+
         _installed = True
     except Exception as _e:
         import logging

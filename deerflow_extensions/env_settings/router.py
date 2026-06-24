@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["router", "_CHANNEL_META", "_set_channel_enabled_in_config", "_get_config_path"]
+
 _ENV_LOCK_PATH: str | None = None
 router = APIRouter(prefix="/api/env-settings", tags=["env-settings"])
 
