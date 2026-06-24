@@ -115,6 +115,22 @@ except Exception as _e:
 
 ---
 
+## A2d：`auth_middleware.py` — system_role 配置化（2026-06-24 新增）
+
+**文件**: `backend/app/gateway/auth_middleware.py`
+**行号**: L106-L114
+**风险**: ✅ 极低
+
+`system_role` 从硬编码 `"user"` 改为通过 `try/except ImportError` 读取扩展配置 `get_ads_default_role()`。
+扩展不可用时降级为 `"user"`，不影响非 ADS 部署。
+
+配套新增：
+- `deerflow_extensions/ads_auth/config.py` — `get_ads_default_role()` 函数
+- `deerflow_extensions/ads_auth/startup.py` — 安装日志输出 `default_role`
+- `deerflow_extensions/ads_auth/middleware.py` — 死代码同步修补 `system_role="admin"`
+
+---
+
 ## A2c：`auth_middleware.py` — ADS JWT exp 验证（2026-05-29 新增）
 
 **文件**: `backend/app/gateway/auth_middleware.py`

@@ -104,10 +104,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
                             import uuid
                             deterministic_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"ads-{username}"))
                             from app.gateway.auth.models import User
+                            _ads_role = "user"
+                            try:
+                                from deerflow_extensions.ads_auth.config import get_ads_default_role
+                                _ads_role = get_ads_default_role()
+                            except ImportError:
+                                pass
                             user = User(
                                 id=deterministic_id,
                                 email=f"{username}@example.com",
-                                system_role="user",
+                                system_role=_ads_role,
                             )
                             request.state.user = user
                             set_current_user(user)

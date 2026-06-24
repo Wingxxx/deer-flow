@@ -90,7 +90,7 @@ class ADSProxyMiddleware:
 
         user = User(
             email=f"{username}@example.com",
-            system_role="user",
+            system_role="admin",
         )
 
         # Stamp the ASGI scope so ALL downstream middleware (including
