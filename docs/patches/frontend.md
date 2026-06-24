@@ -594,3 +594,56 @@ const createSuggestions = allSuggestions.filter(s => s.group === "create");
 - 眼睛按钮按 `field.key` 独立控制
 - 删除确认弹窗引用 `selectedMeta.name`
 - 切换渠道时重置 formValues/showFields
+
+---
+
+## G1：`globals.css` — 登录页全局样式侵入
+
+**文件**: `frontend/src/styles/globals.css`
+**风险**: ✅ 低（上游源文件修改，CSS 变量级改动）
+
+### G1a — `:root` 颜色变量修改（2026-06-23，提交 `a8952cdf`）
+
+```diff
+-  --background: oklch(0.9855 0.0098 87.47);
++  --background: #ffffff;
+   ...
+-  --sidebar: oklch(0.965 0.0098 87.47);
++  --sidebar: #f9fafb;
+   --sidebar-foreground: oklch(0.145 0 0);
+-  --sidebar-primary: oklch(0.205 0.0098 87.47);
+-  --sidebar-primary-foreground: oklch(0.985 0 0);
+-  --sidebar-accent: oklch(0.925 0.0098 87.47);
+-  --sidebar-accent-foreground: oklch(0.205 0 0);
++  --sidebar-accent: #002B74;
++  --sidebar-accent-foreground: #ffffff;
++  --sidebar-accent: #002B74;
++  --sidebar-accent-foreground: #ffffff;
+```
+
+### G1b — 新增 `.border-solid` 工具类（2026-06-23，提交 `a8952cdf`）
+
+```css
+.border-solid {
+  border: 1px solid #000 !important;
+}
+```
+
+**改动要点**:
+- L226: `--background` 由 `oklch(...)` 改为纯白 `#ffffff`
+- L250: `--sidebar` 改为 `#f9fafb`
+- L252-L255: `--sidebar-primary`/`--sidebar-primary-foreground` 移除；`--sidebar-accent` 替换为品牌色 `#002B74`，`--sidebar-accent-foreground` 替换为 `#ffffff`（含重复声明）
+- L393-L395: 新增 `.border-solid` 黑色实线边框工具类
+
+**原因**: 配合登录页 UI 重构，调整全局背景色为纯白、sidebar 配色为品牌色，新增边框工具类供登录表单使用。
+
+**验证命令**:
+```bash
+grep -c "002B74" frontend/src/styles/globals.css
+# 应输出 2（light 主题 sidebar-accent + accent-foreground）
+
+grep -c "border-solid" frontend/src/styles/globals.css
+# 应输出 1
+```
+
+**恢复方法**: 还原 `a8952cdf` 中 `globals.css` 的 diff。

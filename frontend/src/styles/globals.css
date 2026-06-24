@@ -249,8 +249,8 @@
   --chart-5: oklch(0.769 0.188 70.08);
   --sidebar: #f9fafb;
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-accent: #002B74;
-  --sidebar-accent-foreground: #ffffff;
+  --sidebar-primary: oklch(0.205 0.0098 87.47);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: #002B74;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: oklch(0.922 0.0098 87.47);
