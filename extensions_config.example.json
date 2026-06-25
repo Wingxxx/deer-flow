@@ -27,7 +27,44 @@
       ],
       "env": {},
       "description": "PostgreSQL database access"
+    },
+    "#": "── 以下为部署示例（使用相对路径 + cwd 绑定确保路径稳定） ──",
+    "ads": {
+      "enabled": true,
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "ads-agent-mcp/dist/index.js"
+      ],
+      "cwd": "$DEER_FLOW_PROJECT_ROOT",
+      "env": {
+        "ADS_API_BASE_URL": "$ADS_API_BASE_URL",
+        "ADS_CONFIG_PATH": "ads-agent-mcp/.ads-mcp/config.json"
+      },
+      "description": "ADS云桌面管理系统"
+    },
+    "deeprag": {
+      "enabled": true,
+      "type": "http",
+      "url": "$DEEPRAG_MCP_URL",
+      "description": "DeepRAG 知识库检索引擎"
     }
   },
-  "skills": {}
+  "skills": {
+    "surprise-me": {
+      "enabled": false
+    },
+    "image-generation": {
+      "enabled": false
+    },
+    "podcast-generation": {
+      "enabled": false
+    },
+    "video-generation": {
+      "enabled": false
+    },
+    "claude-to-deerflow": {
+      "enabled": false
+    }
+  }
 }
