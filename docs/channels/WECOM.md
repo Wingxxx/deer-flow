@@ -65,6 +65,9 @@ DeerFlow 提供了可视化的渠道配置页面，无需手动编辑 `.env` 文
 2. 输入企业微信 Bot ID 和 Bot Secret
 3. 点击 **"验证连通性"** 测试凭据可用性
 4. 点击 **"保存"** — 配置自动写入 `.env` 并热重启渠道
+5. **完成连接码绑定** — 保存后页面自动显示绑定码引导卡片，包含 `/connect {code}` 指令和二维码。打开企业微信，向 DeerFlow Bot 发送此指令完成账号绑定。绑定后状态徽章变为「已连接」
+
+> ⚠️ 绑定码有效期 10 分钟。未绑定前向 Bot 发送消息会被拦截，返回"Connect this channel from DeerFlow Settings"提示。如需重新获取绑定码，重新保存凭据即可。
 
 此功能由 `env-settings` 扩展提供，后端 API 路径为 `/api/env-settings/channels/*`。保存配置时会自动启用渠道（修改 `config.yaml` 的 `channels.wecom.enabled: true`），清除配置时自动禁用。无需手动编辑 `config.yaml`。
 

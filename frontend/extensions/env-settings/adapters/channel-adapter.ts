@@ -10,13 +10,21 @@
  * This is the ONLY integration point with upstream API types.
  * If upstream response shapes change, only this file needs updating.
  */
+import QRCode from "qrcode";
+
 import {
   configureChannelProvider,
+  connectChannelProvider,
   disconnectChannelProvider,
   listChannelConnections,
   listChannelProviders,
 } from "@/core/channels/api";
-import type { ChannelProvider, ChannelRuntimeConfigValues } from "@/core/channels/types";
+import type {
+  ChannelProvider,
+  ChannelRuntimeConfigValues,
+} from "@/core/channels/types";
+
+import type { ChannelSaveResult } from "../types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -159,7 +167,7 @@ export async function listChannels(): Promise<AdaptedChannelSettingsResponse> {
  */
 export async function saveChannel(
   input: ChannelUpdateInput,
-): Promise<{ success: boolean; message: string }> {
+): Promise<ChannelSaveResult> {
   // Normalize credentials: skip entries where value is the masked placeholder.
   const values: ChannelRuntimeConfigValues = {};
   for (const [key, val] of Object.entries(input.credentials)) {
@@ -169,15 +177,39 @@ export async function saveChannel(
   }
   try {
     const result = await configureChannelProvider(
-      input.channel as Parameters<typeof configureChannelProvider>[0],
+      input.channel,
       values,
     );
     const connected = result.connection_status === "connected";
+    const baseMessage = connected
+      ? `${result.display_name} 配置成功并已连接`
+      : `${result.display_name} 配置已保存`;
+
+    // Auto-fetch binding code for binding_code channels that need it.
+    let connectInfo: ChannelSaveResult["connectInfo"] | undefined;
+    if (
+      result.auth_mode === "binding_code" &&
+      !connected &&
+      result.connectable
+    ) {
+      try {
+        const connectResp = await connectChannelProvider(
+          input.channel,
+        );
+        connectInfo = {
+          code: connectResp.code,
+          instruction: connectResp.instruction,
+          expiresIn: connectResp.expires_in,
+        };
+      } catch {
+        // Silently skip — user can still manually initiate connect.
+      }
+    }
+
     return {
-      success: connected,
-      message: connected
-        ? `${result.display_name} 配置成功并已连接`
-        : `${result.display_name} 配置已保存，等待连接`,
+      success: true,
+      message: baseMessage,
+      connectInfo,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "保存失败";
@@ -255,4 +287,17 @@ export async function verifyChannel(
       message: err instanceof Error ? err.message : "验证失败",
     };
   }
+}
+
+/**
+ * Generate a QR code Data URL for a binding code.
+ * When scanned on a phone, the text "/connect {code}" is available for copying.
+ */
+export async function generateQrDataUrl(code: string): Promise<string> {
+  const text = `/connect ${code}`;
+  return QRCode.toDataURL(text, {
+    width: 200,
+    margin: 2,
+    color: { dark: "#1f2937", light: "#ffffff" },
+  });
 }

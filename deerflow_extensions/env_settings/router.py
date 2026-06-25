@@ -490,8 +490,7 @@ def _set_channel_enabled_in_config(channel_id: str, enabled: bool) -> bool:
     """在 config.yaml 中设置 channels.<channel_id>.enabled = true/false。
 
     如果 channels 区块或 channel 区块不存在则自动创建。
-    - 启用渠道时：补齐缺失的凭据引用字段（如 $WECOM_BOT_ID），确保
-      ChannelService 能从 .env 读取凭据
+    - 启用渠道时：仅设置 enabled = true，凭据由 runtime-config.json 管理
     - 禁用渠道时：清理已有的凭据引用字段，避免 Gateway 启动时因
       $VAR 未设置而报错
     返回是否写入成功，失败时仅日志警告（不阻止主流程）。
@@ -517,27 +516,16 @@ def _set_channel_enabled_in_config(channel_id: str, enabled: bool) -> bool:
         channel_cfg["enabled"] = enabled
         changed = True
 
-    # 根据启用/禁用状态管理凭据引用字段：
-    #   - 启用渠道时，自动补齐缺失的凭据引用字段（如 $WECOM_BOT_ID），
-    #     确保 ChannelService 能从 .env 读取凭据
-    #   - 禁用渠道时，清理已有的凭据引用字段以避免 Gateway 启动时
-    #     resolve_env_variables() 因 $VAR 未设置而报错
+    # 禁用渠道时，清理已有的凭据引用字段以避免 Gateway 启动时
+    # resolve_env_variables() 因 $VAR 未设置而报错。
+    # 启用渠道时仅写 enabled = true（凭据由 runtime-config.json 管理）。
     meta = _CHANNEL_META.get(channel_id)
-    if meta:
-        prefix = meta["env_prefix"]
-        if enabled:
-            for field in meta["credential_fields"]:
-                key = field["key"]
-                if key not in channel_cfg:
-                    env_ref = f"${prefix}_{key.upper()}"
-                    channel_cfg[key] = env_ref
-                    changed = True
-        else:
-            for field in meta["credential_fields"]:
-                key = field["key"]
-                if key in channel_cfg:
-                    del channel_cfg[key]
-                    changed = True
+    if meta and not enabled:
+        for field in meta["credential_fields"]:
+            key = field["key"]
+            if key in channel_cfg:
+                del channel_cfg[key]
+                changed = True
 
     if not changed:
         return True
@@ -548,7 +536,7 @@ def _set_channel_enabled_in_config(channel_id: str, enabled: bool) -> bool:
     try:
         with open(config_path, "w") as f:
             yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        logger.info("[Audit] config.yaml channels.%s.enabled set to %s with credential fields", channel_id, enabled)
+        logger.info("[Audit] config.yaml channels.%s.enabled set to %s", channel_id, enabled)
     except Exception as e:
         logger.error("Failed to write config.yaml: %s", e, exc_info=True)
         return False

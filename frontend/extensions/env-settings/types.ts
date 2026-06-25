@@ -53,3 +53,15 @@ export interface ChannelUpdateInput {
   channel: string;
   credentials: Record<string, string>;
 }
+
+/** Result returned by saveChannel — includes optional binding code info. */
+export interface ChannelSaveResult {
+  success: boolean;
+  message: string;
+  /** When the channel needs a binding code to complete connection. */
+  connectInfo?: {
+    code: string;
+    instruction: string;
+    expiresIn: number;
+  };
+}
