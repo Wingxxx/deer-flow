@@ -20,6 +20,7 @@ import logging
 _logger = logging.getLogger("Boot")
 
 _EXTENSIONS = [
+    ("env_bootstrap",    False),   # auto-detect env vars, runs FIRST
     ("data_collection",  False),   # monkey-patch, no app needed
     ("ads_auth",         True),    # app.include_router()
     ("env_settings",     True),    # app.include_router()
@@ -96,7 +97,10 @@ def boot_topic_guardrail_early(ext_internal=None):
 
 def _boot_one(name: str, app=None, ext_internal=None):
     """Boot a single extension by name."""
-    if name == "data_collection":
+    if name == "env_bootstrap":
+        from deerflow_extensions.env_bootstrap.startup import install_env_bootstrap
+        install_env_bootstrap()
+    elif name == "data_collection":
         from deerflow_extensions.data_collection.startup import install_data_collection
         install_data_collection()
     elif name == "ads_auth":

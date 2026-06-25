@@ -8,6 +8,7 @@
 
 | 模块 | 说明 | 核心文件 | 前端对应 |
 |------|------|---------|---------|
+| [env_bootstrap](./env_bootstrap/README.md) | 启动时自动探测环境变量 (DEER_FLOW_PROJECT_ROOT, ADS_MCP_CONFIG_PATH) 并写入 .env | bootstrap.py, startup.py | 无 |
 | [ads_auth](./ads_auth/README.md) | ADS 统一认证登录，替换 DeerFlow 原生认证 | router.py, middleware.py, startup.py | [frontend/extensions/ads_auth/](../frontend/extensions/ads_auth/README.md) |
 | [data_collection](./data_collection/README.md) | 蒸馏数据采集系统，全链路旁路采集训练数据 | collector.py, middleware.py, scripts/ | 无 |
 | [env_settings](./env_settings/README.md) | 多厂商 API Key 管理，Key 写入 .env 并自动注册模型 | router.py, startup.py | [frontend/extensions/env-settings/](../frontend/extensions/env-settings/README.md) |
