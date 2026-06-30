@@ -52,7 +52,7 @@ type SettingsDialogProps = React.ComponentProps<typeof Dialog> & {
 
 export function SettingsDialog(props: SettingsDialogProps) {
   // --- EXTENSION SLOT: begin ---
-  const { defaultSection = "appearance", additionalSections = [], hiddenSectionIds = [], ...dialogProps } = props;
+  const { defaultSection = "account", additionalSections = [], hiddenSectionIds = [], ...dialogProps } = props;
   // --- EXTENSION SLOT: end ---
   const { t } = useI18n();
   const [activeSection, setActiveSection] =

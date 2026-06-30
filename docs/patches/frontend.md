@@ -98,9 +98,13 @@ type SettingsDialogProps = React.ComponentProps<typeof Dialog> & {
 
 ```typescript
   // --- EXTENSION SLOT: begin ---
-  const { defaultSection = "appearance", additionalSections = [], hiddenSectionIds = [], ...dialogProps } = props;
+  const { defaultSection = "account", additionalSections = [], hiddenSectionIds = [], ...dialogProps } = props;
   // --- EXTENSION SLOT: end ---
 ```
+
+**变更记录**:
+- 初始: `defaultSection = "appearance"`
+- **2026-06-30 修改**: 改为 `"account"` — 外观页被隐藏后，默认打开第一个可见 Tab（账号页）
 
 **原因**: 将新 props 从 props 中解构出来，并设置安全的默认值（空数组），确保未传值时行为不变。
 
