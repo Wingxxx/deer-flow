@@ -9,6 +9,7 @@
 | 模块 | 说明 | 核心文件 |
 |------|------|----------|
 | [ads_auth](./ads_auth/README.md) | ADS 统一认证登录，替换 DeerFlow 原生登录页 | LoginPage.tsx, middleware-handler.ts |
+| [branding](./branding/README.md) | 品牌自定义配置，替换应用名/欢迎语/登录页标题 | types.ts, config.ts, context.tsx |
 | [env-settings](./env-settings/README.md) | AI 模型 API Key 配置面板 + IM 渠道凭据管理（WeCom Bot） | provider-settings-page.tsx, providers.ts, hooks.ts |
 | [input-suggestions](./input-suggestions/README.md) | 输入建议按钮自定义系统，替换内置快捷按钮 | registry.ts, config.ts |
 | [mobile-sidebar](./mobile-sidebar/README.md) | 移动端侧栏浮动汉堡触发按钮 | mobile-sidebar-trigger.tsx |

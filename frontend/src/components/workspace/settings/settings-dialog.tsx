@@ -126,9 +126,10 @@ export function SettingsDialog(props: SettingsDialogProps) {
       >
         <DialogHeader className="gap-1">
           <DialogTitle>{t.settings.title}</DialogTitle>
-          <p className="text-muted-foreground text-sm">
+          {/* 品牌化后 description 引用 "DeerFlow" 品牌名不一致，注释掉——2026-06-30 */}
+          {/* <p className="text-muted-foreground text-sm">
             {t.settings.description}
-          </p>
+          </p> */}
         </DialogHeader>
         <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
           <nav className="bg-sidebar min-h-0 overflow-y-auto rounded-lg border p-2">

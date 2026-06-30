@@ -1,0 +1,11 @@
+{
+  "appName": "ADS集智智能客服",
+  "appAbbreviation": "ADS",
+  "welcome": {
+    "greeting": "欢迎回来",
+    "description": "欢迎使用 ADS 集智智能客服平台，您的智能服务助手。"
+  },
+  "loginPage": {
+    "title": "ADS集智智能客服"
+  }
+}

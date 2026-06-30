@@ -37,12 +37,16 @@ return {
 
 现在内联为完整 37 行 middleware，包含：
 
-1. **公开路径跳过**: `/_next`、`/favicon.ico`、`/images`、`/ads-login` 直接 `next()`
+1. **公开路径跳过**: `/_next`、`/favicon.ico`、`/images`、`/ads-login`、`/site.config.json` 直接 `next()`
 2. **主页预检（2026-05-29 新增）**: `/` → 先检查 `access_token` cookie，有则 302 到 `/workspace`，无则 rewrite 到 `/ads-login`
 3. **登录页重写**: `/login` → rewrite 到 `/ads-login`
 4. **Token 守卫**: 无 `access_token` cookie 时 redirect 到 `/login?next=原路径`
 
 **注意**: `next.config.js` 的 `beforeFiles` 优先级高于 middleware，所以第 2、3 步在实际运行中不会被触发（请求到 `/` 已在路由层被改写）。保留它们是为了**文档对称性和回退安全性**——如果未来去掉了 `beforeFiles`，middleware 仍能兜底。
+
+**变更记录**:
+- 初始内联（A7）: `/_next`、`/favicon.ico`、`/images`、`/ads-login`
+- **2026-06-30 新增** `/site.config.json`: 品牌自定义配置静态文件需绕过中间件认证，否则客户端 `fetch()` 被 307 重定向导致品牌配置加载失败
 
 ---
 
@@ -647,3 +651,48 @@ grep -c "border-solid" frontend/src/styles/globals.css
 ```
 
 **恢复方法**: 还原 `a8952cdf` 中 `globals.css` 的 diff。
+
+---
+
+## B1：品牌自定义配置扩展层
+
+**文件集合**:
+- `frontend/extensions/branding/types.ts` — BrandingConfig 接口
+- `frontend/extensions/branding/config.ts` — /site.config.json 加载器（含 _cached 缓存）
+- `frontend/extensions/branding/context.tsx` — BrandingProvider + useBranding hook
+- `frontend/public/site.config.json` — 运行时配置文件
+- `frontend/src/app/layout.tsx` — 包裹 BrandingProvider + generateMetadata 动态标题
+- `frontend/src/components/workspace/workspace-header.tsx` — useBranding 替换硬编码 DF / DeerFlow
+- `frontend/src/components/workspace/welcome.tsx` — 消费端叠加 branding.welcome
+- `frontend/extensions/ads_auth/LoginPage.tsx` — 品牌标题槽位
+- `frontend/src/components/workspace/workspace-nav-menu.tsx` — hiddenSectionIds 限制为 Account / API Keys / 渠道配置
+- `frontend/middleware.ts` — 公开路径新增 `/site.config.json`（绕过中间件认证）
+- `frontend/src/components/workspace/settings/settings-dialog.tsx` — 注释掉 title 下的 description 行（内容含 "DeerFlow" 品牌名，与自定义品牌不一致）
+
+**隐藏的设置页 section**: appearance, notification, memory, tools, skills, about（只保留 account + api + channels）
+
+**风险**: ✅ 低（所有字段均为可选，缺失时降级到 i18n 默认值或硬编码回退值）
+
+**验证命令**:
+```bash
+# 验证侧栏品牌名已替换
+grep -c "useBranding" frontend/src/components/workspace/workspace-header.tsx
+
+# 验证 metadata title 已动态
+grep -n "title" frontend/src/app/layout.tsx | head -3
+
+# 验证登录页品牌槽位
+grep -c "useBranding\|loginPage" frontend/extensions/ads_auth/LoginPage.tsx
+
+# 验证欢迎页叠加
+grep -c "useBranding" frontend/src/components/workspace/welcome.tsx
+
+# 验证设置页限制
+grep -n "hiddenSectionIds" frontend/src/components/workspace/workspace-nav-menu.tsx
+
+# 验证扩展目录完整性
+ls frontend/extensions/branding/types.ts frontend/extensions/branding/config.ts frontend/extensions/branding/context.tsx
+
+# 验证本补丁记录
+grep -c "品牌" docs/patches/frontend.md
+```

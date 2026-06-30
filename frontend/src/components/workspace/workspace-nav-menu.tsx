@@ -82,7 +82,7 @@ export function WorkspaceNavMenu() {
         onOpenChange={setSettingsOpen}
         defaultSection={settingsDefaultSection}
         additionalSections={extensions}
-        hiddenSectionIds={["about"]}
+        hiddenSectionIds={["appearance","notification","memory","tools","skills","about"]}
       />
       <SidebarMenu className="w-full">
         <SidebarMenuItem>

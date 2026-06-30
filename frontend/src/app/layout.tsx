@@ -1,16 +1,33 @@
 import "@/styles/globals.css";
 import "katex/dist/katex.min.css";
 
-import { type Metadata } from "next";
+import { readFileSync } from "fs";
+import { join } from "path";
+
+import type { Metadata } from "next";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { BrandingProvider } from "../../extensions/branding/context";
 import { I18nProvider } from "@/core/i18n/context";
 import { detectLocaleServer } from "@/core/i18n/server";
 
-export const metadata: Metadata = {
-  title: "DeerFlow",
-  description: "A LangChain-based framework for building super agents.",
-};
+function loadSiteConfig(): { appName?: string } {
+  try {
+    const configPath = join(process.cwd(), "public", "site.config.json");
+    const content = readFileSync(configPath, "utf-8");
+    return JSON.parse(content);
+  } catch {
+    return {};
+  }
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const config = loadSiteConfig();
+  return {
+    title: config.appName ?? "DeerFlow",
+    description: "A LangChain-based framework for building super agents.",
+  };
+}
 
 export default async function RootLayout({
   children,
@@ -20,7 +37,9 @@ export default async function RootLayout({
     <html lang={locale} suppressContentEditableWarning suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="class" enableSystem disableTransitionOnChange>
-          <I18nProvider initialLocale={locale}>{children}</I18nProvider>
+          <BrandingProvider>
+            <I18nProvider initialLocale={locale}>{children}</I18nProvider>
+          </BrandingProvider>
         </ThemeProvider>
       </body>
     </html>

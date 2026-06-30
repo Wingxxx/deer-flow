@@ -5,6 +5,7 @@ import { useEffect, useMemo } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
+import { useBranding } from "../../../extensions/branding/context";
 
 import { AuroraText } from "../ui/aurora-text";
 
@@ -26,6 +27,7 @@ export function Welcome({
   mode?: "ultra" | "pro" | "thinking" | "flash";
 }) {
   const { t } = useI18n();
+  const branding = useBranding();
   const searchParams = useSearchParams();
   const isUltra = useMemo(() => mode === "ultra", [mode]);
   const colors = useMemo(() => {
@@ -52,7 +54,7 @@ export function Welcome({
             <div className={cn("inline-block", !waved ? "animate-wave" : "")}>
               {isUltra ? "🚀" : "👋"}
             </div>
-            <AuroraText colors={colors}>{t.welcome.greeting}</AuroraText>
+            <AuroraText colors={colors}>{branding.welcome?.greeting ?? t.welcome.greeting}</AuroraText>
           </div>
         )}
       </div>
@@ -64,7 +66,7 @@ export function Welcome({
         </div>
       ) : (
         <div className="text-muted-foreground max-w-full text-sm">
-          <WelcomeDescription>{t.welcome.description}</WelcomeDescription>
+          <WelcomeDescription>{branding.welcome?.description ?? t.welcome.description}</WelcomeDescription>
         </div>
       )}
     </div>

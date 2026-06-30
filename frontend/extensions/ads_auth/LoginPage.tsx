@@ -8,6 +8,7 @@ import { Loader2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FlickeringGrid } from "@/components/ui/flickering-grid";
 import { Input } from "@/components/ui/input";
+import { useBranding } from "../branding/context";
 
 function validateNext(next: string | null): string | null {
   if (!next || !next.startsWith("/")) return null;
@@ -17,6 +18,7 @@ function validateNext(next: string | null): string | null {
 }
 
 export default function ADSLoginPage() {
+  const branding = useBranding();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { theme, resolvedTheme } = useTheme();
@@ -90,7 +92,7 @@ export default function ADSLoginPage() {
       <div className="border-border/20 bg-white/90 w-full max-w-md space-y-6 rounded-3xl border p-8 backdrop-blur-sm">
         <div className="text-center">
           {/* <h1 className="text-foreground font-serif text-3xl">DeerFlow</h1> */}
-          <p className="text-black font-medium mt-2">ADS 账号登录</p>
+          <p className="text-black font-medium mt-2">{branding.loginPage?.title ?? "ADS 账号登录"}</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-2">
           <div className="flex flex-col space-y-1">
