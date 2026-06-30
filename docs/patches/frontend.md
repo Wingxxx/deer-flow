@@ -235,6 +235,24 @@ import "@/core/env-settings/extension";
 - 通过 `additionalSections` prop 传递给 `SettingsDialog`
 - `hiddenSectionIds` 设为空数组（不隐藏任何内置页面）
 
+### S3c — settingsDefaultSection 默认值改为 account（2026-06-30）
+
+**行号**: L65-L67
+
+```typescript
+const [settingsDefaultSection, setSettingsDefaultSection] = useState<
+  "account" | "appearance" | "memory" | "tools" | "skills" | "notification" | "about"
+>("account");
+```
+
+**变更**:
+- 初始: `"appearance"`（类型不含 `"account"`）
+- **2026-06-30 修改**: 类型追加 `"account"`，默认值改为 `"account"`
+
+**原因**: 外观 Tab 已被 `hiddenSectionIds` 隐藏，但默认打开的 Tab 仍为 `"appearance"`，导致设置面板打开时显示空白。改为 `"account"` 使首次打开时聚焦于账号页。
+
+**附带修改**: `SettingsDialog` 的 onClick 行（L107） `setSettingsDefaultSection("appearance")` 同步改为 `"account"`，否则该处会覆盖 state 初始值。
+
 ---
 
 ## S4：`account-settings-page.tsx` — ADS 账号字段隐藏

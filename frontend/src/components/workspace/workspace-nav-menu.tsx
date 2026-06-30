@@ -63,8 +63,8 @@ function NavMenuButtonContent({
 export function WorkspaceNavMenu() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDefaultSection, setSettingsDefaultSection] = useState<
-    "appearance" | "memory" | "tools" | "skills" | "notification" | "about"
-  >("appearance");
+    "account" | "appearance" | "memory" | "tools" | "skills" | "notification" | "about"
+  >("account");
   const [mounted, setMounted] = useState(false);
   const { open: isSidebarOpen } = useSidebar();
   const { t } = useI18n();
@@ -104,7 +104,7 @@ export function WorkspaceNavMenu() {
                 <DropdownMenuGroup>
                   <DropdownMenuItem
                     onClick={() => {
-                      setSettingsDefaultSection("appearance");
+                      setSettingsDefaultSection("account");
                       setSettingsOpen(true);
                     }}
                   >
