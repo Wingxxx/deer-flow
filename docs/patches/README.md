@@ -16,6 +16,10 @@
 | **input-suggestions**（输入建议按钮自定义） | `input-box.tsx`（2 行 import + 渲染改用动态注册）+ `registry.ts` + `config.ts` | ✅ 极低 | **1 个前端核心 + 2 个扩展** |
 | topic_guardrail（回答范围限制） | `app.py`（boot_all_extensions）+ `deerflow_entry.py`（boot_topic_guardrail_early）+ `boot.py`（扩展目录）| ✅ 低 | **2 个核心 + 1 个扩展** |
 | **Boot Loader**（扩展统一注入） | `app.py`（精简为 1 次调用）+ `deerflow_entry.py`（精简）+ `entrypoint.sh`（移除 sitecustomize） | ✅ 低 | **3 个核心精简** |
+| **branding**（品牌自定义） | `layout.tsx` + `workspace-header.tsx` + `welcome.tsx` + `site.config.json` + `middleware.ts` + `settings-dialog.tsx` + `workspace-nav-menu.tsx` | ✅ 低 | 7 个核心 |
+| **CSS/Hydration 修复** | `dialog.tsx` + `globals.css` | ✅ 极低 | **2 个核心** |
+| **per-user 隔离简化** | `sandbox/tools.py` | 🟡 中 | **1 个核心** |
+| **配置精简** | `config.example.yaml` | 🟢 低 | **1 个核心** |
 
 两条原则：
 1. 所有注入代码都是 `try/except ImportError` 包起来的——即使扩展不可用，DeerFlow 正常运行
@@ -27,11 +31,11 @@
 
 | 模块 | 文件 | 包含补丁 | 说明 |
 |------|------|---------|------|
-| **后端** | [backend.md](backend.md) | D1, A1, A2, A3, A3b, A10, T1, T5, T6, T7 | `app.py`、`auth_middleware.py`、`csrf_middleware.py`、`routers/auth.py`、`deps.py`、`deerflow_entry.py`、`boot.py` |
-| **前端** | [frontend.md](frontend.md) | A6, A7, A8, A10, A11, A12, S1, S2, S3, S4, S5, IS1, WS | `next.config.js`、`middleware.ts`、`types.ts`、`server.ts`、`workspace-content.tsx`、`query-client-provider.tsx`、`settings-dialog.tsx`、`registry.ts`、`workspace-nav-menu.tsx`、`account-settings-page.tsx`、`input-box.tsx`、`env-settings/` |
+| **后端** | [backend.md](backend.md) | D1, A1, A2, A3, A3b, A10, T1, T5, T6, T7, FIX2 | `app.py`、`auth_middleware.py`、`csrf_middleware.py`、`routers/auth.py`、`deps.py`、`deerflow_entry.py`、`boot.py`、`sandbox/tools.py` |
+| **前端** | [frontend.md](frontend.md) | A6, A7, A8, A10, A11, A12, S1, S2, S3, S4, S5, IS1, WS, G1, B1, FIX1 | `next.config.js`、`middleware.ts`、`types.ts`、`server.ts`、`workspace-content.tsx`、`query-client-provider.tsx`、`settings-dialog.tsx`、`registry.ts`、`workspace-nav-menu.tsx`、`account-settings-page.tsx`、`input-box.tsx`、`globals.css`、`layout.tsx`、`workspace-header.tsx`、`welcome.tsx`、`dialog.tsx`、`env-settings/` |
 | **Docker** | [docker.md](docker.md) | D2, D3, A4 | `docker-compose-dev.yaml`、`docker-compose.yaml` |
 | **脚本** | [scripts.md](scripts.md) | D4 | `entrypoint.sh` |
-| **配置** | [config.md](config.md) | A9, D5 | `.env.example`、`pyproject.toml` |
+| **配置** | [config.md](config.md) | A9, D5, C1 | `.env.example`、`pyproject.toml`、`config.example.yaml` |
 
 ---
 

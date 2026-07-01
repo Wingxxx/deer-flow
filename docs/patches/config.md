@@ -50,3 +50,22 @@ grep -n "ADS_BASE_URL\|ADS_MCP" .env.example
 grep -c "filelock\|pyahocorasick" backend/pyproject.toml
 # 应输出 2
 ```
+
+---
+
+## C1：`config.example.yaml` — 配置精简
+
+**文件**: `config.example.yaml`
+**风险**: 🟢 低（模板文件，不影响运行时行为）
+
+**改动**: 从上游原版大幅精简（`+6/-28`），移除了不必要的示例配置项，保留本 Fork 需要的核心配置。
+
+**原因**: 上游 config.example.yaml 包含大量与本 Fork 无关的示例（如原版认证方式、多租户配置等），精简后降低配置误导风险。
+
+> ⚠️ **同步警告**: 上游 `v2.0.0` → `upstream/main` 对此文件做了 `+171/-2` 的恢复性修改（重新添加了大量配置示例），未来同步时需决定是否再次精简。
+
+**验证命令**:
+```bash
+git diff v2.0.0-rc1..HEAD --stat -- config.example.yaml
+# 应显示 deletions > insertions（已精简）
+```

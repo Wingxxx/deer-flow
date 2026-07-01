@@ -941,3 +941,30 @@ grep -n "sitecustomize" deerflow_extensions/entrypoint.sh 2>/dev/null || echo "s
 ```bash
 cd backend && uv run pytest deerflow_extensions/env_settings/tests/ -v
 cd frontend && npx tsc --noEmit
+```
+
+---
+
+## FIX2：`sandbox/tools.py` — 移除 `get_effective_user_id()` 调用
+
+**文件**: `backend/packages/harness/deerflow/sandbox/tools.py`
+**行号**: L258-L261
+**风险**: 🟡 中（上游 v2.0.0 之后对此文件做了 68 行重写，冲突风险高）
+
+**改动**:
+```diff
+-            from deerflow.runtime.user_context import get_effective_user_id
+-
+-            host_path = get_paths().acp_workspace_dir(thread_id, user_id=get_effective_user_id())
++            host_path = get_paths().acp_workspace_dir(thread_id)
+```
+
+**原因**: `get_effective_user_id()` 引入复杂的用户上下文依赖，且本 Fork 的 ADS 认证路径下用户上下文获取不稳定。简化为不传 `user_id` 参数，使用默认行为。
+
+> ⚠️ **同步警告**: 上游 `v2.0.0` → `upstream/main` 对此文件做了 68 行全量重写（`+68/-68`），未来同步 `upstream/main` 时此处必然冲突，需仔细评估上游重写与本 Fork 改动的兼容性。
+
+**验证命令**:
+```bash
+grep -c "get_effective_user_id" backend/packages/harness/deerflow/sandbox/tools.py
+# 应输出 0（已移除）
+```

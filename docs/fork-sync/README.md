@@ -227,7 +227,7 @@ git commit -m "Fork sync: N upstream commits + conflict resolutions"
 
 ## 侵入点清单（必须保护的自定义代码）
 
-以下 20 个侵入点是本 Fork 的核心自定义，**任何同步操作都不能冲掉**：
+以下 28 个侵入点是本 Fork 的核心自定义，**任何同步操作都不能冲掉**：
 
 | # | 位置 | 功能 | 保护方式 | 风险 |
 |---|------|------|---------|------|
@@ -238,6 +238,7 @@ git commit -m "Fork sync: N upstream commits + conflict resolutions"
 | 4 | `backend/app/gateway/deps.py` | `user_from_state` 守卫，先查 request.state.user | 函数守卫(5行) | ✅ 低 |
 | 5 | `backend/app/gateway/routers/auth.py` | `ads_token` cookie 清除 | cookie 删除行 | ✅ 低 |
 | 6 | `backend/deerflow_entry.py` | `boot_topic_guardrail_early()` + frozen/dev 双路径修复 | 统一调用 + try/except | 🔴 高 |
+| 25 | `backend/packages/harness/deerflow/sandbox/tools.py` | 移除 `get_effective_user_id()` 调用 | 1 行删除 | 🟡 中 |
 | **前端核心文件** |
 | 7 | `frontend/next.config.js` | `beforeFiles` ADS 登录重定向 | beforeFiles 块 | 🟡 中 |
 | 8 | `frontend/middleware.ts` | `PUBLIC_PATHS` + auth guard 内联(~37行) | 全文件重写 | 🟡 中 |
@@ -249,11 +250,18 @@ git commit -m "Fork sync: N upstream commits + conflict resolutions"
 | 14 | `frontend/src/app/workspace/workspace-content.tsx` | MobileSidebarTrigger 注入(2行) | JSX 行追加 | ✅ 低 |
 | 15 | `frontend/src/components/workspace/input-box.tsx` | input-suggestions 动态注册 import | import 行 + 动态渲染 | ✅ 低 |
 | 16 | `frontend/src/components/query-client-provider.tsx` | TanStack Query 缓存配置(gcTime/staleTime) | 配置对象 | ✅ 低 |
+| 21 | `frontend/src/app/layout.tsx` | BrandingProvider 包裹 + generateMetadata 动态标题 | BrandingProvider | 🟡 中 |
+| 22 | `frontend/src/components/workspace/workspace-header.tsx` | 品牌自定义 appName/appAbbreviation | useBranding hook | 🟡 中 |
+| 23 | `frontend/src/components/workspace/welcome.tsx` | 品牌自定义问候语 | useBranding hook | 🟢 低 |
+| 24 | `frontend/src/components/ui/dialog.tsx` | suppressHydrationWarning 修复 | 1 行 prop | 🟢 极低 |
+| 26 | `frontend/public/site.config.json` | 品牌运行时配置（新文件） | 静态 JSON | 🟢 低 |
+| 27 | `frontend/src/styles/globals.css` | 品牌色替换 + border-solid 工具类 | CSS 变量 | 🟢 低 |
 | **Docker 文件** |
-| 17 | `docker/docker-compose-dev.yaml` | `deerflow_extensions` 和 `training_logs` 挂载 + PYTHONPATH + ADS env | volumes 配置 | ✅ 低 |
+| 17 | `docker/docker-compose-dev.yaml` | `deerflow_extensions` 和 `training_logs` 挂载 + ADS env | volumes 配置 | ✅ 低 |
 | 18 | `docker/docker-compose.yaml` | `deerflow_extensions` 和 `training_logs` 挂载 | volumes 配置 | ✅ 低 |
 | **配置文件** |
 | 19 | `.env.example` | ADS_BASE_URL + ADS_MCP_CONFIG_PATH 配置示例 | 行追加 | ✅ 极低 |
+| 28 | `config.example.yaml` | 配置精简（从上游移除非必要示例） | 行删除 | 🟢 低 |
 | **构建配置** |
 | 20 | `backend/pyproject.toml` | `filelock>=3.0.0` + `pyahocorasick>=2.3.1` 依赖 | 行追加 | 🟡 中 |
 
@@ -263,7 +271,7 @@ git commit -m "Fork sync: N upstream commits + conflict resolutions"
 
 同步完成后按以下顺序验证：
 
-- [ ] 19 个侵入点 grep 检查通过（详见 `docs/patches/` 中各模块的验证命令）
+- [ ] 28 个侵入点 grep 检查通过（详见 `docs/patches/` 中各模块的验证命令）
 - [ ] `deerflow_extensions/` + `frontend/extensions/` 目录完整（与 backup-main 一致）
 - [ ] 后端全量 `.py` 语法检查通过（`python3 -m py_compile`）
 - [ ] 关键文件的本地自定义引用计数正常（`app_config`、`user_id` 等）
@@ -460,19 +468,21 @@ done
 
 建议每 1-2 个月或每出一个 Release Tag 时同步一次上游变更，避免累积过多冲突。
 
-### 下次同步计划（2026-06-22）
+### 下次同步计划（2026-07-01）
 
-本次以 Release Tag `v2.0.0-rc1` 为同步目标（版本优先策略），替代此前以 `upstream/main` 最新提交为目标的方案。
+上次同步已完成（`v2.0.0-rc1`）。下一目标为稳定版 `v2.0.0`。
 
 | 项目 | 内容 |
 |------|------|
-| **上次同步** | 2026-06-01，HEAD `be7a1685` |
-| **本次目标** | Release Tag `v2.0.0-rc1`（`98127f58`，2026-06-19） |
-| **同步范围** | `dc9efc8d` → `v2.0.0-rc1` |
-| **预计提交数** | ~410 个 |
-| **涉及侵入点** | 20 个（见上方清单） |
-| **备份分支** | `backup-main`（当前 `88da215f`，已推送到 origin） |
-| **执行计划** | `.trae/documents/fork-sync-20260622-v2.0.0-rc1-execution-plan.md` |
+| **上次同步** | 2026-06-22，目标 `v2.0.0-rc1`，HEAD `dd6b6fb5` |
+| **本次目标** | Release Tag `v2.0.0`（`7e7f0410`，2026-06-25） |
+| **同步范围** | `v2.0.0-rc1` → `v2.0.0` |
+| **预计提交数** | 14 个 |
+| **涉及侵入点** | 28 个（见上方清单）— **v2.0.0 零冲突预期** |
+| **备份分支** | `backup-main`（当前 `cf0dff27`） |
+| **文档位置** | `docs/patches/`（5 个模块文件） |
+
+> **注意**: upstream/main 在 `v2.0.0` 之后另有 82 个提交，含中间件重构 + OIDC SSO 等大改动（4 个激烈冲突区），建议等待下一个 Release Tag 再同步。
 
 同步前注意事项：
 - 先 `git fetch upstream --tags` 确保目标 Tag 可用

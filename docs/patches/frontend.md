@@ -623,6 +623,29 @@ const createSuggestions = allSuggestions.filter(s => s.group === "create");
 
 ---
 
+## FIX1：`dialog.tsx` — suppressHydrationWarning 修复
+
+**文件**: `frontend/src/components/ui/dialog.tsx`
+**行号**: L127
+**风险**: ✅ 极低（1 行，CSS 预渲染兼容）
+
+**改动**:
+```diff
+     className={cn("text-muted-foreground text-sm", className)}
++    suppressHydrationWarning
+     {...props}
+```
+
+**原因**: 品牌动态内容导致服务端/客户端 HTML 不一致，Next.js hydration 报错。`suppressHydrationWarning` 消除已知差异的警告。
+
+**验证命令**:
+```bash
+grep -c "suppressHydrationWarning" frontend/src/components/ui/dialog.tsx
+# 应输出 1
+```
+
+---
+
 ## G1：`globals.css` — 登录页全局样式侵入
 
 **文件**: `frontend/src/styles/globals.css`

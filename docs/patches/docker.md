@@ -17,18 +17,19 @@
       - ../training_logs:/data/deerflow/training_logs
 ```
 
-### D2c — PYTHONPATH（行 123，内嵌在 command 中）
+### D2c — PYTHONPATH（已由 entrypoint.sh 接管）
+
+**状态**: ✅ 设计演进，无需在 docker-compose-dev.yaml 中维护。
+
+原 D2c 补丁要求将 command 中 `PYTHONPATH=.` 改为 `PYTHONPATH=/app`。当前版本改为在 `deerflow_extensions/entrypoint.sh` 行 15 统一管理：
 
 ```bash
-# 原 command 中内嵌：
-PYTHONPATH=. uv run uvicorn ...
-```
-改为：
-```bash
-PYTHONPATH=/app uv run uvicorn ...
+PYTHONPATH=/app:. python3 -c "from deerflow_extensions.boot import boot_all_extensions; boot_all_extensions()"
 ```
 
-**原因**: Volume 挂载使扩展目录和采集数据在容器内可用；`PYTHONPATH=/app` 确保 Python 能找到 `deerflow_extensions` 包。
+`docker-compose-dev.yaml` 中不再单独设置 PYTHONPATH，由 entrypoint 脚本统一接管。
+
+> **文档维护**: 本补丁标记为"设计演进"，原 D2c 内容保留归档，后续维护关注 entrypoint.sh 中的 PYTHONPATH 设置。
 
 ---
 
@@ -43,19 +44,27 @@ PYTHONPATH=/app uv run uvicorn ...
       - ../deerflow_extensions:/app/deerflow_extensions
 ```
 
-### D3b — training_logs volume（行 84）
+### D3b — training_logs volume
+
+**状态**: ❌ 当前缺失，需在下次同步时补回。
 
 ```yaml
       - ../training_logs:/data/deerflow/training_logs
 ```
 
-### D3c — PYTHONPATH（行 76，内嵌在 command 中）
+**原因**: 数据采集系统写入 `training_logs/` 目录，容器内需有对应卷挂载才能访问采集数据。
+
+**修复**: 在 `deerflow_extensions` 卷挂载行下方追加此卷。
+
+### D3c — PYTHONPATH（待修复）
+
+**状态**: ❌ 当前仍为 `PYTHONPATH=.`，未改为 `/app`。
 
 ```bash
+# 当前（未修改）：
 command: sh -c "cd backend && PYTHONPATH=. uv run uvicorn ..."
 ```
-
-**原因**: 生产环境与 dev 环境相同需求。
+应在下次同步时评估是否需要改为 `PYTHONPATH=/app`（与 entrypoint.sh 保持一致）。
 
 ---
 
