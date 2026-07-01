@@ -293,7 +293,8 @@ git commit -m "Fork sync: N upstream commits + conflict resolutions"
 |------|---------|-----------|--------|--------|------|---------|------|
 | 2026-05-07 | fork 分叉点后 | N/A（预发布） | 128 | 6 | 939aff04 | 上游大版本重构：Gateway 嵌入 LangGraph 运行时、认证系统重构（auth_middleware/CSRF）、Docker 大幅改造（docker.sh/nginx/compose）、Makefile 重构、DingTalk/Serper 等新集成 | [`FORK_SYNC_20260507.md`](FORK_SYNC_20260507.md) |
 | 2026-06-01 | fork 分叉点后 | N/A（预发布） | 274 | 3 | be7a1685 | 上游大量稳定性修复：persistence SQL 化 + run history 持久化 + event store 重构、per-user 隔离完善、DingTalk/Feishu 频道增强、静态 system prompt 优化、run 恢复机制、subagent token 用量追踪、BlockingIO 防护 | [`FORK_SYNC_20260601_CONFLICTS.md`](FORK_SYNC_20260601_CONFLICTS.md) |
-| 2026-06-22 | `dc9efc8d` → `v2.0.0-rc1` | `v2.0.0-rc1` | TBD | TBD | TBD | 同步过程中填写 | [`FORK_SYNC_20260622-v2.0.0-rc1.md`](FORK_SYNC_20260622-v2.0.0-rc1.md) |
+| 2026-06-22 | `dc9efc8d` → `v2.0.0-rc1` | `v2.0.0-rc1` | 410 | ~40 | dd6b6fb5 | v2.0.0-rc1 同步：Alembic migrations 接入、persistence bootstrap、前端 E2E 测试完善、锁文件更新、CI/CD 调整 | [`FORK_SYNC_20260622-v2.0.0-rc1.md`](FORK_SYNC_20260622-v2.0.0-rc1.md) |
+| 2026-07-01 | `v2.0.0-rc1` → `v2.0.0` | `v2.0.0` | 14 | **0** | 79793c05 | v2.0.0 正式版同步：零冲突 cherry-pick，锁文件自动合并+再生，前后端测试通过率 99%+ | [`FORK_SYNC_20260701-v2.0.0.md`](FORK_SYNC_20260701-v2.0.0.md) |
 
 ---
 
