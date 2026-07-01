@@ -215,6 +215,8 @@ if [ -d "./deerflow_extensions" ]; then
     # 独立映射 topic_guardrail 数据文件到模块路径（双重保障）
     ADD_DATA="$ADD_DATA --add-data ./deerflow_extensions/topic_guardrail/topics.yaml:topic_guardrail/"
     ADD_DATA="$ADD_DATA --add-data ./deerflow_extensions/topic_guardrail/wordlist:topic_guardrail/wordlist/"
+    # Alembic migrations 目录（运行时通过 from_config() 读取，非 import，需显式 --add-data）
+    ADD_DATA="$ADD_DATA --add-data ./packages/harness/deerflow/persistence/migrations:deerflow/persistence/migrations/"
 else
     echo "  ⚠️  未找到 deerflow_extensions，跳过附加数据目录"
 fi
