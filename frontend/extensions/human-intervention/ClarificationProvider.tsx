@@ -5,6 +5,7 @@ import {
   useState,
   useCallback,
   useRef,
+  useEffect,
 } from "react";
 import type { ClarificationContextValue, ClarificationStructured } from "./types";
 
@@ -27,6 +28,24 @@ export function ClarificationProvider({
     useState<ClarificationStructured | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inFlightRef = useRef(false);
+  const pendingAckRef = useRef<string | null>(null);
+  const ackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Listen for ack events matching our pending clarification
+  useEffect(() => {
+    const handleAck = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (pendingAckRef.current && detail?.clarificationId === pendingAckRef.current) {
+        pendingAckRef.current = null;
+        if (ackTimerRef.current) {
+          clearTimeout(ackTimerRef.current);
+          ackTimerRef.current = null;
+        }
+      }
+    };
+    window.addEventListener("clarification:ack", handleAck);
+    return () => window.removeEventListener("clarification:ack", handleAck);
+  }, []);
 
   const submitClarification = useCallback(
     async (answer: string) => {
@@ -34,19 +53,34 @@ export function ClarificationProvider({
       inFlightRef.current = true;
       setIsSubmitting(true);
       try {
+        // Set up ack expectation before dispatching
+        const cId = activeClarificationId;
+        pendingAckRef.current = cId;
+
         window.dispatchEvent(
           new CustomEvent("clarification:submit", {
-            detail: { answer, clarificationId: activeClarificationId },
+            detail: { answer, clarificationId: cId },
           }),
         );
-        setActiveClarificationId(null);
-        setClarificationData(null);
+
+        // Wait 3s for ack, restore state if not received
+        ackTimerRef.current = setTimeout(() => {
+          if (pendingAckRef.current === cId) {
+            pendingAckRef.current = null;
+            // Restore state since sendMessage may have failed
+            setActiveClarificationId(cId);
+            setClarificationData(
+              clarificationData, // This is stale in closure, but better than nothing
+            );
+            console.warn("[HumanIntervention] No ack received within 3s, restored state");
+          }
+        }, 3000);
       } finally {
         setIsSubmitting(false);
         inFlightRef.current = false;
       }
     },
-    [activeClarificationId],
+    [activeClarificationId, clarificationData],
   );
 
   const dismissClarification = useCallback(() => {

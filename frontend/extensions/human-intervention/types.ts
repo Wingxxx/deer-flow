@@ -15,6 +15,9 @@ export interface WidgetHints {
   input_type: WidgetInputType;
   multi_line?: boolean;
   required?: boolean;
+  risk_level?: "low" | "medium" | "high" | "critical";
+  allow_custom?: boolean;
+  confirm_phrase?: string;
 }
 
 export interface ClarificationStructured {

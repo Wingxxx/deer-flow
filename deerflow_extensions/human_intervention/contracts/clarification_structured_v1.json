@@ -4,6 +4,94 @@
   "description": "Schema for structured clarification data attached to ToolMessage.additional_kwargs._clarification",
   "type": "object",
   "properties": {
+    "_schema": {
+      "type": "string",
+      "description": "Schema version identifier for frontend parsing, e.g. 'deerflow/clarification/v1'"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["clarification"],
+      "description": "Discriminant field identifying this as a clarification payload"
+    },
+    "id": {
+      "type": "string",
+      "description": "The tool_call_id from the original ask_clarification tool call"
+    },
+    "question": {
+      "type": "string",
+      "description": "The clarification question text"
+    },
+    "clarification_type": {
+      "type": "string",
+      "enum": ["missing_info", "ambiguous_requirement", "approach_choice", "risk_confirmation", "suggestion"],
+      "description": "Categorisation of the clarification request"
+    },
+    "context": {
+      "type": ["string", "null"],
+      "description": "Optional background context provided by the model"
+    },
+    "options": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Suggested response options (may be empty for free-text input)"
+    },
+    "widget_hint": {
+      "type": "string",
+      "enum": ["text_input", "option_buttons", "confirm_dialog", "multi_choice"],
+      "description": "[DEPRECATED — use widget_hints instead] Legacy hint for the frontend on which interactive widget to render"
+    },
+    "widget_hints": {
+      "type": "object",
+      "description": "Structured widget hints dict matching the WidgetHints interface in types.ts",
+      "properties": {
+        "input_type": {
+          "type": "string",
+          "enum": ["text", "single_choice", "multi_choice", "confirmation"],
+          "description": "Widget input type"
+        },
+        "multi_line": {
+          "type": "boolean",
+          "description": "Whether text input should be multi-line"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether input is required"
+        },
+        "risk_level": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"],
+          "description": "Risk level for confirmation widgets"
+        },
+        "allow_custom": {
+          "type": "boolean",
+          "description": "Whether custom text input is allowed (shows 'other' option)"
+        },
+        "confirm_phrase": {
+          "type": "string",
+          "description": "Required confirmation phrase for high/critical risk confirmations"
+        }
+      },
+      "additionalProperties": false
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "max_per_turn": { "type": "integer", "default": 3 },
+        "cooldown_seconds": { "type": "integer", "default": 30 },
+        "timeout_minutes": { "type": "integer", "default": 5 }
+      },
+      "description": "[DEPRECATED — not emitted by code] Rate-limiting and timeout policy (defined in extension_manifest.json instead)"
+    }
+  },
+  "required": ["_schema", "type", "id", "question", "clarification_type", "options", "widget_hints"],
+  "additionalProperties": false
+}
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ClarificationStructuredV1",
+  "description": "Schema for structured clarification data attached to ToolMessage.additional_kwargs._clarification",
+  "type": "object",
+  "properties": {
     "type": {
       "type": "string",
       "enum": ["clarification"],

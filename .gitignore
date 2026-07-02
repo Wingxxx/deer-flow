@@ -67,6 +67,7 @@ config.yaml.bak
 .worktrees
 release/
 
+.agent/
 .trae/
 .qoder/
 ads-agent-mcp/
