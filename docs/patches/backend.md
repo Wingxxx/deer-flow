@@ -959,6 +959,37 @@ cd frontend && npx tsc --noEmit
 +            host_path = get_paths().acp_workspace_dir(thread_id)
 ```
 
+---
+
+## H1：`boot.py` — human_intervention 扩展注册
+
+**文件**: `deerflow_extensions/boot.py`
+**行号**: L28 + L116-L118
+**风险**: ✅ 低（已有 topic_guardrail 完全相同的注入模式）
+
+### H1a — _EXTENSIONS 元组新增条目（L28）
+
+```python
+    ("human_intervention", False), # inject human_intervention middleware
+```
+
+### H1b — _boot_one 分发新增分支（L116-L118）
+
+```python
+    elif name == "human_intervention":
+        from deerflow_extensions.human_intervention.startup import install_human_intervention
+        install_human_intervention()
+```
+
+**原因**: 遵循 deerflow_extensions/boot.py 统一的扩展注册模式——一条元组 + 一个 elif 分支。
+needs_app=False 因为 human_intervention 只需中间件注入，无需注册路由器。
+
+**验证命令**:
+```bash
+grep -n "human_intervention" deerflow_extensions/boot.py
+# 期望输出 4 行
+```
+
 **原因**: `get_effective_user_id()` 引入复杂的用户上下文依赖，且本 Fork 的 ADS 认证路径下用户上下文获取不稳定。简化为不传 `user_id` 参数，使用默认行为。
 
 > ⚠️ **同步警告**: 上游 `v2.0.0` → `upstream/main` 对此文件做了 68 行全量重写（`+68/-68`），未来同步 `upstream/main` 时此处必然冲突，需仔细评估上游重写与本 Fork 改动的兼容性。

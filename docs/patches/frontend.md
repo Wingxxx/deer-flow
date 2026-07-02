@@ -741,3 +741,95 @@ ls frontend/extensions/branding/types.ts frontend/extensions/branding/config.ts 
 # 验证本补丁记录
 grep -c "品牌" docs/patches/frontend.md
 ```
+
+---
+
+## C1：`workspace-content.tsx` — ClarificationProvider 挂载
+
+**文件**: `frontend/src/app/workspace/workspace-content.tsx`
+**行号**: L10 (import), L30-L32 (JSX 包裹)
+**风险**: ✅ 极低（2 行：1 行 import + 1 行 JSX 包裹，其余代码在 `extensions/` 目录）
+
+**改动**:
+
+```diff
++import { ClarificationProvider } from "../../../extensions/human-intervention/config";
+ ...
+       <QueryClientProvider>
++        <ClarificationProvider>
+           <MobileSidebarTrigger />
+           <WorkspaceSidebar />
+           <SidebarInset>{children}</SidebarInset>
++        </ClarificationProvider>
+       </QueryClientProvider>
+```
+
+**原因**: `ClarificationProvider` React Context 在全局层级传播提交状态（activeClarificationId、isSubmitting），使 Widget 按钮和 InputBox 都能感知当前的澄清状态。
+
+**配套扩展文件**（全在 `frontend/extensions/human-intervention/`，零侵入）：
+- `ClarificationProvider.tsx` — React Context 定义
+- `config.ts` — 注册入口（re-export Provider/Widget/hooks）
+
+**恢复方法**: 删除 import 行和 `<ClarificationProvider>...</ClarificationProvider>` 包裹，删除 `frontend/extensions/human-intervention/` 目录。
+
+**验证命令**:
+```bash
+# 确认 import 存在
+grep -n "ClarificationProvider" frontend/src/app/workspace/workspace-content.tsx
+
+# 确认扩展组件存在
+ls frontend/extensions/human-intervention/ClarificationProvider.tsx
+```
+
+---
+
+## C2：`page.tsx` — useClarificationSubmit 注入
+
+**文件**: `frontend/src/app/workspace/chats/[thread_id]/page.tsx`
+**行号**: L7 (import), L123 (hook 调用)
+**风险**: ✅ 极低（2 行：1 行 import + 1 行 hook 调用）
+
+**改动**:
+
+```diff
++import { useClarificationSubmit } from "../../../../../extensions/human-intervention/hooks";
+ ...
+   });
++
++  useClarificationSubmit(sendMessage, threadId, thread.isLoading);
+```
+
+**原因**: `ClarificationProvider` 的 `submitClarification` 通过 `clarification:submit` CustomEvent 通信。`useClarificationSubmit` hook 监听该事件，提取 answer，并调用 `sendMessage(threadId, { text: answer, files: [] })` 将用户回答发送回 AI Agent。
+
+**配套扩展文件**（全在 `frontend/extensions/human-intervention/`，零侵入）：
+- `hooks.ts` — useClarificationSubmit hook（事件监听 + sendMessage 桥接）
+
+**恢复方法**: 删除 import 行和 `useClarificationSubmit(...)` 行，删除 `frontend/extensions/human-intervention/` 目录。
+
+**验证命令**:
+```bash
+# 确认 import 存在
+grep -n "useClarificationSubmit" frontend/src/app/workspace/chats/[thread_id]/page.tsx
+
+# 确认扩展组件存在
+ls frontend/extensions/human-intervention/hooks.ts
+```
+
+---
+## 验证命令（human-intervention 汇总）
+
+```bash
+# === C1: workspace-content.tsx ClarificationProvider ===
+grep -n "ClarificationProvider" frontend/src/app/workspace/workspace-content.tsx
+
+# === C2: page.tsx useClarificationSubmit ===
+grep -n "useClarificationSubmit" frontend/src/app/workspace/chats/[thread_id]/page.tsx
+
+# === 扩展目录完整性 ===
+ls frontend/extensions/human-intervention/ClarificationProvider.tsx \
+   frontend/extensions/human-intervention/ClarificationWidget.tsx \
+   frontend/extensions/human-intervention/hooks.ts \
+   frontend/extensions/human-intervention/config.ts \
+   frontend/extensions/human-intervention/types.ts \
+   frontend/extensions/human-intervention/schema.ts
+```

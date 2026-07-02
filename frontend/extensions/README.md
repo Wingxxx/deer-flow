@@ -13,6 +13,7 @@
 | [env-settings](./env-settings/README.md) | AI 模型 API Key 配置面板 + IM 渠道凭据管理（WeCom Bot） | provider-settings-page.tsx, providers.ts, hooks.ts |
 | [input-suggestions](./input-suggestions/README.md) | 输入建议按钮自定义系统，替换内置快捷按钮 | registry.ts, config.ts |
 | [mobile-sidebar](./mobile-sidebar/README.md) | 移动端侧栏浮动汉堡触发按钮 | mobile-sidebar-trigger.tsx |
+| [human-intervention](./human-intervention/README.md) | 交互式人工介入 UI，Agent 澄清请求的交互式选择/输入/确认组件 | ClarificationProvider.tsx, ClarificationWidget.tsx, widgets/, schema.ts, hooks.ts |
 
 ## 各模块详情
 

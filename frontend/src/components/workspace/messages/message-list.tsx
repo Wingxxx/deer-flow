@@ -40,6 +40,8 @@ import { ArtifactFileList } from "../artifacts/artifact-file-list";
 import { CopyButton } from "../copy-button";
 import { StreamingIndicator } from "../streaming-indicator";
 
+import { ClarificationWidget, parseClarificationStructured } from "../../../../extensions/human-intervention/config";
+
 import { MarkdownContent } from "./markdown-content";
 import { MessageGroup } from "./message-group";
 import { MessageListItem } from "./message-list-item";
@@ -318,6 +320,24 @@ export function MessageList({
             );
           } else if (group.type === "assistant:clarification") {
             const message = group.messages[0];
+            const structured = message
+              ? parseClarificationStructured(message)
+              : null;
+            if (structured && message) {
+              return (
+                <div key={group.id} className="w-full">
+                  <ClarificationWidget
+                    message={message}
+                    threadMessages={messages}
+                    threadIsLoading={thread.isLoading}
+                  />
+                  {renderTokenUsage({
+                    messages: group.messages,
+                    turnUsageMessages,
+                  })}
+                </div>
+              );
+            }
             if (message && hasContent(message)) {
               return (
                 <div key={group.id} className="w-full">

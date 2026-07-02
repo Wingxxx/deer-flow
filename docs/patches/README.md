@@ -15,6 +15,7 @@
 | **settings-dialog-ext**（SettingsDialog 扩展架构 + ADS 账号适配） | `settings-dialog.tsx` + `registry.ts` + `workspace-nav-menu.tsx` + `app.py` + `account-settings-page.tsx` | ✅ 低 | 4 个前端 + 1 个后端 |
 | **input-suggestions**（输入建议按钮自定义） | `input-box.tsx`（2 行 import + 渲染改用动态注册）+ `registry.ts` + `config.ts` | ✅ 极低 | **1 个前端核心 + 2 个扩展** |
 | topic_guardrail（回答范围限制） | `app.py`（boot_all_extensions）+ `deerflow_entry.py`（boot_topic_guardrail_early）+ `boot.py`（扩展目录）| ✅ 低 | **2 个核心 + 1 个扩展** |
+| **human_intervention**（交互式人工介入） | `boot.py` + `workspace-content.tsx` + `message-list.tsx` | ✅ 低 | **3 个核心 + 1 个扩展** |
 | **Boot Loader**（扩展统一注入） | `app.py`（精简为 1 次调用）+ `deerflow_entry.py`（精简）+ `entrypoint.sh`（移除 sitecustomize） | ✅ 低 | **3 个核心精简** |
 | **branding**（品牌自定义） | `layout.tsx` + `workspace-header.tsx` + `welcome.tsx` + `site.config.json` + `middleware.ts` + `settings-dialog.tsx` + `workspace-nav-menu.tsx` | ✅ 低 | 7 个核心 |
 | **CSS/Hydration 修复** | `dialog.tsx` + `globals.css` | ✅ 极低 | **2 个核心** |
@@ -31,8 +32,8 @@
 
 | 模块 | 文件 | 包含补丁 | 说明 |
 |------|------|---------|------|
-| **后端** | [backend.md](backend.md) | D1, A1, A2, A3, A3b, A10, T1, T5, T6, T7, FIX2 | `app.py`、`auth_middleware.py`、`csrf_middleware.py`、`routers/auth.py`、`deps.py`、`deerflow_entry.py`、`boot.py`、`sandbox/tools.py` |
-| **前端** | [frontend.md](frontend.md) | A6, A7, A8, A10, A11, A12, S1, S2, S3, S4, S5, IS1, WS, G1, B1, FIX1 | `next.config.js`、`middleware.ts`、`types.ts`、`server.ts`、`workspace-content.tsx`、`query-client-provider.tsx`、`settings-dialog.tsx`、`registry.ts`、`workspace-nav-menu.tsx`、`account-settings-page.tsx`、`input-box.tsx`、`globals.css`、`layout.tsx`、`workspace-header.tsx`、`welcome.tsx`、`dialog.tsx`、`env-settings/` |
+| **后端** | [backend.md](backend.md) | D1, A1, A2, A3, A3b, A10, T1, T5, T6, T7, FIX2, **H1** | `app.py`、`auth_middleware.py`、`csrf_middleware.py`、`routers/auth.py`、`deps.py`、`deerflow_entry.py`、`boot.py`、`sandbox/tools.py` |
+| **前端** | [frontend.md](frontend.md) | A6, A7, A8, A10, A11, A12, S1, S2, S3, S4, S5, IS1, WS, G1, B1, FIX1, **H2, H3** | `next.config.js`、`middleware.ts`、`types.ts`、`server.ts`、`workspace-content.tsx`、`query-client-provider.tsx`、`settings-dialog.tsx`、`registry.ts`、`workspace-nav-menu.tsx`、`account-settings-page.tsx`、`input-box.tsx`、`globals.css`、`layout.tsx`、`workspace-header.tsx`、`welcome.tsx`、`dialog.tsx`、`env-settings/`、`message-list.tsx` |
 | **Docker** | [docker.md](docker.md) | D2, D3, A4 | `docker-compose-dev.yaml`、`docker-compose.yaml` |
 | **脚本** | [scripts.md](scripts.md) | D4 | `entrypoint.sh` |
 | **配置** | [config.md](config.md) | A9, D5, C1 | `.env.example`、`pyproject.toml`、`config.example.yaml` |
@@ -206,6 +207,19 @@ grep -n "filelock\|_get_env_lock" deerflow_extensions/env_settings/router.py
 echo "=== D5: pyproject.toml 依赖 ==="
 grep -c "filelock\|pyahocorasick" backend/pyproject.toml
 # 应输出 2
+
+# === human_intervention 补丁 ===
+echo "=== H1: boot.py human_intervention ==="
+grep -n "human_intervention" deerflow_extensions/boot.py
+
+echo "=== H2: workspace-content.tsx ClarificationProvider ==="
+grep -n "ClarificationProvider" frontend/src/app/workspace/workspace-content.tsx
+
+echo "=== H3: message-list.tsx ClarificationWidget ==="
+grep -n "ClarificationWidget" frontend/src/components/workspace/messages/message-list.tsx
+
+echo "=== H4: page.tsx useClarificationSubmit ==="
+grep -n "useClarificationSubmit" frontend/src/app/workspace/chats/*/page.tsx 2>/dev/null || echo "（非主聊天页尚未集成）"
 ```
 
 如果某个 grep 返回空，说明补丁被覆盖了，需要重新打上。

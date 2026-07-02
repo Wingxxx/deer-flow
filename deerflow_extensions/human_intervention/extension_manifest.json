@@ -1,0 +1,22 @@
+{
+  "name": "human_intervention",
+  "version": "1.0.0",
+  "display_name": "交互式人工介入",
+  "deerflow_version": ">=2.0,<3.0",
+  "priority": 90,
+  "enabled": true,
+  "entry_point": "startup.install_human_intervention",
+  "replaces_middleware": {
+    "class": "deerflow.agents.middlewares.clarification_middleware.ClarificationMiddleware",
+    "with": "deerflow_extensions.human_intervention.clarification_middleware_ext.HumanInterventionClarificationMiddleware"
+  },
+  "additional_kwargs_keys": ["_clarification"],
+  "kill_switch": {
+    "file_marker": ".deer-flow/extensions/human_intervention.disabled"
+  },
+  "clarification_policy": {
+    "max_per_turn": 3,
+    "cooldown_seconds": 30,
+    "timeout_minutes": 5
+  }
+}

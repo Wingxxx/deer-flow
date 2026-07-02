@@ -61,6 +61,7 @@ The frontend is a stateful chat application. Users create **threads** (conversat
   - `ads_auth/` — ADS 统一认证登录页
   - `input-suggestions/` — 输入建议按钮自定义（registry 注册表 + config 配置）
   - `mobile-sidebar/` — 移动端侧栏浮动汉堡触发按钮
+  - `human-intervention/` — AI 澄清请求交互式 UI（ClarificationProvider + Widgets + hooks）
 - `hooks/` — Shared React hooks
 - **`lib/`** — Utilities (`cn()` from clsx + tailwind-merge)
 - **`core/settings-extensions/`** — SettingsDialog extension registry (`registry.ts` + `index.ts`)
@@ -116,10 +117,12 @@ Requires Node.js 22+ and pnpm 10.26.2+.
 - `env-settings/` — API Key 配置 UI
 - `input-suggestions/` — 输入建议按钮（registry）
 - `mobile-sidebar/` — 移动端侧栏按钮
+- `human-intervention/` — AI 澄清请求交互式 UI（ClarificationProvider + Widgets + hooks）
 
 ### 已有注入点（优先使用）
 - `core/settings-extensions/registry.ts` — SettingsDialog 扩展注册
 - `core/input-suggestions/registry.ts` — 输入建议注册
+- `src/app/workspace/chats/[thread_id]/page.tsx` — useClarificationSubmit hook 注入
 
 ### 绝对禁区
 - 禁止直接修改 `components/ui/`（shadcn 生成）
