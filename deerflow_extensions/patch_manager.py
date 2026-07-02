@@ -63,7 +63,7 @@ def _patch_sensitive_word():
     from topic_guardrail.sensitive_word_middleware import SensitiveWordMiddleware
     import deerflow.agents.lead_agent.agent as _agent_mw
 
-    _orig = _agent_mw._build_middlewares
+    _orig = _agent_mw.build_middlewares
 
     @wraps(_orig)
     def _patched_build(config, *args, **kwargs):
@@ -83,7 +83,7 @@ def _patch_sensitive_word():
             _logger.debug("[SensitiveWord] Middleware already present, skipping")
         return middlewares
 
-    _agent_mw._build_middlewares = _patched_build
+    _agent_mw.build_middlewares = _patched_build
     _logger.info("[SensitiveWord] Patch installed")
 
 

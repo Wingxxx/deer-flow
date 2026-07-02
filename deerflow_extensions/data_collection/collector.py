@@ -31,7 +31,7 @@ class TrainingDataCollector:
 
     def __init__(self, config: dict | None = None):
         cfg = config if config is not None else load_config()
-        self.output_dir = cfg.get("output_dir", "/data/deerflow/training_logs")
+        self.output_dir = cfg.get("output_dir", "./data_collection_logs")
         self.buffer_size = cfg.get("buffer_size", 500)
         self.flush_interval_sec = cfg.get("flush_interval_sec", 5.0)
         self.max_file_size_mb = cfg.get("max_file_size_mb", 100)

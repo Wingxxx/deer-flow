@@ -72,7 +72,7 @@ cd "$REPO_ROOT"
 echo "[2/3] 启动 Gateway (端口 8001)..."
 mkdir -p logs
 cd backend
-nohup env DEER_FLOW_INTERNAL_AUTH_TOKEN=deerflow-local-dev-token PYTHONPATH=. uv run uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001 > ../logs/gateway.log 2>&1 &
+nohup env DATA_COLLECTION_OUTPUT_DIR=../training_logs DEER_FLOW_INTERNAL_AUTH_TOKEN=deerflow-local-dev-token PYTHONPATH=. uv run uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001 > ../logs/gateway.log 2>&1 &
 GATEWAY_PID=$!
 echo "  Gateway PID: $GATEWAY_PID"
 cd "$REPO_ROOT"

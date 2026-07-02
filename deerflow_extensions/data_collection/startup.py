@@ -28,7 +28,7 @@ def install_data_collection(config_path: str | None = None) -> None:
         import deerflow.agents.lead_agent.agent as agent_module
         from deerflow_extensions.data_collection.middleware import DataCollectionMiddleware
 
-        original_build = agent_module._build_middlewares
+        original_build = agent_module.build_middlewares
 
         def patched_build_middlewares(*args: Any, **kwargs: Any) -> list:
             middlewares = original_build(*args, **kwargs)
@@ -40,7 +40,17 @@ def install_data_collection(config_path: str | None = None) -> None:
             middlewares.append(DataCollectionMiddleware())
             return middlewares
 
-        agent_module._build_middlewares = patched_build_middlewares
+        agent_module.build_middlewares = patched_build_middlewares
+
+        # Also patch deerflow.client which imports build_middlewares as a local
+        # reference at module load time (line 36). Without this, client.py uses
+        # the original function even though agent.py's module attribute has been patched.
+        try:
+            import deerflow.client as _client_mod
+            _client_mod.build_middlewares = patched_build_middlewares
+            logger.debug("[DataCollection] Also patched deerflow.client.build_middlewares")
+        except ImportError:
+            logger.debug("[DataCollection] deerflow.client not yet imported, skipping")
         _installed = True
         logger.info("[DataCollection] System installed via monkey-patch (agent only)")
 
