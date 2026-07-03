@@ -4,6 +4,18 @@
 
 ---
 
+## 零、🔒 封存 human_intervention 扩展（2026-07-03）
+
+**删除的侵入点**:
+- `workspace-content.tsx`: `ClarificationProvider` import + JSX 包裹
+- `page.tsx`: `useClarificationSubmit` import + hook 调用
+- `message-list.tsx`: `ClarificationWidget`/`parseClarificationStructured` import + 渲染分支
+
+**保留**: `frontend/extensions/human-intervention/` 完整保留
+**原因**: 交互式人工介入功能封存，侵入点清理。上游内置的 `ask_clarification` 处理逻辑（`utils.ts`/`usage-model.ts`/`message-group.tsx`）不受影响。
+
+---
+
 ## 一、后端
 
 ### 1. `backend/CLAUDE.md`

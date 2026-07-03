@@ -1,5 +1,11 @@
 # 后端变更
 
+## 0. 🔒 封存 human_intervention 扩展（2026-07-03）
+
+**删除**: `deerflow_extensions/boot.py` 中 human_intervention 注册条目（_EXTENSIONS 元组 + _boot_one 分支）
+**保留**: `deerflow_extensions/human_intervention/` 扩展代码完整保留
+**原因**: 交互式人工介入功能封存，侵入点清理。上游内置 `ClarificationMiddleware`/`ask_clarification_tool` 继续可用。
+
 ## 1. `backend/CLAUDE.md`
 
 ```diff

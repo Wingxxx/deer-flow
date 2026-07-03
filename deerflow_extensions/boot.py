@@ -25,7 +25,6 @@ _EXTENSIONS = [
     ("ads_auth",         True),    # app.include_router()
     ("env_settings",     True),    # app.include_router()
     ("topic_guardrail",  False),   # apply_all() — own _APPLIED guard
-    ("human_intervention", False), # inject human_intervention middleware
 ]
 
 
@@ -113,6 +112,3 @@ def _boot_one(name: str, app=None, ext_internal=None):
     elif name == "topic_guardrail":
         from deerflow_extensions.patch_manager import apply_all
         apply_all(ext_internal=ext_internal)
-    elif name == "human_intervention":
-        from deerflow_extensions.human_intervention.startup import install_human_intervention
-        install_human_intervention()

@@ -15,7 +15,7 @@
 | **settings-dialog-ext**（SettingsDialog 扩展架构 + ADS 账号适配） | `settings-dialog.tsx` + `registry.ts` + `workspace-nav-menu.tsx` + `app.py` + `account-settings-page.tsx` | ✅ 低 | 4 个前端 + 1 个后端 |
 | **input-suggestions**（输入建议按钮自定义） | `input-box.tsx`（2 行 import + 渲染改用动态注册）+ `registry.ts` + `config.ts` | ✅ 极低 | **1 个前端核心 + 2 个扩展** |
 | topic_guardrail（回答范围限制） | `app.py`（boot_all_extensions）+ `deerflow_entry.py`（boot_topic_guardrail_early）+ `boot.py`（扩展目录）| ✅ 低 | **2 个核心 + 1 个扩展** |
-| **human_intervention**（交互式人工介入） | `boot.py` + `workspace-content.tsx` + `message-list.tsx` | ✅ 低 | **3 个核心 + 1 个扩展** |
+| ~~human_intervention~~（交互式人工介入）| `boot.py` + `workspace-content.tsx` + `page.tsx` + `message-list.tsx` | ⚠️ **已封存** — 侵入点已清理（0 个核心），仅保留扩展目录代码 |
 | **Boot Loader**（扩展统一注入） | `app.py`（精简为 1 次调用）+ `deerflow_entry.py`（精简）+ `entrypoint.sh`（移除 sitecustomize） | ✅ 低 | **3 个核心精简** |
 | **branding**（品牌自定义） | `layout.tsx` + `workspace-header.tsx` + `welcome.tsx` + `site.config.json` + `middleware.ts` + `settings-dialog.tsx` + `workspace-nav-menu.tsx` | ✅ 低 | 7 个核心 |
 | **CSS/Hydration 修复** | `dialog.tsx` + `globals.css` | ✅ 极低 | **2 个核心** |
@@ -208,18 +208,16 @@ echo "=== D5: pyproject.toml 依赖 ==="
 grep -c "filelock\|pyahocorasick" backend/pyproject.toml
 # 应输出 2
 
-# === human_intervention 补丁 ===
-echo "=== H1: boot.py human_intervention ==="
-grep -n "human_intervention" deerflow_extensions/boot.py
+# === human_intervention（已封存） ===
+echo "=== 侵入点已清理，以下命令应返回空（确认无残留）：==="
+grep -n "human_intervention" deerflow_extensions/boot.py || echo "✓ boot.py 已清理"
+grep -rn "ClarificationProvider" frontend/src/app/workspace/workspace-content.tsx || echo "✓ workspace-content.tsx 已清理"
+grep -rn "useClarificationSubmit" frontend/src/app/workspace/chats/*/page.tsx 2>/dev/null || echo "✓ page.tsx 已清理"
+grep -rn "ClarificationWidget" frontend/src/components/workspace/messages/message-list.tsx || echo "✓ message-list.tsx 已清理"
 
-echo "=== H2: workspace-content.tsx ClarificationProvider ==="
-grep -n "ClarificationProvider" frontend/src/app/workspace/workspace-content.tsx
-
-echo "=== H3: message-list.tsx ClarificationWidget ==="
-grep -n "ClarificationWidget" frontend/src/components/workspace/messages/message-list.tsx
-
-echo "=== H4: page.tsx useClarificationSubmit ==="
-grep -n "useClarificationSubmit" frontend/src/app/workspace/chats/*/page.tsx 2>/dev/null || echo "（非主聊天页尚未集成）"
+echo "=== 扩展目录保留确认：==="
+ls deerflow_extensions/human_intervention/startup.py && echo "✓ 后端扩展代码保留"
+ls frontend/extensions/human-intervention/config.ts && echo "✓ 前端扩展代码保留"
 ```
 
 如果某个 grep 返回空，说明补丁被覆盖了，需要重新打上。

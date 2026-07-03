@@ -7,7 +7,6 @@ import { CommandPalette } from "@/components/workspace/command-palette";
 import { GatewayOfflineBanner } from "@/components/workspace/gateway-offline-banner";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
 
-import { ClarificationProvider } from "../../../extensions/human-intervention/config";
 import { MobileSidebarTrigger } from "../../../extensions/mobile-sidebar/mobile-sidebar-trigger";
 
 function parseSidebarOpenCookie(
@@ -32,16 +31,14 @@ export async function WorkspaceContent({
 
   return (
     <QueryClientProvider>
-      <ClarificationProvider>
-        <SidebarProvider className="h-screen" defaultOpen={initialSidebarOpen}>
-          <MobileSidebarTrigger />
-          <WorkspaceSidebar />
-          <SidebarInset className="min-w-0">
-            <GatewayOfflineBanner gatewayUnavailable={gatewayUnavailable} />
-            {children}
-          </SidebarInset>
-        </SidebarProvider>
-      </ClarificationProvider>
+      <SidebarProvider className="h-screen" defaultOpen={initialSidebarOpen}>
+        <MobileSidebarTrigger />
+        <WorkspaceSidebar />
+        <SidebarInset className="min-w-0">
+          <GatewayOfflineBanner gatewayUnavailable={gatewayUnavailable} />
+          {children}
+        </SidebarInset>
+      </SidebarProvider>
       <CommandPalette />
       <Toaster position="top-center" />
     </QueryClientProvider>

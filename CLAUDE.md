@@ -86,7 +86,7 @@ DeerFlow 是一个基于 LangGraph 的 AI Super Agent 系统，采用全栈架�
 | **ADS 统一认证** | `@./deerflow_extensions/ads_auth/` | **ADS JWT 登录代理，替换 DeerFlow 原生认证** |
 | **Env Settings** | `@./deerflow_extensions/env_settings/` | **多厂商 API Key 管理 + 渠道配置（/providers + /channels 分路径），自动注册/清理 config.yaml 模型** |
 | **topic_guardrail** | `@./deerflow_extensions/topic_guardrail/` | 回答范围限制 + 角色定义外部化<br>v7 新增：纵深防御（TextPreprocessor + Fail-Closed + 拼音变体 + 语义审核）<br>65 个暴力测试用例全覆盖<br>注入方式：`boot.py` 统一 Boot Loader（`app.py` + `deerflow_entry.py` + `entrypoint.sh`）<br>架构：模板字符串替换 `SYSTEM_PROMPT_TEMPLATE` |
-| **human_intervention** | `@./deerflow_extensions/human_intervention/` | 交互式人工介入增强<br>子类化 ClarificationMiddleware 注入结构化 widget_hints<br>前端交互式 UI 选择/输入/确认组件 |
+| ~~human_intervention~~ | `@./deerflow_extensions/human_intervention/` | ⚠️ **已封存** — 侵入点已清理，仅保留 extension 代码。上游内置 `ClarificationMiddleware`/`ask_clarification_tool` 继续可用 |
 | **branding** | `@./frontend/extensions/branding/` | 前端品牌自定义配置，替换应用名/欢迎语/登录页标题 |
 | **input-suggestions** | `@./frontend/extensions/input-suggestions/` | 输入建议按钮自定义，替换内置的"小惊喜/写作/研究"等按钮 |
 | **mobile-sidebar** | `@./frontend/extensions/mobile-sidebar/` | 移动端侧栏浮动汉堡触发按钮 |

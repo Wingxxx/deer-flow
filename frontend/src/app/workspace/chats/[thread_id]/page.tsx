@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { type PromptInputMessage } from "@/components/ai-elements/prompt-input";
-import { useClarificationSubmit } from "../../../../../extensions/human-intervention/hooks";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ArtifactTrigger } from "@/components/workspace/artifacts";
 import {
@@ -119,8 +118,6 @@ export default function ChatPage() {
       }
     },
   });
-
-  useClarificationSubmit(sendMessage, threadId, thread.isLoading);
 
   const hasThreadMessages = thread.messages.length > 0;
 

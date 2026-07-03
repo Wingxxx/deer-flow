@@ -744,11 +744,13 @@ grep -c "品牌" docs/patches/frontend.md
 
 ---
 
-## C1：`workspace-content.tsx` — ClarificationProvider 挂载
+## C1：`workspace-content.tsx` — ClarificationProvider 挂载（⚠️ 已封存）
+
+> **状态**：侵入点已清理（2026-07-03）。`ClarificationProvider` import 和 JSX 包裹已移除。扩展组件保留在 `frontend/extensions/human-intervention/` 供未来参考。
 
 **文件**: `frontend/src/app/workspace/workspace-content.tsx`
-**行号**: L10 (import), L30-L32 (JSX 包裹)
-**风险**: ✅ 极低（2 行：1 行 import + 1 行 JSX 包裹，其余代码在 `extensions/` 目录）
+**行号**: 原 L10 (import), L35-L44 (JSX 包裹)（已删除）
+**风险**: ✅ 极低（2 行：1 行 import + 1 层 JSX 包裹，其余代码在 `extensions/` 目录）
 
 **改动**:
 
@@ -774,8 +776,8 @@ grep -c "品牌" docs/patches/frontend.md
 
 **验证命令**:
 ```bash
-# 确认 import 存在
-grep -n "ClarificationProvider" frontend/src/app/workspace/workspace-content.tsx
+# 确认已封存（grep 应返回空）
+grep -rn "ClarificationProvider" frontend/src/app/workspace/workspace-content.tsx || echo "✓ C1 侵入点已清理"
 
 # 确认扩展组件存在
 ls frontend/extensions/human-intervention/ClarificationProvider.tsx
@@ -783,10 +785,12 @@ ls frontend/extensions/human-intervention/ClarificationProvider.tsx
 
 ---
 
-## C2：`page.tsx` — useClarificationSubmit 注入
+## C2：`page.tsx` — useClarificationSubmit 注入（⚠️ 已封存）
+
+> **状态**：侵入点已清理（2026-07-03）。`useClarificationSubmit` import 和 hook 调用已移除。扩展 hook 保留在 `frontend/extensions/human-intervention/hooks.ts` 供未来参考。
 
 **文件**: `frontend/src/app/workspace/chats/[thread_id]/page.tsx`
-**行号**: L7 (import), L123 (hook 调用)
+**行号**: 原 L7 (import), L123 (hook 调用)（已删除）
 **风险**: ✅ 极低（2 行：1 行 import + 1 行 hook 调用）
 
 **改动**:
@@ -808,24 +812,23 @@ ls frontend/extensions/human-intervention/ClarificationProvider.tsx
 
 **验证命令**:
 ```bash
-# 确认 import 存在
-grep -n "useClarificationSubmit" frontend/src/app/workspace/chats/[thread_id]/page.tsx
+# 确认已封存（grep 应返回空）
+grep -rn "useClarificationSubmit" frontend/src/app/workspace/chats/*/page.tsx 2>/dev/null || echo "✓ C2 侵入点已清理"
 
 # 确认扩展组件存在
 ls frontend/extensions/human-intervention/hooks.ts
 ```
 
 ---
-## 验证命令（human-intervention 汇总）
+## 验证命令（human-intervention 封存状态检查）
 
 ```bash
-# === C1: workspace-content.tsx ClarificationProvider ===
-grep -n "ClarificationProvider" frontend/src/app/workspace/workspace-content.tsx
+# === 侵入点已清理确认（全部应返回空）===
+grep -rn "ClarificationProvider" frontend/src/app/workspace/workspace-content.tsx || echo "✓ C1 已清理"
+grep -rn "useClarificationSubmit" frontend/src/app/workspace/chats/*/page.tsx 2>/dev/null || echo "✓ C2 已清理"
+grep -rn "ClarificationWidget" frontend/src/components/workspace/messages/message-list.tsx || echo "✓ C3 已清理"
 
-# === C2: page.tsx useClarificationSubmit ===
-grep -n "useClarificationSubmit" frontend/src/app/workspace/chats/[thread_id]/page.tsx
-
-# === 扩展目录完整性 ===
+# === 扩展目录完整性（应存在） ===
 ls frontend/extensions/human-intervention/ClarificationProvider.tsx \
    frontend/extensions/human-intervention/ClarificationWidget.tsx \
    frontend/extensions/human-intervention/hooks.ts \

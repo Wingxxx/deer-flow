@@ -961,10 +961,12 @@ cd frontend && npx tsc --noEmit
 
 ---
 
-## H1：`boot.py` — human_intervention 扩展注册
+## H1：`boot.py` — human_intervention 扩展注册（⚠️ 已封存）
+
+> **状态**：侵入点已清理（2026-07-03）。`boot.py` 中不再有 human_intervention 注册，但扩展代码保留在 `deerflow_extensions/human_intervention/` 供未来参考。
 
 **文件**: `deerflow_extensions/boot.py`
-**行号**: L28 + L116-L118
+**行号**: 原 L28 + L116-L118（已删除）
 **风险**: ✅ 低（已有 topic_guardrail 完全相同的注入模式）
 
 ### H1a — _EXTENSIONS 元组新增条目（L28）
@@ -986,8 +988,8 @@ needs_app=False 因为 human_intervention 只需中间件注入，无需注册�
 
 **验证命令**:
 ```bash
-grep -n "human_intervention" deerflow_extensions/boot.py
-# 期望输出 4 行
+# 确认已封存（grep 应返回空）
+grep -n "human_intervention" deerflow_extensions/boot.py || echo "✓ 侵入点已清理"
 ```
 
 **原因**: `get_effective_user_id()` 引入复杂的用户上下文依赖，且本 Fork 的 ADS 认证路径下用户上下文获取不稳定。简化为不传 `user_id` 参数，使用默认行为。
