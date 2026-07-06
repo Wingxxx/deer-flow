@@ -3,7 +3,7 @@
 import { Search, MessageSquarePlus } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -28,7 +28,9 @@ export function WorkspaceHeader({ className }: { className?: string }) {
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchListRef = useRef<HTMLDivElement>(null);
 
   const { data: infiniteThreads } = useInfiniteThreads();
   const threads = useMemo(
@@ -44,6 +46,24 @@ export function WorkspaceHeader({ className }: { className?: string }) {
       return title.includes(q);
     });
   }, [threads, searchQuery]);
+
+  // Reset selection when results change
+  useEffect(() => {
+    setSelectedIndex(-1);
+  }, [filteredThreads]);
+
+  // Scroll selected item into view
+  const scrollToSelected = useCallback(() => {
+    if (selectedIndex < 0 || !searchListRef.current) return;
+    const items = searchListRef.current.querySelectorAll<HTMLButtonElement>(
+      "[data-search-item]",
+    );
+    items[selectedIndex]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [selectedIndex]);
+
+  useEffect(() => {
+    scrollToSelected();
+  }, [selectedIndex, scrollToSelected]);
 
   return (
     <>
@@ -155,6 +175,33 @@ export function WorkspaceHeader({ className }: { className?: string }) {
                   onKeyDown={(e) => {
                     if (e.key === "Escape") {
                       setSearchOpen(false);
+                    } else if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setSelectedIndex((prev) =>
+                        prev < filteredThreads.length - 1 ? prev + 1 : 0,
+                      );
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setSelectedIndex((prev) =>
+                        prev > 0 ? prev - 1 : filteredThreads.length - 1,
+                      );
+                    } else if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (selectedIndex >= 0 && selectedIndex < filteredThreads.length) {
+                        const thread = filteredThreads[selectedIndex];
+                        setSearchOpen(false);
+                        setSearchQuery("");
+                        router.push(pathOfThread(thread));
+                        setTimeout(() => {
+                          const activeItem = document.querySelector(
+                            '[data-slot="sidebar-menu-button"][data-active="true"]',
+                          );
+                          activeItem?.scrollIntoView({
+                            block: "nearest",
+                            behavior: "smooth",
+                          });
+                        }, 200);
+                      }
                     }
                   }}
                 />
@@ -167,17 +214,30 @@ export function WorkspaceHeader({ className }: { className?: string }) {
                       : "No conversations yet"}
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-0.5">
-                    {filteredThreads.map((thread) => (
+                  <div ref={searchListRef} className="flex flex-col gap-0.5">
+                    {filteredThreads.map((thread, index) => (
                       <button
                         key={thread.thread_id}
+                        data-search-item
                         type="button"
                         onClick={() => {
                           setSearchOpen(false);
                           setSearchQuery("");
                           router.push(pathOfThread(thread));
+                          setTimeout(() => {
+                            const activeItem = document.querySelector(
+                              '[data-slot="sidebar-menu-button"][data-active="true"]',
+                            );
+                            activeItem?.scrollIntoView({
+                              block: "nearest",
+                              behavior: "smooth",
+                            });
+                          }, 200);
                         }}
-                        className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors"
+                        className={cn(
+                          "flex items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors",
+                          index === selectedIndex ? "bg-accent" : "hover:bg-accent",
+                        )}
                       >
                         <div className="flex min-w-0 flex-1 flex-col">
                           <span className="truncate font-medium">
