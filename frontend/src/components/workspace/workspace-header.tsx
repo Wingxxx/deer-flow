@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { useBranding } from "../../../extensions/branding/context";
 
 export function WorkspaceHeader({ className }: { className?: string }) {
-  const { appName = "", appAbbreviation = "" } = useBranding();
+  const { appName = "开天智能客服", appAbbreviation = "开天智能客服" } = useBranding();
   const { t } = useI18n();
   const { state } = useSidebar();
   const pathname = usePathname();
@@ -51,6 +51,22 @@ export function WorkspaceHeader({ className }: { className?: string }) {
           </div>
         )}
       </div>
+      <style>{`
+        .workspace-header-newchat {
+          transition: all 0.25s ease !important;
+          will-change: transform, box-shadow;
+        }
+        .workspace-header-newchat:hover {
+          transform: translateY(-1px) !important;
+          border-color: rgba(74, 108, 247, .35) !important;
+          box-shadow:
+            0 1px 0 rgba(255,255,255,.5) inset,
+            0 -1px 0 rgba(0,0,0,.08) inset,
+            0 4px 12px rgba(74, 108, 247, .15),
+            0 16px 32px rgba(0,0,0,.3),
+            0 8px 16px rgba(0,0,0,.18) !important;
+        }
+      `}</style>
       <SidebarMenu>
         <SidebarMenuItem>
           <SidebarMenuButton
@@ -58,7 +74,7 @@ export function WorkspaceHeader({ className }: { className?: string }) {
             asChild
           >
             <Link
-              className="flex h-10 w-full shrink-0 items-center px-4 text-sm font-medium select-none"
+              className="flex h-10 w-full shrink-0 items-center px-4 text-sm font-medium select-none workspace-header-newchat"
               style={{
                 color: "#0f1115",
                 background: "#fff",
@@ -69,7 +85,6 @@ export function WorkspaceHeader({ className }: { className?: string }) {
                 outline: "none",
                 boxShadow:
                   "0 -2px 2px rgba(72,104,178,.04), 0 2px 2px rgba(106,111,117,.09), 0 1px 2px rgba(72,104,178,.08)",
-                transition: "box-shadow .3s",
               }}
               href="/workspace/chats/new"
             >

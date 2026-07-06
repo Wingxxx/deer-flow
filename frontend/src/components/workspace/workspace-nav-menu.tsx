@@ -4,6 +4,7 @@ import {
   LogOutIcon,
   Settings2Icon,
   SettingsIcon,
+  UserIcon,
 } from "lucide-react";
 // 🚫 以下导入被注释——原因：对应的菜单项（官方网站、Github、报告问题、联系我们、关于DeerFlow）已被注释隐藏，恢复时取消注释即可。
 // import {
@@ -88,12 +89,11 @@ export function WorkspaceNavMenu() {
           {mounted ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <SidebarMenuButton size="lg">
+                <SidebarMenuButton size="lg" className="focus-visible:!ring-0">
                   <div
-                    className="flex h-10 w-full shrink-0 items-center justify-center gap-2 px-4 text-sm font-medium select-none"
+                    className="flex h-10 w-full shrink-0 items-center justify-between gap-2 px-4 text-sm font-medium select-none bg-white hover:!bg-[#e5e5e5]"
                     style={{
                       color: "#0f1115",
-                      background: "#fff",
                       border: "1px solid #679efe00",
                       borderRadius: 100,
                       cursor: "pointer",
@@ -103,8 +103,11 @@ export function WorkspaceNavMenu() {
                       transition: "box-shadow .3s",
                     }}
                   >
-                    <SettingsIcon className="size-4 shrink-0" />
+                    <span className="flex items-center gap-2 min-w-0">
+                    <UserIcon className="size-4 shrink-0" />
                     <span className="truncate">{isSidebarOpen ? displayName : ""}</span>
+                    </span>
+                    {isSidebarOpen && <span className="text-sm font-bold opacity-55 shrink-0">...</span>}
                   </div>
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
@@ -120,7 +123,7 @@ export function WorkspaceNavMenu() {
                       setSettingsOpen(true);
                     }}
                   >
-                    <Settings2Icon />
+                    <SettingsIcon className="size-4 shrink-0" />
                     {t.common.settings}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => logout()}>

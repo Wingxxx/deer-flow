@@ -33,29 +33,23 @@ export function AppearanceSettingsPage() {
       {
         id: "system",
         label: t.settings.appearance.system,
-        description: t.settings.appearance.systemDescription,
         icon: MonitorSmartphoneIcon,
       },
       {
         id: "light",
         label: t.settings.appearance.light,
-        description: t.settings.appearance.lightDescription,
         icon: SunIcon,
       },
       {
         id: "dark",
         label: t.settings.appearance.dark,
-        description: t.settings.appearance.darkDescription,
         icon: MoonIcon,
       },
     ],
     [
       t.settings.appearance.dark,
-      t.settings.appearance.darkDescription,
       t.settings.appearance.light,
-      t.settings.appearance.lightDescription,
       t.settings.appearance.system,
-      t.settings.appearance.systemDescription,
     ],
   );
 
@@ -63,7 +57,6 @@ export function AppearanceSettingsPage() {
     <div className="space-y-8">
       <SettingsSection
         title={t.settings.appearance.themeTitle}
-        description={t.settings.appearance.themeDescription}
       >
         <div className="grid gap-3 lg:grid-cols-3">
           {themeOptions.map((option) => (
@@ -71,7 +64,6 @@ export function AppearanceSettingsPage() {
               key={option.id}
               icon={option.icon}
               label={option.label}
-              description={option.description}
               active={currentTheme === option.id}
               mode={option.id as "system" | "light" | "dark"}
               onSelect={(value) => setTheme(value)}
@@ -84,7 +76,6 @@ export function AppearanceSettingsPage() {
 
       <SettingsSection
         title={t.settings.appearance.languageTitle}
-        description={t.settings.appearance.languageDescription}
       >
         <Select
           value={locale}
@@ -113,14 +104,12 @@ export function AppearanceSettingsPage() {
 function ThemePreviewCard({
   icon: Icon,
   label,
-  description,
   active,
   mode,
   onSelect,
 }: {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   label: string;
-  description: string;
   active: boolean;
   mode: "system" | "light" | "dark";
   onSelect: (mode: "system" | "light" | "dark") => void;
@@ -136,16 +125,11 @@ function ThemePreviewCard({
           : "hover:border-border hover:shadow-sm",
       )}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-center gap-3">
         <div className="bg-muted rounded-md p-2">
           <Icon className="size-4" />
         </div>
-        <div className="space-y-1">
-          <div className="text-sm leading-none font-semibold">{label}</div>
-          <p className="text-muted-foreground text-xs leading-snug">
-            {description}
-          </p>
-        </div>
+        <div className="text-base font-semibold">{label}</div>
       </div>
     </button>
   );

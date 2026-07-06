@@ -239,8 +239,8 @@ export function RecentChatList() {
           opacity: 1 !important;
         }
         .recent-chat-item [data-sidebar="menu-action"]:hover {
-          background-color: rgba(255, 255, 255, 0.3) !important;
-          color: #ffffff !important;
+          background-color: rgba(0, 0, 0, 0.15) !important;
+          color: #1A3454 !important;
         }
         .recent-chat-item [data-slot="sidebar-menu-button"][data-active="true"] [data-sidebar="menu-action"] {
           background-color: rgba(0, 0, 0, 0.08) !important;
