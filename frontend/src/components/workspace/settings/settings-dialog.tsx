@@ -142,7 +142,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                       type="button"
                       onClick={() => setActiveSection(id as SettingsSection)}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors outline-none",
+                        "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors outline-none cursor-pointer",
                         active
                           ? "bg-primary text-primary-foreground shadow-sm"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground",

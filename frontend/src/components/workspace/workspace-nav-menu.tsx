@@ -118,6 +118,7 @@ export function WorkspaceNavMenu() {
               >
                 <DropdownMenuGroup>
                   <DropdownMenuItem
+                    className="cursor-pointer"
                     onClick={() => {
                       setSettingsDefaultSection("account");
                       setSettingsOpen(true);
@@ -126,7 +127,7 @@ export function WorkspaceNavMenu() {
                     <SettingsIcon className="size-4 shrink-0" />
                     {t.common.settings}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => logout()}>
+                  <DropdownMenuItem className="cursor-pointer" onClick={() => logout()}>
                     <LogOutIcon />
                     {t.workspace.logout}
                   </DropdownMenuItem>

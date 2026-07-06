@@ -98,7 +98,7 @@ export function WorkspaceHeader({ className }: { className?: string }) {
                   setSearchOpen(true);
                   setTimeout(() => searchInputRef.current?.focus(), 100);
                 }}
-                className="inline-flex items-center justify-center rounded-md text-sm font-medium outline-none transition-all hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 size-7 opacity-50 hover:opacity-100"
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium outline-none transition-all hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 size-7 opacity-50 hover:opacity-100 cursor-pointer"
                 aria-label="Search conversations"
               >
                 <Search className="size-4" />
@@ -235,7 +235,7 @@ export function WorkspaceHeader({ className }: { className?: string }) {
                           }, 200);
                         }}
                         className={cn(
-                          "flex items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors",
+                          "flex items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors cursor-pointer",
                           index === selectedIndex ? "bg-accent" : "hover:bg-accent",
                         )}
                       >

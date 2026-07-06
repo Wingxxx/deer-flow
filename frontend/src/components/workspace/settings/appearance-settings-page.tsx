@@ -119,7 +119,7 @@ function ThemePreviewCard({
       type="button"
       onClick={() => onSelect(mode)}
       className={cn(
-        "group flex h-full flex-col gap-3 rounded-lg border p-4 text-left transition-all",
+        "group flex h-full flex-col gap-3 rounded-lg border p-4 text-left transition-all cursor-pointer",
         active
           ? "border-primary ring-primary/30 shadow-sm"
           : "hover:border-border hover:shadow-sm",
