@@ -1,8 +1,10 @@
 "use client";
 
-import { MessageSquarePlus } from "lucide-react";
+import { Search, MessageSquarePlus } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import {
   SidebarMenu,
@@ -12,6 +14,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useI18n } from "@/core/i18n/hooks";
+import { useInfiniteThreads } from "@/core/threads/hooks";
+import { pathOfThread, titleOfThread } from "@/core/threads/utils";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 import { useBranding } from "../../../extensions/branding/context";
@@ -21,6 +25,26 @@ export function WorkspaceHeader({ className }: { className?: string }) {
   const { t } = useI18n();
   const { state } = useSidebar();
   const pathname = usePathname();
+  const router = useRouter();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: infiniteThreads } = useInfiniteThreads();
+  const threads = useMemo(
+    () => infiniteThreads?.pages.flat() ?? [],
+    [infiniteThreads],
+  );
+
+  const filteredThreads = useMemo(() => {
+    if (!searchQuery.trim()) return threads;
+    const q = searchQuery.toLowerCase();
+    return threads.filter((thread) => {
+      const title = titleOfThread(thread).toLowerCase();
+      return title.includes(q);
+    });
+  }, [threads, searchQuery]);
+
   return (
     <>
       <div
@@ -47,7 +71,20 @@ export function WorkspaceHeader({ className }: { className?: string }) {
                 {appName}
               </div>
             )}
-            <SidebarTrigger />
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchOpen(true);
+                  setTimeout(() => searchInputRef.current?.focus(), 100);
+                }}
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium outline-none transition-all hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 size-7 opacity-50 hover:opacity-100"
+                aria-label="Search conversations"
+              >
+                <Search className="size-4" />
+              </button>
+              <SidebarTrigger />
+            </div>
           </div>
         )}
       </div>
@@ -94,6 +131,68 @@ export function WorkspaceHeader({ className }: { className?: string }) {
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
+
+      {/* Search Dialog */}
+      {searchOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[60] flex items-start justify-center bg-black/50 pt-[15vh]"
+            onClick={() => setSearchOpen(false)}
+          >
+            <div
+              className="bg-popover text-popover-foreground mx-4 w-full max-w-lg rounded-lg border shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 border-b px-4">
+                <Search className="text-muted-foreground size-4 shrink-0" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="搜索最近对话"
+                  className="flex h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setSearchOpen(false);
+                    }
+                  }}
+                />
+              </div>
+              <div className="max-h-[50vh] overflow-y-auto p-2">
+                {filteredThreads.length === 0 ? (
+                  <div className="text-muted-foreground py-8 text-center text-sm">
+                    {searchQuery.trim()
+                      ? "No conversations found"
+                      : "No conversations yet"}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-0.5">
+                    {filteredThreads.map((thread) => (
+                      <button
+                        key={thread.thread_id}
+                        type="button"
+                        onClick={() => {
+                          setSearchOpen(false);
+                          setSearchQuery("");
+                          router.push(pathOfThread(thread));
+                        }}
+                        className="hover:bg-accent flex items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition-colors"
+                      >
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <span className="truncate font-medium">
+                            {titleOfThread(thread)}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
