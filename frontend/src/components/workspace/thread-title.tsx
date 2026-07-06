@@ -26,15 +26,14 @@ export function ThreadTitle({
       _title = t.pages.newChat;
     }
     if (thread.isThreadLoading) {
-      document.title = `Loading... - ${t.pages.appName}`;
+      document.title = `Loading...`;
     } else {
-      document.title = `${_title} - ${t.pages.appName}`;
+      document.title = _title;
     }
   }, [
     isNewThread,
     t.pages.newChat,
     t.pages.untitled,
-    t.pages.appName,
     thread.isThreadLoading,
     thread.values,
   ]);

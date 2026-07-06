@@ -1,23 +1,21 @@
 "use client";
 
-import { BotIcon, MessagesSquare } from "lucide-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-
 import {
   SidebarGroup,
   SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { useI18n } from "@/core/i18n/hooks";
+
+/**
+ * 🚫 导航项已隐藏——原因：
+ * 🚫 根据需求，左侧隐藏「对话」和「智能体」导航链接。
+ * 🚫 如需恢复，取消下方注释即可。
+ */
 
 export function WorkspaceNavChatList() {
-  const { t } = useI18n();
-  const pathname = usePathname();
   return (
     <SidebarGroup className="pt-1">
       <SidebarMenu>
+        {/*
         <SidebarMenuItem>
           <SidebarMenuButton isActive={pathname === "/workspace/chats"} asChild>
             <Link className="text-muted-foreground" href="/workspace/chats">
@@ -37,6 +35,7 @@ export function WorkspaceNavChatList() {
             </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>
+        */}
       </SidebarMenu>
     </SidebarGroup>
   );

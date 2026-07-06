@@ -223,6 +223,41 @@ export function RecentChatList() {
   }
   return (
     <>
+      <style>{`
+        .recent-chat-item [data-slot="sidebar-menu-button"]:hover {
+          background-color: #e4edfd !important;
+          color: #000000 !important;
+        }
+        .recent-chat-item [data-sidebar="menu-action"] {
+          background-color: rgba(255, 255, 255, 0.06) !important;
+          border-radius: 6px !important;
+          color: rgba(255, 255, 255, 0.6) !important;
+        }
+        .recent-chat-item:hover [data-sidebar="menu-action"] {
+          background-color: rgba(0, 0, 0, 0.1) !important;
+          color: #1A3454 !important;
+          opacity: 1 !important;
+        }
+        .recent-chat-item [data-sidebar="menu-action"]:hover {
+          background-color: rgba(255, 255, 255, 0.3) !important;
+          color: #ffffff !important;
+        }
+        .recent-chat-item [data-slot="sidebar-menu-button"][data-active="true"] [data-sidebar="menu-action"] {
+          background-color: rgba(0, 0, 0, 0.08) !important;
+          color: #1A3454 !important;
+          opacity: 1 !important;
+        }
+        .recent-chat-item [data-slot="sidebar-menu-button"][data-active="true"] [data-sidebar="menu-action"]:hover {
+          background-color: rgba(0, 0, 0, 0.15) !important;
+          color: #1A3454 !important;
+        }
+        .recent-chat-item:hover [data-slot="sidebar-menu-button"][data-active="true"] [data-sidebar="menu-action"] {
+          background-color: rgba(0, 0, 0, 0.12) !important;
+        }
+        .recent-chat-item:hover [data-slot="sidebar-menu-button"][data-active="true"] [data-sidebar="menu-action"]:hover {
+          background-color: rgba(0, 0, 0, 0.2) !important;
+        }
+      `}</style>
       <SidebarGroup>
         <SidebarGroupLabel>
           {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true"
@@ -238,12 +273,12 @@ export function RecentChatList() {
                 return (
                   <SidebarMenuItem
                     key={thread.thread_id}
-                    className="group/side-menu-item"
+                    className="group/side-menu-item recent-chat-item"
                   >
                     <SidebarMenuButton isActive={isActive} asChild>
                       <div>
                         <Link
-                          className="text-muted-foreground flex min-w-0 items-center gap-1.5 pr-7 whitespace-nowrap group-hover/side-menu-item:overflow-hidden"
+                          className="flex min-w-0 items-center gap-1.5 pr-7 whitespace-nowrap group-hover/side-menu-item:overflow-hidden hover:text-[#000000]"
                           href={pathOfThread(thread)}
                         >
                           <ThreadChannelIcon source={channelSource} />
@@ -266,7 +301,6 @@ export function RecentChatList() {
                             <DropdownMenuTrigger asChild>
                               <SidebarMenuAction
                                 showOnHover
-                                className="bg-background/50 hover:bg-background"
                               >
                                 <MoreHorizontal />
                                 <span className="sr-only">{t.common.more}</span>

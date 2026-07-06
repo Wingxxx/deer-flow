@@ -197,7 +197,7 @@ export default function ChatPage() {
               <ArtifactTrigger />
             </div>
           </header>
-          <main className="flex min-h-0 max-w-full grow flex-col">
+          <main className="bg-[#f3f3f4] flex min-h-0 max-w-full grow flex-col">
             <div className="flex min-h-0 flex-1 justify-center">
               <MessageList
                 className={cn("size-full", !isWelcomeMode && "pt-10")}

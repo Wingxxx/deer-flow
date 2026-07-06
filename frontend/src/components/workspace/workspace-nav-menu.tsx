@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  ChevronsUpDown,
+  LogOutIcon,
   Settings2Icon,
   SettingsIcon,
 } from "lucide-react";
@@ -29,6 +29,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/core/auth/AuthProvider";
 import { useI18n } from "@/core/i18n/hooks";
 import { getSettingsExtensions } from "@/core/settings-extensions";
 
@@ -40,24 +41,10 @@ import { SettingsDialog } from "./settings";
 // 🚫 GithubIcon 导入被注释——原因：对应的 Github 菜单项已被注释隐藏，恢复时取消注释即可。
 // import { GithubIcon } from "./github-icon";
 
-function NavMenuButtonContent({
-  isSidebarOpen,
-  t,
-}: {
-  isSidebarOpen: boolean;
-  t: ReturnType<typeof useI18n>["t"];
-}) {
-  return isSidebarOpen ? (
-    <div className="text-muted-foreground flex w-full items-center gap-2 text-left text-sm">
-      <SettingsIcon className="size-4" />
-      <span>{t.workspace.settingsAndMore}</span>
-      <ChevronsUpDown className="text-muted-foreground ml-auto size-4" />
-    </div>
-  ) : (
-    <div className="flex size-full items-center justify-center">
-      <SettingsIcon className="text-muted-foreground size-4" />
-    </div>
-  );
+/** 将用户名格式化为 "前2位...后2位" */
+function maskDisplayName(name: string): string {
+  if (name.length <= 4) return name;
+  return name.slice(0, 2) + "..." + name.slice(-2);
 }
 
 export function WorkspaceNavMenu() {
@@ -68,12 +55,17 @@ export function WorkspaceNavMenu() {
   const [mounted, setMounted] = useState(false);
   const { open: isSidebarOpen } = useSidebar();
   const { t } = useI18n();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const extensions = getSettingsExtensions();
+
+  // 获取用户显示名称（取 email 的 @ 前部分）
+  const rawName = user?.email?.split("@")[0] ?? user?.id ?? "User";
+  const displayName = maskDisplayName(rawName);
 
   return (
     <>
@@ -82,18 +74,38 @@ export function WorkspaceNavMenu() {
         onOpenChange={setSettingsOpen}
         defaultSection={settingsDefaultSection}
         additionalSections={extensions}
-        hiddenSectionIds={["appearance","notification","memory","tools","skills","about"]}
+        hiddenSectionIds={["notification","memory","tools","skills","about"]}
       />
+      <style>{`
+        .nav-menu-hover {
+          --sidebar-accent: transparent !important;
+          --sidebar-accent-foreground: inherit !important;
+          outline: none;
+        }
+      `}</style>
       <SidebarMenu className="w-full">
-        <SidebarMenuItem>
+        <SidebarMenuItem className="nav-menu-hover">
           {mounted ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                >
-                  <NavMenuButtonContent isSidebarOpen={isSidebarOpen} t={t} />
+                <SidebarMenuButton size="lg">
+                  <div
+                    className="flex h-10 w-full shrink-0 items-center justify-center gap-2 px-4 text-sm font-medium select-none"
+                    style={{
+                      color: "#0f1115",
+                      background: "#fff",
+                      border: "1px solid #679efe00",
+                      borderRadius: 100,
+                      cursor: "pointer",
+                      outline: "none",
+                      boxShadow:
+                        "0 -2px 2px rgba(72,104,178,.04), 0 2px 2px rgba(106,111,117,.09), 0 1px 2px rgba(72,104,178,.08)",
+                      transition: "box-shadow .3s",
+                    }}
+                  >
+                    <SettingsIcon className="size-4 shrink-0" />
+                    <span className="truncate">{isSidebarOpen ? displayName : ""}</span>
+                  </div>
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -110,6 +122,10 @@ export function WorkspaceNavMenu() {
                   >
                     <Settings2Icon />
                     {t.common.settings}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => logout()}>
+                    <LogOutIcon />
+                    {t.workspace.logout}
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 {/*
@@ -172,7 +188,22 @@ export function WorkspaceNavMenu() {
             </DropdownMenu>
           ) : (
             <SidebarMenuButton size="lg" className="pointer-events-none">
-              <NavMenuButtonContent isSidebarOpen={isSidebarOpen} t={t} />
+              <div
+                className="flex h-10 w-full shrink-0 items-center justify-center px-4 text-sm font-medium select-none"
+                style={{
+                  color: "#0f1115",
+                  background: "#fff",
+                  border: "1px solid #679efe00",
+                  borderRadius: 100,
+                  cursor: "pointer",
+                  outline: "none",
+                  boxShadow:
+                    "0 -2px 2px rgba(72,104,178,.04), 0 2px 2px rgba(106,111,117,.09), 0 1px 2px rgba(72,104,178,.08)",
+                  transition: "box-shadow .3s",
+                }}
+              >
+                <span className="truncate">{isSidebarOpen ? displayName : ""}</span>
+              </div>
             </SidebarMenuButton>
           )}
         </SidebarMenuItem>

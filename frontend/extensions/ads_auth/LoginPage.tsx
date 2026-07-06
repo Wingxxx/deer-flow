@@ -92,16 +92,16 @@ export default function ADSLoginPage() {
       <div className="border-border/20 bg-white/90 w-full max-w-md space-y-6 rounded-3xl border p-8 backdrop-blur-sm">
         <div className="text-center">
           {/* <h1 className="text-foreground font-serif text-3xl">DeerFlow</h1> */}
-          <p className="text-black font-medium mt-2">{branding.loginPage?.title ?? "ADS 账号登录"}</p>
+          <p className="text-black font-medium mt-2 text-2xl">{branding.loginPage?.title ?? "账号登录"}</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-2">
           <div className="flex flex-col space-y-1">
-            <label htmlFor="username" className="text-black font-medium">ADS 用户名</label>
+            <label htmlFor="username" className="text-black font-medium">用户名</label>
             <Input
               id="username" className="text-black font-medium border border-solid border-black" type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="输入 ADS 登录名" required
+              placeholder="输入登录名" required
             />
           </div>
           <div className="flex flex-col space-y-1">

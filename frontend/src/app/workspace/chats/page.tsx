@@ -40,8 +40,8 @@ export default function ChatsPage() {
   const isSearching = search.trim().length > 0;
 
   useEffect(() => {
-    document.title = `${t.pages.chats} - ${t.pages.appName}`;
-  }, [t.pages.chats, t.pages.appName]);
+    document.title = t.pages.chats;
+  }, [t.pages.chats]);
 
   const filteredThreads = useMemo(() => {
     return threads.filter((thread) => {

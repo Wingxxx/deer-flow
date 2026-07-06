@@ -29,6 +29,20 @@ export function Welcome({
   const { t } = useI18n();
   const branding = useBranding();
   const searchParams = useSearchParams();
+  const modeIcon = useMemo(() => {
+    switch (mode) {
+      case "ultra":
+        return "🚀";
+      case "pro":
+        return "⚡";
+      case "thinking":
+        return "⚡";
+      case "flash":
+        return "⚡";
+      default:
+        return "⚡";
+    }
+  }, [mode]);
   const isUltra = useMemo(() => mode === "ultra", [mode]);
   const colors = useMemo(() => {
     if (isUltra) {
@@ -52,7 +66,7 @@ export function Welcome({
         ) : (
           <div className="flex max-w-full flex-wrap items-center justify-center gap-2">
             <div className={cn("inline-block", !waved ? "animate-wave" : "")}>
-              {isUltra ? "🚀" : "👋"}
+              {modeIcon}
             </div>
             <AuroraText colors={colors}>{branding.welcome?.greeting ?? t.welcome.greeting}</AuroraText>
           </div>

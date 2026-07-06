@@ -133,8 +133,8 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
       return;
     }
 
-    // Redirect to home page
-    router.push("/");
+    // Always use hard navigation to ensure all client state is cleared
+    window.location.href = "/";
   }, [staticMode, router]);
 
   /**
