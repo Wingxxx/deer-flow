@@ -276,10 +276,12 @@ export function RecentChatList() {
                     className="group/side-menu-item recent-chat-item"
                   >
                     <SidebarMenuButton isActive={isActive} asChild>
-                      <div>
-                        <Link
+                      <div
+                        onClick={() => router.push(pathOfThread(thread))}
+                        className="cursor-pointer"
+                      >
+                        <div
                           className="flex min-w-0 items-center gap-1.5 pr-7 whitespace-nowrap group-hover/side-menu-item:overflow-hidden hover:text-[#000000]"
-                          href={pathOfThread(thread)}
                         >
                           <ThreadChannelIcon source={channelSource} />
                           <span className="min-w-0 truncate">
@@ -295,12 +297,13 @@ export function RecentChatList() {
                               </span>
                             </span>
                           )}
-                        </Link>
+                        </div>
                         {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <SidebarMenuAction
                                 showOnHover
+                                onClick={(e: React.MouseEvent) => e.stopPropagation()}
                               >
                                 <MoreHorizontal />
                                 <span className="sr-only">{t.common.more}</span>
