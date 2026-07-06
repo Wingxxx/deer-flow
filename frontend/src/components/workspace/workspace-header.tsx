@@ -75,7 +75,8 @@ export function WorkspaceHeader({ className }: { className?: string }) {
       >
         {state === "collapsed" ? (
           <div className="group-has-data-[collapsible=icon]/sidebar-wrapper:-translate-y flex w-full cursor-pointer items-center justify-center">
-            <div className="text-[#fff] block pt-1 font-serif group-hover/workspace-header:hidden">
+            <div className="text-[#fff] flex items-center gap-1.5 pt-1 font-serif group-hover/workspace-header:hidden">
+              <img src="/images/logo.png" alt="" className="size-5"/>
               {appAbbreviation}
             </div>
             <SidebarTrigger className="hidden pl-2 group-hover/workspace-header:block" />
@@ -83,11 +84,13 @@ export function WorkspaceHeader({ className }: { className?: string }) {
         ) : (
           <div className="flex items-center justify-between gap-2">
             {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ? (
-              <Link href="/" className="text-[#fff] ml-2 font-serif">
+              <Link href="/" className="text-[#fff] ml-2 flex items-center gap-1.5 font-serif">
+                <img src="/images/logo.png" alt="" className="size-5"/>
                 {appName}
               </Link>
             ) : (
-              <div className="text-[#fff] ml-2 cursor-default font-serif">
+              <div className="text-[#fff] ml-2 flex cursor-default items-center gap-1.5 font-serif">
+                <img src="/images/logo.png" alt="" className="size-5"/>
                 {appName}
               </div>
             )}
