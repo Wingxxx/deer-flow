@@ -1,4 +1,4 @@
-﻿﻿import {
+﻿﻿﻿import {
   CompassIcon,
   GraduationCapIcon,
   ImageIcon,
@@ -24,7 +24,9 @@ export const zhCN: Translations = {
     delete: "删除",
     edit: "编辑",
     rename: "重命名",
-    share: "分享",
+    pin: "置顶",
+    unpin: "取消置顶",
+    share: "分享链接",
     openInNewWindow: "在新窗口打开",
     close: "关闭",
     more: "更多",
@@ -166,6 +168,7 @@ export const zhCN: Translations = {
     chats: "对话",
     channels: "渠道",
     recentChats: "最近的对话",
+    pinned: "置顶",
     demoChats: "演示对话",
     agents: "智能体",
   },

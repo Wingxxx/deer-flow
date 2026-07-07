@@ -13,6 +13,8 @@ export interface Translations {
     delete: string;
     edit: string;
     rename: string;
+    pin: string;
+    unpin: string;
     share: string;
     openInNewWindow: string;
     close: string;
@@ -113,6 +115,7 @@ export interface Translations {
   // Sidebar
   sidebar: {
     recentChats: string;
+    pinned: string;
     newChat: string;
     chats: string;
     demoChats: string;

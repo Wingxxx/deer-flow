@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, MessageSquarePlus } from "lucide-react";
+import { MessageSquarePlus, Pin, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -16,6 +16,7 @@ import {
 import { useI18n } from "@/core/i18n/hooks";
 import { useInfiniteThreads } from "@/core/threads/hooks";
 import { pathOfThread, titleOfThread } from "@/core/threads/utils";
+import { usePinnedThreads } from "@/core/threads/use-pinned-threads";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 import { useBranding } from "../../../extensions/branding/context";
@@ -38,14 +39,25 @@ export function WorkspaceHeader({ className }: { className?: string }) {
     [infiniteThreads],
   );
 
+  const { pinnedIds } = usePinnedThreads();
+
   const filteredThreads = useMemo(() => {
-    if (!searchQuery.trim()) return threads;
-    const q = searchQuery.toLowerCase();
-    return threads.filter((thread) => {
-      const title = titleOfThread(thread).toLowerCase();
-      return title.includes(q);
+    const source = searchQuery.trim()
+      ? threads.filter((thread) => {
+          const q = searchQuery.toLowerCase();
+          const title = titleOfThread(thread).toLowerCase();
+          return title.includes(q);
+        })
+      : threads;
+    return [...source].sort((a, b) => {
+      const aPinned = pinnedIds.indexOf(a.thread_id);
+      const bPinned = pinnedIds.indexOf(b.thread_id);
+      if (aPinned !== -1 && bPinned !== -1) return aPinned - bPinned;
+      if (aPinned !== -1) return -1;
+      if (bPinned !== -1) return 1;
+      return 0;
     });
-  }, [threads, searchQuery]);
+  }, [threads, searchQuery, pinnedIds]);
 
   // Reset selection when results change
   useEffect(() => {
@@ -247,6 +259,9 @@ export function WorkspaceHeader({ className }: { className?: string }) {
                             {titleOfThread(thread)}
                           </span>
                         </div>
+                        {pinnedIds.includes(thread.thread_id) && (
+                          <Pin className="text-muted-foreground size-3 shrink-0 fill-current" />
+                        )}
                       </button>
                     ))}
                   </div>
