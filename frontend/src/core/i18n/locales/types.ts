@@ -438,8 +438,11 @@ export interface Translations {
     };
     account: {
       profileTitle: string;
+      loginAccount: string;
       email: string;
       role: string;
+      browser: string;
+      os: string;
       changePasswordTitle: string;
       changePasswordDescription: string;
       currentPassword: string;

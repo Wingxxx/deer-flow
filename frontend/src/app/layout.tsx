@@ -24,7 +24,7 @@ function loadSiteConfig(): { appName?: string } {
 export async function generateMetadata(): Promise<Metadata> {
   const config = loadSiteConfig();
   return {
-    title: config.appName ?? "开天智能客服",
+    title: config.appName ?? "开天智能助手",
     description: "A LangChain-based framework for building super agents.",
   };
 }

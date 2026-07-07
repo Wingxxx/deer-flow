@@ -533,8 +533,11 @@ export const enUS: Translations = {
     },
     account: {
       profileTitle: "Profile",
+      loginAccount: "Account",
       email: "Email",
       role: "Role",
+      browser: "Browser",
+      os: "Operating System",
       changePasswordTitle: "Change Password",
       changePasswordDescription: "Update your account password.",
       currentPassword: "Current password",

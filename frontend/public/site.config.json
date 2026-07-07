@@ -1,11 +1,11 @@
 {
-  "appName": "开天智能客服",
+  "appName": "开天智能助手",
   "appAbbreviation": "开天",
   "welcome": {
-    "greeting": "欢迎使用开天智能客服",
-    "description": "欢迎使用开天智能客服平台，您的智能服务助手。"
+    "greeting": "欢迎使用开天智能助手",
+    "description": "欢迎使用开天智能助手平台，您的智能服务助手。"
   },
   "loginPage": {
-    "title": "开天智能客服"
+    "title": "开天智能助手"
   }
 }

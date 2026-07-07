@@ -141,7 +141,7 @@ export default function LoginPage() {
       />
       <div className="border-border/20 bg-background/5 w-full max-w-md space-y-6 rounded-3xl border p-8 backdrop-blur-sm">
         <div className="text-center">
-          <h1 className="text-foreground fonf-sorif teeex3x3l">开天智能客服</h1>
+          <h1 className="text-foreground fonf-sorif teeex3x3l">开天智能助手</h1>
           <p className="text-muted-foreground mt-l">
             {isLogin ? "Sign in to your account" : "Create a new account"}
           </p>

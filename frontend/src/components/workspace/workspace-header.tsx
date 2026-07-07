@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { useBranding } from "../../../extensions/branding/context";
 
 export function WorkspaceHeader({ className }: { className?: string }) {
-  const { appName = "开天智能客服", appAbbreviation = "开天智能客服" } = useBranding();
+  const { appName = "开天智能助手", appAbbreviation = "开天智能助手" } = useBranding();
   const { t } = useI18n();
   const { state } = useSidebar();
   const pathname = usePathname();

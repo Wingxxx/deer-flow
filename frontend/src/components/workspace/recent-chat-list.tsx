@@ -10,6 +10,7 @@ import {
   Pencil,
   Pin,
   Share2,
+  TriangleAlert,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
@@ -580,47 +581,13 @@ export function RecentChatList() {
                 {shareCopied ? <Check className="size-4 text-green-500" /> : <Copy className="size-4" />}
               </Button>
             </div>
-            {/* Social Share */}
-            <div>
-              <p className="text-sm text-muted-foreground mb-3">分享到</p>
-              <div className="flex items-center gap-3">
-                <a
-                  href={`https://connect.qq.com/widget/shareqq/index.html?url=${encodeURIComponent(shareThreadUrl)}&title=${encodeURIComponent("DeerFlow")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#12B7F5] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#0ea5e6] transition-colors cursor-pointer no-underline"
-                >
-                  <img src="/images/qq.png" alt="QQ" className="size-4" />
-                  QQ
-                </a>
-                <a
-                  href={`https://service.weibo.com/share/share.php?url=${encodeURIComponent(shareThreadUrl)}&title=${encodeURIComponent("DeerFlow")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#E6162D] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#c91225] transition-colors cursor-pointer no-underline"
-                >
-                  <img src="/images/wb.png" alt="微博" className="size-4" />
-                  微博
-                </a>
-                <a
-                  href={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shareThreadUrl)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0a8a47] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#06ad56] transition-colors cursor-pointer no-underline"
-                >
-                  <img src="/images/wx.png" alt="微信" className="size-4" />
-                  微信
-                </a>
-                <a
-                  href={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shareThreadUrl)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#2AB050] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#239644] transition-colors cursor-pointer no-underline"
-                >
-                  <img src="/images/work.png" alt="企业微信" className="size-4" />
-                  企业微信
-                </a>
-              </div>
+
+            {/* Share Warning */}
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <TriangleAlert className="size-4 mt-0.5 shrink-0 text-amber-600" />
+              <p className="text-xs text-amber-700 leading-relaxed">
+                任何获得链接的人都可以查看你的分享内容，请检查是否包含敏感或隐私内容。
+              </p>
             </div>
           </div>
         </DialogContent>

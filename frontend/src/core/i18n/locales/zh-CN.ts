@@ -512,8 +512,11 @@ export const zhCN: Translations = {
     },
     account: {
       profileTitle: "个人信息",
+      loginAccount: "登录账号",
       email: "邮箱",
       role: "角色",
+      browser: "浏览器",
+      os: "操作系统",
       changePasswordTitle: "修改密码",
       changePasswordDescription: "更新你的账号密码。",
       currentPassword: "当前密码",
