@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: docker/nginx
+title: Nginx 反向代理与路由配置
+scope:
+    - docker/nginx/
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: scripts
+title: 环境配置向导与健康诊断系统
+scope:
+    - scripts/
+source_files: []
+depends_on: []
+related_to: []

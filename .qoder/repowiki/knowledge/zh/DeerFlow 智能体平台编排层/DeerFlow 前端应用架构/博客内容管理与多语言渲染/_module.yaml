@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend/blog_app
+title: 博客内容管理与多语言渲染
+scope:
+    - frontend/src/app/blog/
+source_files: []
+depends_on: []
+related_to: []

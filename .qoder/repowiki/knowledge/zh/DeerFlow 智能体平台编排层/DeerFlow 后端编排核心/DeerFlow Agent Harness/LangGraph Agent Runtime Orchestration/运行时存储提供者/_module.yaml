@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: backend/agent_harness/runtime/store
+title: 运行时存储提供者
+scope:
+    - backend/packages/harness/deerflow/runtime/store/
+source_files: []
+depends_on: []
+related_to: []

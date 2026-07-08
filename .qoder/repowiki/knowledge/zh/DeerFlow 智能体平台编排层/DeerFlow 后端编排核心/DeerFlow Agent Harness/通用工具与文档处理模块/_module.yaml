@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: backend/agent_harness/utils
+title: 通用工具与文档处理模块
+scope:
+    - backend/packages/harness/deerflow/utils/
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: backend/agent_harness/mcp
+title: MCP 集成与会话管理
+scope:
+    - backend/packages/harness/deerflow/mcp/
+source_files: []
+depends_on: []
+related_to: []

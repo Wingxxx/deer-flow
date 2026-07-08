@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend/core_library/core_uploads
+title: 文件上传与验证管理
+scope:
+    - frontend/src/core/uploads/
+source_files: []
+depends_on: []
+related_to: []

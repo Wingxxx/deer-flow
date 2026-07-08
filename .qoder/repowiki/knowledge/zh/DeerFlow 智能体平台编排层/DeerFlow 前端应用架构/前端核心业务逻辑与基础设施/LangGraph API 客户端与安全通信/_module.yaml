@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend/core_library/core_api
+title: LangGraph API 客户端与安全通信
+scope:
+    - frontend/src/core/api/
+source_files: []
+depends_on: []
+related_to: []

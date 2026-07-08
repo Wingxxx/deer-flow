@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend/core_library/core_channels
+title: 渠道集成与连接管理
+scope:
+    - frontend/src/core/channels/
+source_files: []
+depends_on: []
+related_to: []

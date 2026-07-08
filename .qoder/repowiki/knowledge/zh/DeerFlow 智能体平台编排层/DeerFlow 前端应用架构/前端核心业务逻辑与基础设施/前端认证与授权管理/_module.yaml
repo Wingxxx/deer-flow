@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend/core_library/core_auth
+title: 前端认证与授权管理
+scope:
+    - frontend/src/core/auth/
+source_files: []
+depends_on: []
+related_to: []

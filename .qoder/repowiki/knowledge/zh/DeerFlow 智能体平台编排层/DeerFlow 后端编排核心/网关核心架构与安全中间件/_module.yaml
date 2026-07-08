@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: backend/gateway_api
+title: 网关核心架构与安全中间件
+scope:
+    - backend/app/gateway/
+source_files: []
+depends_on: []
+related_to: []

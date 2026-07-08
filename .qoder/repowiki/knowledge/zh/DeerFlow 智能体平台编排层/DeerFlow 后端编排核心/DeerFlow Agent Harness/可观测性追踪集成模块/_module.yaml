@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: backend/agent_harness/tracing
+title: 可观测性追踪集成模块
+scope:
+    - backend/packages/harness/deerflow/tracing/
+source_files: []
+depends_on: []
+related_to: []

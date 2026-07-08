@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: backend/agent_harness/agents/middlewares
+title: 代理执行中间件与安全控制
+scope:
+    - backend/packages/harness/deerflow/agents/middlewares/
+source_files: []
+depends_on: []
+related_to: []

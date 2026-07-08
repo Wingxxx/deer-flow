@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend/components_library/ai_elements
+title: AI 交互与可视化组件库
+scope:
+    - frontend/src/components/ai-elements/
+source_files: []
+depends_on: []
+related_to: []

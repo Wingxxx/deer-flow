@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend/components_library/ui_primitives
+title: UI 基础组件库
+scope:
+    - frontend/src/components/ui/
+source_files: []
+depends_on: []
+related_to: []

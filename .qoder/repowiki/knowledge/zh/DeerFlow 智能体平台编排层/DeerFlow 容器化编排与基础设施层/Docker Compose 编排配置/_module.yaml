@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: docker/compose_config
+title: Docker Compose 编排配置
+scope:
+    - docker/
+source_files: []
+depends_on: []
+related_to: []

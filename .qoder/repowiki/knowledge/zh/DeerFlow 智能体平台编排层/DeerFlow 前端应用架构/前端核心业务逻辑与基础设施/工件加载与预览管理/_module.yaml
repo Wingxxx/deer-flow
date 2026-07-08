@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend/core_library/core_artifacts
+title: 工件加载与预览管理
+scope:
+    - frontend/src/core/artifacts/
+source_files: []
+depends_on: []
+related_to: []

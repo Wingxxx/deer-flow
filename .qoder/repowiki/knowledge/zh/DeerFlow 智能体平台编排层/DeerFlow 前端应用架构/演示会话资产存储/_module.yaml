@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend/demo_assets
+title: 演示会话资产存储
+scope:
+    - frontend/public/demo/
+source_files: []
+depends_on: []
+related_to: []

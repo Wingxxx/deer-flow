@@ -1,0 +1,15 @@
+schema_version: 1
+module_path: build_system
+title: DeerFlow 构建与发布体系
+scope: []
+source_files:
+    - Makefile
+    - scripts/build-release.sh
+    - docker/docker-compose.yaml
+    - backend/Dockerfile
+    - frontend/Dockerfile
+    - backend/pyproject.toml
+    - frontend/package.json
+    - .github/workflows/container.yaml
+depends_on: []
+related_to: []

@@ -1,0 +1,16 @@
+schema_version: 1
+module_path: backend/agent_harness/sandbox/core
+title: 沙箱环境抽象与安全管理
+scope:
+    - backend/packages/harness/deerflow/sandbox/__init__.py
+    - backend/packages/harness/deerflow/sandbox/exceptions.py
+    - backend/packages/harness/deerflow/sandbox/file_operation_lock.py
+    - backend/packages/harness/deerflow/sandbox/middleware.py
+    - backend/packages/harness/deerflow/sandbox/sandbox.py
+    - backend/packages/harness/deerflow/sandbox/sandbox_provider.py
+    - backend/packages/harness/deerflow/sandbox/search.py
+    - backend/packages/harness/deerflow/sandbox/security.py
+    - backend/packages/harness/deerflow/sandbox/tools.py
+source_files: []
+depends_on: []
+related_to: []

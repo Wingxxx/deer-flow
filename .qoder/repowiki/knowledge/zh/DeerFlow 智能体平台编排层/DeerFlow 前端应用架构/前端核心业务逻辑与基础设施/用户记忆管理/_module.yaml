@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend/core_library/core_memory
+title: 用户记忆管理
+scope:
+    - frontend/src/core/memory/
+source_files: []
+depends_on: []
+related_to: []

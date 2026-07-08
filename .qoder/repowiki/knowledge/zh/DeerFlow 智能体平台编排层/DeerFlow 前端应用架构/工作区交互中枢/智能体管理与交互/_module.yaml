@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend/workspace_app/agents
+title: 智能体管理与交互
+scope:
+    - frontend/src/app/workspace/agents/
+source_files: []
+depends_on: []
+related_to: []

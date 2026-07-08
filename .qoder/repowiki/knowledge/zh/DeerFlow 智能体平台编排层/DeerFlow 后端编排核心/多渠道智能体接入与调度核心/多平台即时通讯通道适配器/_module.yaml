@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: backend/channels_integrations/platforms
+title: 多平台即时通讯通道适配器
+scope:
+    - backend/app/channels/dingtalk.py
+    - backend/app/channels/discord.py
+    - backend/app/channels/feishu.py
+    - backend/app/channels/slack.py
+    - backend/app/channels/telegram.py
+    - backend/app/channels/wechat.py
+    - backend/app/channels/wecom.py
+source_files: []
+depends_on: []
+related_to: []

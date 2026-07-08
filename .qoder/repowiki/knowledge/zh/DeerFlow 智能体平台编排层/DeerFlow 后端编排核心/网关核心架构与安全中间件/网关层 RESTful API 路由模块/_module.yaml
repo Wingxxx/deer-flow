@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: backend/gateway_api/api_routers
+title: 网关层 RESTful API 路由模块
+scope:
+    - backend/app/gateway/routers/
+source_files: []
+depends_on: []
+related_to: []

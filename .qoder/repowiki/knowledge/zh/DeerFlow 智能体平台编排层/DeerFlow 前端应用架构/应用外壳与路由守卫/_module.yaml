@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: frontend/app_shell
+title: 应用外壳与路由守卫
+scope:
+    - frontend/src/app/layout.tsx
+    - frontend/src/app/page.tsx
+    - frontend/middleware.ts
+source_files: []
+depends_on: []
+related_to: []

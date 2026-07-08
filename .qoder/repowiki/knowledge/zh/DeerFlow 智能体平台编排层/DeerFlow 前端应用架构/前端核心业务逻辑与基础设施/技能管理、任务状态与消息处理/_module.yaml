@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: frontend/core_library/core_skills_tasks_messages
+title: 技能管理、任务状态与消息处理
+scope:
+    - frontend/src/core/skills/
+    - frontend/src/core/tasks/
+    - frontend/src/core/messages/
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,16 @@
+schema_version: 1
+module_path: configuration_system
+title: DeerFlow 配置系统：YAML/JSON 分层、环境变量注入与运行时热重载
+scope: []
+source_files:
+    - config.example.yaml
+    - backend/packages/harness/deerflow/config/app_config.py
+    - backend/packages/harness/deerflow/config/extensions_config.py
+    - backend/packages/harness/deerflow/config/paths.py
+    - backend/packages/harness/deerflow/config/database_config.py
+    - backend/packages/harness/deerflow/config/tracing_config.py
+    - extensions_config.example.json
+    - frontend/src/env.js
+    - frontend/.env.example
+depends_on: []
+related_to: []

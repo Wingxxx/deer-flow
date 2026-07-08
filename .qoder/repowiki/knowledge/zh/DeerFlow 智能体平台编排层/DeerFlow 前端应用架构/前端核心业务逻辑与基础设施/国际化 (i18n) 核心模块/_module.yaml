@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend/core_library/core_i18n
+title: 国际化 (i18n) 核心模块
+scope:
+    - frontend/src/core/i18n/
+source_files: []
+depends_on: []
+related_to: []

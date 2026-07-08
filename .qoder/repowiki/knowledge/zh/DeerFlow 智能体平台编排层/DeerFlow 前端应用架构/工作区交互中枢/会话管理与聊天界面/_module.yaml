@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: frontend/workspace_app/chats
+title: 会话管理与聊天界面
+scope:
+    - frontend/src/app/workspace/chats/
+source_files: []
+depends_on: []
+related_to: []

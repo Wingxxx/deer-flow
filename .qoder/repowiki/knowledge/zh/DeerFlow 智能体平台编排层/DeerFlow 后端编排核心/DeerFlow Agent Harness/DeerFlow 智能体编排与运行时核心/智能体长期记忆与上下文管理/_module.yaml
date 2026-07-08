@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: backend/agent_harness/agents/memory
+title: 智能体长期记忆与上下文管理
+scope:
+    - backend/packages/harness/deerflow/agents/memory/
+source_files: []
+depends_on: []
+related_to: []

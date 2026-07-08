@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: backend/agent_harness
+title: DeerFlow Agent Harness
+scope:
+    - backend/packages/harness/deerflow/
+source_files: []
+depends_on: []
+related_to: []
