@@ -69,7 +69,10 @@ release/
 
 .agent/
 .trae/
-.qoder/
+# Qoder（仅保留 repowiki）
+/.qoder/*
+!/.qoder/repowiki/
+!/.qoder/repowiki/**
 ads-agent-mcp/
 ads-agent-mcp/.ads-mcp/config.json
 training_logs/*
