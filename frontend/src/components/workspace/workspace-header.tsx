@@ -206,7 +206,7 @@ export function WorkspaceHeader({ className }: { className?: string }) {
                         const thread = filteredThreads[selectedIndex];
                         setSearchOpen(false);
                         setSearchQuery("");
-                        router.push(pathOfThread(thread));
+                        router.push(pathOfThread(thread!));
                         setTimeout(() => {
                           const activeItem = document.querySelector(
                             '[data-slot="sidebar-menu-button"][data-active="true"]',
