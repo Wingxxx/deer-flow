@@ -81,6 +81,38 @@ fi
 
 NEXT_CONFIG_BUILD_OUTPUT=standalone SKIP_ENV_VALIDATION=1 pnpm build
 
+# ── 修复 pnpm strict mode + Next.js standalone 依赖解析 ─────────────────────
+#
+# 根因：Next.js standalone trace (@vercel/nft) 在 pnpm 严格模式下存在两个断层：
+#   (1) @swc/helpers 的 _/ 入口代理目录（836KB, ~100 个 package.json）未被追踪，
+#       导致 require('@swc/helpers/_/_interop_require_default') 无法找到入口
+#   (2) node_modules/ 顶层缺少 @swc/helpers symlink，Node.js CJS 解析器无法定位包
+#
+# 触发场景：运维从 56 复制 release/ 到其他服务器时，standalone 缺少完整依赖拓扑
+# 修复方式：从本地完整 node_modules/.pnpm store 补缺 _/ 目录 → 补建顶层 symlink
+#
+FULL_NM="$REPO_ROOT/frontend/node_modules"
+STANDALONE_NM="$REPO_ROOT/frontend/.next/standalone/node_modules"
+NEXT_SWC_VERSION=$(node -e "try{console.log(require('$STANDALONE_NM/next/package.json').dependencies['@swc/helpers'])}catch(e){console.log('')}")
+if [ -n "$NEXT_SWC_VERSION" ]; then
+  SWC_SRC="$FULL_NM/.pnpm/@swc+helpers@${NEXT_SWC_VERSION}/node_modules/@swc/helpers"
+  SWC_DST="$STANDALONE_NM/.pnpm/@swc+helpers@${NEXT_SWC_VERSION}/node_modules/@swc/helpers"
+  if [ -d "$SWC_SRC/_" ] && [ -d "$SWC_DST/cjs" ]; then
+    # (1) 补缺 _/ 入口代理目录（每个子目录是一个 package.json 指向 cjs/_*.cjs）
+    if [ ! -d "$SWC_DST/_" ]; then
+      cp -r "$SWC_SRC/_" "$SWC_DST/_"
+    fi
+    # (2) 补建顶层 @swc/helpers symlink
+    SWC_LINK_DIR="$STANDALONE_NM/@swc"
+    SWC_LINK="$SWC_LINK_DIR/helpers"
+    mkdir -p "$SWC_LINK_DIR"
+    ln -sfn "../.pnpm/@swc+helpers@${NEXT_SWC_VERSION}/node_modules/@swc/helpers" "$SWC_LINK"
+    echo "  ✓ 已修复 @swc/helpers standalone 依赖 (v${NEXT_SWC_VERSION}): 补缺 _/ 目录 + 顶层 symlink"
+  else
+    echo "  ⚠ @swc/helpers@${NEXT_SWC_VERSION} 源或目标不完整，跳过修复"
+  fi
+fi
+
 echo "  复制前端构建产物（standalone 模式 = 无源码 + 无 node_modules）..."
 cp -r .next "$RELEASE_DIR/frontend/"
 # standalone 模式：将静态资源复制到 server.js 同级目录下
