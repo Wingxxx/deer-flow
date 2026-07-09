@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: backend/agent_harness/config
-title: 应用配置管理与沙箱路径体系
-scope:
-    - backend/packages/harness/deerflow/config/
-source_files: []
-depends_on: []
-related_to: []

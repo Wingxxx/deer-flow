@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: backend/agent_harness/models
-title: 多提供商 LLM 适配与凭证管理
-scope:
-    - backend/packages/harness/deerflow/models/
-source_files: []
-depends_on: []
-related_to: []

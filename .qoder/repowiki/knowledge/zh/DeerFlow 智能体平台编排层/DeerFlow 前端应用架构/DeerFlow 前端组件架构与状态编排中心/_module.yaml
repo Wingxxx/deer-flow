@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: frontend/components_library
-title: DeerFlow 前端组件架构与状态编排中心
-scope:
-    - frontend/src/components/
-source_files: []
-depends_on: []
-related_to: []

@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: frontend/core_library/core_mcp
-title: MCP 服务器配置管理
-scope:
-    - frontend/src/core/mcp/
-source_files: []
-depends_on: []
-related_to: []

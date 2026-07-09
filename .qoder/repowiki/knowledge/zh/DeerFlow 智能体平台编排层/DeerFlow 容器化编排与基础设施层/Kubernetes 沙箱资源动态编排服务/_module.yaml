@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: docker/provisioner
-title: Kubernetes 沙箱资源动态编排服务
-scope:
-    - docker/provisioner/
-source_files: []
-depends_on: []
-related_to: []

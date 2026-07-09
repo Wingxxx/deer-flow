@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: backend/channels_integrations
-title: 多渠道智能体接入与调度核心
-scope:
-    - backend/app/channels/
-source_files: []
-depends_on: []
-related_to: []

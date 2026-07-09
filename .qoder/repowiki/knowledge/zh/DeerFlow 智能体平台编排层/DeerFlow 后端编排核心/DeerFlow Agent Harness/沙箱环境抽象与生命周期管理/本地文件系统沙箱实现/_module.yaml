@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: backend/agent_harness/sandbox/local
-title: 本地文件系统沙箱实现
-scope:
-    - backend/packages/harness/deerflow/sandbox/local/
-source_files: []
-depends_on: []
-related_to: []

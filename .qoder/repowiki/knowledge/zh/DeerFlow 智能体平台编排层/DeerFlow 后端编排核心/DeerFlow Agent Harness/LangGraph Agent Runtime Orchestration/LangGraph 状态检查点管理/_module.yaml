@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: backend/agent_harness/runtime/checkpointer
-title: LangGraph 状态检查点管理
-scope:
-    - backend/packages/harness/deerflow/runtime/checkpointer/
-source_files: []
-depends_on: []
-related_to: []

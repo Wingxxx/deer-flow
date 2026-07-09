@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: backend/agent_harness/runtime/stream_bridge
-title: 流式事件桥接与 SSE 支持
-scope:
-    - backend/packages/harness/deerflow/runtime/stream_bridge/
-source_files: []
-depends_on: []
-related_to: []

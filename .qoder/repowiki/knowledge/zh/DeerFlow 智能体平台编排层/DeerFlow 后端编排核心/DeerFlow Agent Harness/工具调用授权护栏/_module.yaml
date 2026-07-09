@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: backend/agent_harness/guardrails
-title: 工具调用授权护栏
-scope:
-    - backend/packages/harness/deerflow/guardrails/
-source_files: []
-depends_on: []
-related_to: []

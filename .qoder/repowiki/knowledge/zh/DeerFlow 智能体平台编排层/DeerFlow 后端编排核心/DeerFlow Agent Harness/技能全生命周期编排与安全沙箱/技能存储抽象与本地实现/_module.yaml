@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: backend/agent_harness/skills/skill_storage
-title: 技能存储抽象与本地实现
-scope:
-    - backend/packages/harness/deerflow/skills/storage/
-source_files: []
-depends_on: []
-related_to: []

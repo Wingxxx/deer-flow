@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: frontend/core_library/core_agents
-title: 智能体管理模块
-scope:
-    - frontend/src/core/agents/
-source_files: []
-depends_on: []
-related_to: []

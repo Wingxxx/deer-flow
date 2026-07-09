@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: frontend/auth_app
-title: 认证与账户初始化
-scope:
-    - frontend/src/app/(auth)/
-    - frontend/src/app/ads-login/
-source_files: []
-depends_on: []
-related_to: []

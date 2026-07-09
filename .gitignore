@@ -69,10 +69,10 @@ release/
 
 .agent/
 .trae/
-# Qoder（仅保留 repowiki）
+# Qoder（仅追踪 Wiki 文章，不追踪 Knowledge 卡片）
 /.qoder/*
-!/.qoder/repowiki/
-!/.qoder/repowiki/**
+!/.qoder/repowiki/zh/content/
+!/.qoder/repowiki/wiki_plan.yaml
 ads-agent-mcp/
 ads-agent-mcp/.ads-mcp/config.json
 training_logs/*

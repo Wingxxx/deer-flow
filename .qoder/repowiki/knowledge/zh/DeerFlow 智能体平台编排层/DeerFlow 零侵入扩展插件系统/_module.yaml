@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: deerflow_extensions
-title: DeerFlow 零侵入扩展插件系统
-scope:
-    - deerflow_extensions/
-source_files: []
-depends_on: []
-related_to: []

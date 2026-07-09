@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: backend/gateway_api/auth
-title: 认证与用户管理模块
-scope:
-    - backend/app/gateway/auth/
-source_files: []
-depends_on: []
-related_to: []

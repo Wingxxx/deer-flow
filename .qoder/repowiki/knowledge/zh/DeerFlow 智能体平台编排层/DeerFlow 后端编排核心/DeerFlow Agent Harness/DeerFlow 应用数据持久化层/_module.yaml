@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: backend/agent_harness/persistence
-title: DeerFlow 应用数据持久化层
-scope:
-    - backend/packages/harness/deerflow/persistence/
-source_files: []
-depends_on: []
-related_to: []

@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: backend/agent_harness/skills/skill_core
-title: 技能全生命周期管理核心
-scope:
-    - backend/packages/harness/deerflow/skills/
-source_files: []
-depends_on: []
-related_to: []

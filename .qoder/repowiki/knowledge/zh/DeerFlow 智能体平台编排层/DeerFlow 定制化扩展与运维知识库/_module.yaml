@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: docs
-title: DeerFlow 定制化扩展与运维知识库
-scope:
-    - docs/
-source_files: []
-depends_on: []
-related_to: []

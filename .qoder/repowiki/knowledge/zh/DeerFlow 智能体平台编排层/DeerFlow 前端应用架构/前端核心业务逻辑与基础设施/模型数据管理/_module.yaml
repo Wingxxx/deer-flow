@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: frontend/core_library/core_models
-title: 模型数据管理
-scope:
-    - frontend/src/core/models/
-source_files: []
-depends_on: []
-related_to: []

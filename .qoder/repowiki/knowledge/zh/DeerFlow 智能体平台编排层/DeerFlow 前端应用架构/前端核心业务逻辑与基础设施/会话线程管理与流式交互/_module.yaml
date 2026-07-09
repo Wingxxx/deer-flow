@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: frontend/core_library/core_threads
-title: 会话线程管理与流式交互
-scope:
-    - frontend/src/core/threads/
-source_files: []
-depends_on: []
-related_to: []

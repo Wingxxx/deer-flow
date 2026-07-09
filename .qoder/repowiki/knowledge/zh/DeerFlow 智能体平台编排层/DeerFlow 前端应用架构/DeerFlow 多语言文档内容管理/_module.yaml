@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: frontend/content_docs
-title: DeerFlow 多语言文档内容管理
-scope:
-    - frontend/src/content/
-source_files: []
-depends_on: []
-related_to: []

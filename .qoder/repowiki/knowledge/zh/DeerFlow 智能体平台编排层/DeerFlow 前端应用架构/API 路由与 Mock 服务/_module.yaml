@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: frontend/api_routes
-title: API 路由与 Mock 服务
-scope:
-    - frontend/src/app/api/
-    - frontend/src/app/mock/
-source_files: []
-depends_on: []
-related_to: []
