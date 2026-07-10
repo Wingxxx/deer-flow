@@ -81,36 +81,49 @@ fi
 
 NEXT_CONFIG_BUILD_OUTPUT=standalone SKIP_ENV_VALIDATION=1 pnpm build
 
-# ── 修复 pnpm strict mode + Next.js standalone 依赖解析 ─────────────────────
+# ── 泛化依赖完整性修复 ──────────────────────────────────────────────────
+# 替代之前按包修补（@swc/helpers、@next/env）的零散逻辑。
+# 根因：pnpm 严格模式下，Next.js standalone trace (@vercel/nft) 会遗漏
+# 部分包的追踪，导致运行时 MODULE_NOT_FOUND。
+# 修复方式：构建后自动扫描 next 声明的运行时依赖，缺失的从 pnpm store 补齐。
 #
-# 根因：Next.js standalone trace (@vercel/nft) 在 pnpm 严格模式下存在两个断层：
-#   (1) @swc/helpers 的 _/ 入口代理目录（836KB, ~100 个 package.json）未被追踪，
-#       导致 require('@swc/helpers/_/_interop_require_default') 无法找到入口
-#   (2) node_modules/ 顶层缺少 @swc/helpers symlink，Node.js CJS 解析器无法定位包
-#
-# 触发场景：运维从 56 复制 release/ 到其他服务器时，standalone 缺少完整依赖拓扑
-# 修复方式：从本地完整 node_modules/.pnpm store 补缺 _/ 目录 → 补建顶层 symlink
-#
+echo "  验证 standalone 依赖完整性..."
 FULL_NM="$REPO_ROOT/frontend/node_modules"
 STANDALONE_NM="$REPO_ROOT/frontend/.next/standalone/node_modules"
-NEXT_SWC_VERSION=$(node -e "try{console.log(require('$STANDALONE_NM/next/package.json').dependencies['@swc/helpers'])}catch(e){console.log('')}")
-if [ -n "$NEXT_SWC_VERSION" ]; then
-  SWC_SRC="$FULL_NM/.pnpm/@swc+helpers@${NEXT_SWC_VERSION}/node_modules/@swc/helpers"
-  SWC_DST="$STANDALONE_NM/.pnpm/@swc+helpers@${NEXT_SWC_VERSION}/node_modules/@swc/helpers"
-  if [ -d "$SWC_SRC/_" ] && [ -d "$SWC_DST/cjs" ]; then
-    # (1) 补缺 _/ 入口代理目录（每个子目录是一个 package.json 指向 cjs/_*.cjs）
-    if [ ! -d "$SWC_DST/_" ]; then
-      cp -r "$SWC_SRC/_" "$SWC_DST/_"
+STANDALONE_NEXT_PKG="$STANDALONE_NM/next/package.json"
+
+FIXED_COUNT=0
+if [ -f "$STANDALONE_NEXT_PKG" ]; then
+  while IFS= read -r pkg_name; do
+    # 跳过 next 自身及其 peerDependency（如 react、react-dom）
+    case "$pkg_name" in
+      next|react|react-dom) continue ;;
+    esac
+    if node -e "require.resolve('$pkg_name',{paths:['$STANDALONE_NM']})" 2>/dev/null; then
+      continue
     fi
-    # (2) 补建顶层 @swc/helpers symlink
-    SWC_LINK_DIR="$STANDALONE_NM/@swc"
-    SWC_LINK="$SWC_LINK_DIR/helpers"
-    mkdir -p "$SWC_LINK_DIR"
-    ln -sfn "../.pnpm/@swc+helpers@${NEXT_SWC_VERSION}/node_modules/@swc/helpers" "$SWC_LINK"
-    echo "  ✓ 已修复 @swc/helpers standalone 依赖 (v${NEXT_SWC_VERSION}): 补缺 _/ 目录 + 顶层 symlink"
-  else
-    echo "  ⚠ @swc/helpers@${NEXT_SWC_VERSION} 源或目标不完整，跳过修复"
-  fi
+    # 在 pnpm store 中查找该包并复制到 standalone
+    STORE_PATH=$(find "$FULL_NM/.pnpm" -maxdepth 4 -path "*/node_modules/$pkg_name" -type d 2>/dev/null | head -1)
+    if [ -n "$STORE_PATH" ] && [ -d "$STORE_PATH" ]; then
+      TARGET="$STANDALONE_NM/$pkg_name"
+      mkdir -p "$(dirname "$TARGET")"
+      cp -r "$STORE_PATH" "$TARGET"
+      echo "  ✓ 已修复缺失依赖: $pkg_name"
+      FIXED_COUNT=$((FIXED_COUNT + 1))
+    else
+      echo "  ⚠ 在 pnpm store 中找不到 $pkg_name，跳过"
+    fi
+  done < <(node -e "
+    const p = require('$STANDALONE_NEXT_PKG');
+    const deps = {...(p.dependencies||{}), ...(p.optionalDependencies||{})};
+    Object.keys(deps).forEach(k => console.log(k));
+  ")
+fi
+
+if [ "$FIXED_COUNT" -gt 0 ]; then
+  echo "  ✓ 共修复 $FIXED_COUNT 个缺失依赖"
+else
+  echo "  ✓ 所有依赖完整，无需修复"
 fi
 
 echo "  复制前端构建产物（standalone 模式 = 无源码 + 无 node_modules）..."
