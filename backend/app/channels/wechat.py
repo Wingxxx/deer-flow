@@ -656,11 +656,11 @@ class WechatChannel(Channel):
 
         state = await self._connection_repo.consume_oauth_state(provider="wechat", state=code)
         if state is None:
-            await self._send_connection_reply(chat_id, context_token, "WeChat connection code is invalid or expired.")
+            await self._send_connection_reply(chat_id, context_token, "微信连接码无效或已过期。")
             return True
 
         if not chat_id:
-            await self._send_connection_reply(chat_id, context_token, "WeChat connection could not be completed from this message.")
+            await self._send_connection_reply(chat_id, context_token, "无法通过此消息完成微信连接。")
             return True
 
         await self._connection_repo.upsert_connection(
@@ -673,7 +673,7 @@ class WechatChannel(Channel):
             },
             status="connected",
         )
-        await self._send_connection_reply(chat_id, context_token, "WeChat connected to DeerFlow.")
+        await self._send_connection_reply(chat_id, context_token, "微信已连接到 DeerFlow。")
         return True
 
     async def _send_connection_reply(self, chat_id: str, context_token: str, text: str) -> None:

@@ -500,7 +500,7 @@ class DingTalkChannel(Channel):
                 conversation_type,
                 sender_staff_id,
                 conversation_id,
-                "DingTalk connection code is invalid or expired.",
+                "钉钉连接码无效或已过期。",
             )
             return True
 
@@ -509,7 +509,7 @@ class DingTalkChannel(Channel):
                 conversation_type,
                 sender_staff_id,
                 conversation_id,
-                "DingTalk connection could not be completed from this message.",
+                "无法通过此消息完成钉钉连接。",
             )
             return True
 
@@ -529,7 +529,7 @@ class DingTalkChannel(Channel):
             conversation_type,
             sender_staff_id,
             conversation_id,
-            "DingTalk connected to DeerFlow.",
+            "钉钉已连接到 DeerFlow。",
         )
         return True
 
@@ -552,7 +552,7 @@ class DingTalkChannel(Channel):
         conversation_type = inbound.metadata.get("conversation_type", _CONVERSATION_TYPE_P2P)
         sender_staff_id = inbound.metadata.get("sender_staff_id", "")
         conversation_id = inbound.metadata.get("conversation_id", "")
-        text = "\u23f3 Working on it..."
+        text = "\u23f3 正在处理..."
 
         try:
             if self._card_template_id:

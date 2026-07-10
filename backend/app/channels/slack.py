@@ -250,7 +250,7 @@ class SlackChannel(Channel):
         try:
             self._web_client.chat_postMessage(
                 channel=channel_id,
-                text=":hourglass_flowing_sand: Working on it...",
+                text=":hourglass_flowing_sand: 正在处理...",
                 thread_ts=thread_ts,
             )
             logger.info("[Slack] 'Working on it...' reply sent in channel=%s, thread_ts=%s", channel_id, thread_ts)
@@ -376,12 +376,12 @@ class SlackChannel(Channel):
         thread_ts = str(event.get("thread_ts") or event.get("ts") or "")
         state = await self._connection_repo.consume_oauth_state(provider="slack", state=code)
         if state is None:
-            await self._post_connection_reply(channel_id, "Slack connection code is invalid or expired.", thread_ts)
+            await self._post_connection_reply(channel_id, "Slack 连接码无效或已过期。", thread_ts)
             return True
 
         user_id = str(event.get("user") or "")
         if not user_id or not team_id:
-            await self._post_connection_reply(channel_id, "Slack connection could not be completed from this message.", thread_ts)
+            await self._post_connection_reply(channel_id, "无法通过此消息完成 Slack 连接。", thread_ts)
             return True
 
         await self._connection_repo.upsert_connection(
@@ -395,7 +395,7 @@ class SlackChannel(Channel):
             },
             status="connected",
         )
-        await self._post_connection_reply(channel_id, "Slack connected to DeerFlow.", thread_ts)
+        await self._post_connection_reply(channel_id, "Slack 已连接到 DeerFlow。", thread_ts)
         return True
 
     async def _post_connection_reply(self, channel_id: str, text: str, thread_ts: str | None = None) -> None:

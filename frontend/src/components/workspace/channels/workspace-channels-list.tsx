@@ -1,12 +1,6 @@
 "use client";
 
-// 🚫 渠道列表已隐藏——原因：根据需求隐藏左侧「渠道」和 WeCom
-// 🚫 如需恢复，删除下方注释并删除本文件末尾的空白导出即可。
-export function WorkspaceChannelsList() {
-  return null;
-}
 
-/*
 import { CheckIcon, LoaderCircleIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -220,4 +214,3 @@ export function WorkspaceChannelsList() {
     </SidebarGroup>
   );
 }
-*/

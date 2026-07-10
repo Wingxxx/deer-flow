@@ -462,7 +462,7 @@ class DiscordChannel(Channel):
 
         state = await self._connection_repo.consume_oauth_state(provider="discord", state=code)
         if state is None:
-            await self._send_connection_reply(message, "Discord connection code is invalid or expired.")
+            await self._send_connection_reply(message, "Discord 连接码无效或已过期。")
             return True
 
         guild = getattr(message, "guild", None)
@@ -470,7 +470,7 @@ class DiscordChannel(Channel):
         author = getattr(message, "author", None)
         user_id = str(getattr(author, "id", "") or "")
         if not user_id:
-            await self._send_connection_reply(message, "Discord connection could not be completed from this message.")
+            await self._send_connection_reply(message, "无法通过此消息完成 Discord 连接。")
             return True
 
         guild_id = str(getattr(guild, "id", "") or "") or None
@@ -487,7 +487,7 @@ class DiscordChannel(Channel):
             },
             status="connected",
         )
-        await self._send_connection_reply(message, "Discord connected to DeerFlow.")
+        await self._send_connection_reply(message, "Discord 已连接到 DeerFlow。")
         return True
 
     @staticmethod

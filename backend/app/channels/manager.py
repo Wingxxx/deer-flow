@@ -60,9 +60,9 @@ STREAM_UPDATE_MIN_INTERVAL_SECONDS = 0.35
 # Platform) deliver the requested "messages-tuple" mode as event "messages".
 STREAM_MODES = ["messages-tuple", "values"]
 MESSAGE_STREAM_EVENTS = ("messages-tuple", "messages")
-THREAD_BUSY_MESSAGE = "This conversation is already processing another request. Please wait for it to finish and try again."
-BOUND_IDENTITY_REQUIRED_MESSAGE = "Connect this channel from DeerFlow Settings, complete the in-channel connect step, then send your message again."
-BOUND_IDENTITY_UNAVAILABLE_MESSAGE = "Channel connection verification is temporarily unavailable. Please try again later or contact the DeerFlow operator."
+THREAD_BUSY_MESSAGE = "当前会话正在处理其他请求，请等待完成后重试。"
+BOUND_IDENTITY_REQUIRED_MESSAGE = "请先在 DeerFlow 设置中完成渠道连接码绑定，再发送消息。"
+BOUND_IDENTITY_UNAVAILABLE_MESSAGE = "渠道连接验证暂时不可用，请稍后重试或联系 DeerFlow 管理员。"
 INBOUND_DEDUPE_TTL_SECONDS = 10 * 60
 INBOUND_DEDUPE_MAX_ENTRIES = 4096
 # Only server-stable provider message ids: client-generated ids (client_msg_id,
@@ -196,9 +196,9 @@ def _normalize_custom_agent_name(raw_value: str) -> str:
     """Normalize legacy channel assistant IDs into valid custom agent names."""
     normalized = raw_value.strip().lower().replace("_", "-")
     if not normalized:
-        raise InvalidChannelSessionConfigError("Channel session assistant_id is empty. Use 'lead_agent' or a valid custom agent name.")
+        raise InvalidChannelSessionConfigError("渠道会话 assistant_id 为空。请使用 'lead_agent' 或有效的自定义 Agent 名称。")
     if not CUSTOM_AGENT_NAME_PATTERN.fullmatch(normalized):
-        raise InvalidChannelSessionConfigError(f"Invalid channel session assistant_id {raw_value!r}. Use 'lead_agent' or a custom agent name containing only letters, digits, and hyphens.")
+        raise InvalidChannelSessionConfigError(f"无效的渠道会话 assistant_id {raw_value!r}。请使用 'lead_agent' 或仅包含字母、数字和连字符的自定义 Agent 名称。")
     return normalized
 
 
@@ -467,8 +467,8 @@ def _format_artifact_text(artifacts: list[str]) -> str:
 
     filenames = [posixpath.basename(p) for p in artifacts]
     if len(filenames) == 1:
-        return f"Created File: 📎 {filenames[0]}"
-    return "Created Files: 📎 " + "、".join(filenames)
+        return f"创建文件: 📎 {filenames[0]}"
+    return "创建文件: 📎 " + "、".join(filenames)
 
 
 _OUTPUTS_VIRTUAL_PREFIX = "/mnt/user-data/outputs/"
@@ -477,8 +477,8 @@ _OUTPUTS_VIRTUAL_PREFIX = "/mnt/user-data/outputs/"
 def _unknown_command_reply(command: str | None = None) -> str:
     available = " | ".join(sorted(KNOWN_CHANNEL_COMMANDS))
     if command:
-        return f"Unknown command: /{command}. Available commands: {available}"
-    return f"Unknown command. Available commands: {available}"
+        return f"未知命令: /{command}。可用命令: {available}"
+    return f"未知命令。可用命令: {available}"
 
 
 def _human_input_message(content: str, *, original_content: str | None = None) -> dict[str, Any]:
@@ -569,14 +569,14 @@ def _resolve_slash_skill_command(
         if skill is None:
             return None
         if not skill.enabled:
-            return _SlashSkillCommandResolution(failure_message=f"Skill `/{reference.name}` is installed but disabled. Enable it before using slash activation.")
+            return _SlashSkillCommandResolution(failure_message=f"Skill `/{reference.name}` 已安装但已禁用。启用后才能使用斜杠激活。")
         if available_skills is not None and reference.name not in available_skills:
-            return _SlashSkillCommandResolution(failure_message=f"Skill `/{reference.name}` is not available for this agent.")
+            return _SlashSkillCommandResolution(failure_message=f"Skill `/{reference.name}` 对此 Agent 不可用。")
 
         return _SlashSkillCommandResolution(route_to_chat=True)
     except Exception as exc:
         logger.exception("[Manager] failed to resolve slash skill command")
-        raise SlashSkillCommandResolutionError("Failed to resolve slash skill command. Please check the skill configuration.") from exc
+        raise SlashSkillCommandResolutionError("解析斜杠技能命令失败。请检查技能配置。") from exc
 
 
 def _resolve_attachments(thread_id: str, artifacts: list[str], *, user_id: str | None = None) -> list[ResolvedAttachment]:
@@ -1103,7 +1103,7 @@ class ChannelManager:
             # redelivery of the same message can recover instead of being dropped
             # for the dedupe TTL.
             self._release_inbound_dedupe_key(msg)
-            await self._send_error(msg, "An internal error occurred. Please try again.")
+            await self._send_error(msg, "发生内部错误，请重试。")
 
     # -- chat handling -----------------------------------------------------
 
@@ -1449,9 +1449,9 @@ class ChannelManager:
                     if _is_thread_busy_error(stream_error):
                         response_text = THREAD_BUSY_MESSAGE
                     else:
-                        response_text = "An error occurred while processing your request. Please try again."
+                        response_text = "处理请求时发生错误，请重试。"
                 else:
-                    response_text = latest_text or "(No response from agent)"
+                    response_text = latest_text or "（Agent 无响应）"
 
             logger.info(
                 "[Manager] streaming response completed: thread_id=%s, response_len=%d, artifacts=%d, error=%s",
@@ -1507,7 +1507,7 @@ class ChannelManager:
         if reply is None and command == "bootstrap":
             from dataclasses import replace as _dc_replace
 
-            chat_text = parts[1] if len(parts) > 1 else "Initialize workspace"
+            chat_text = parts[1] if len(parts) > 1 else "初始化工作区"
             chat_msg = _dc_replace(msg, text=chat_text, msg_type=InboundMessageType.CHAT)
             await self._handle_chat(chat_msg, extra_context={"is_bootstrap": True}, bound_identity_checked=True)
             return
@@ -1516,24 +1516,24 @@ class ChannelManager:
             # Create a new thread through Gateway
             client = self._get_client()
             await self._create_thread(client, msg)
-            reply = "New conversation started."
+            reply = "新会话已开始。"
         elif reply is None and command == "status":
             thread_id = await self._lookup_thread_id(msg)
-            reply = f"Active thread: {thread_id}" if thread_id else "No active conversation."
+            reply = f"当前活跃线程: {thread_id}" if thread_id else "当前无活跃会话。"
         elif reply is None and command == "models":
             reply = await self._fetch_gateway("/api/models", "models", msg=msg)
         elif reply is None and command == "memory":
             reply = await self._fetch_gateway("/api/memory", "memory", msg=msg)
         elif reply is None and command == "help":
             reply = (
-                "Available commands:\n"
-                "/bootstrap — Start a bootstrap session (enables agent setup)\n"
-                "/new — Start a new conversation\n"
-                "/status — Show current thread info\n"
-                "/models — List available models\n"
-                "/memory — Show memory status\n"
-                "/<skill-name> <task> — Activate an enabled skill for one turn\n"
-                "/help — Show this help"
+                "可用命令:\n"
+                "/bootstrap — 启动引导会话（启用 Agent 设置）\n"
+                "/new — 开始新会话\n"
+                "/status — 查看当前线程信息\n"
+                "/models — 列出可用模型\n"
+                "/memory — 查看记忆状态\n"
+                "/<skill-name> <task> — 启用指定技能执行一次\n"
+                "/help — 显示此帮助"
             )
         elif reply is None:
             slash_resolution = await asyncio.to_thread(
@@ -1582,14 +1582,14 @@ class ChannelManager:
                 data = resp.json()
         except Exception:
             logger.exception("Failed to fetch %s from gateway", kind)
-            return f"Failed to fetch {kind} information."
+            return f"获取{kind}信息失败。"
 
         if kind == "models":
             names = [m["name"] for m in data.get("models", [])]
-            return ("Available models:\n" + "\n".join(f"• {n}" for n in names)) if names else "No models configured."
+            return ("可用模型:\n" + "\n".join(f"• {n}" for n in names)) if names else "未配置模型。"
         elif kind == "memory":
             facts = data.get("facts", [])
-            return f"Memory contains {len(facts)} fact(s)."
+            return f"记忆包含 {len(facts)} 条事实。"
         return str(data)
 
     # -- error helper ------------------------------------------------------

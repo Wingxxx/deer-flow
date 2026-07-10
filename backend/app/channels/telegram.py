@@ -342,13 +342,13 @@ class TelegramChannel(Channel):
             bot = self._application.bot
             sent = await bot.send_message(
                 chat_id=int(chat_id),
-                text="Working on it...",
+                text="正在处理...",
                 reply_to_message_id=reply_to_message_id,
             )
             self._register_stream_message(
                 self._stream_key(chat_id, str(reply_to_message_id)),
                 message_id=sent.message_id,
-                last_text="Working on it...",
+                last_text="正在处理...",
                 last_edit_at=0.0,
             )
             logger.info("[Telegram] 'Working on it...' reply sent in chat=%s", chat_id)
@@ -401,7 +401,7 @@ class TelegramChannel(Channel):
 
         state = await self._connection_repo.consume_oauth_state(provider="telegram", state=state_token)
         if state is None:
-            await update.message.reply_text("Telegram connection link is invalid or expired.")
+            await update.message.reply_text("Telegram 连接链接无效或已过期。")
             return True
 
         owner_user_id = state["owner_user_id"]
@@ -422,7 +422,7 @@ class TelegramChannel(Channel):
             status="connected",
         )
         logger.info("[Telegram] bound chat=%s user=%s to DeerFlow user=%s connection=%s", chat_id, user_id, owner_user_id, connection["id"])
-        await update.message.reply_text("Telegram connected to DeerFlow.")
+        await update.message.reply_text("Telegram 已连接到 DeerFlow。")
         return True
 
     async def _attach_connection_identity(self, inbound: InboundMessage) -> InboundMessage:
@@ -471,7 +471,7 @@ class TelegramChannel(Channel):
                 return
         if not self._check_user(update.effective_user.id):
             return
-        await update.message.reply_text("Welcome to DeerFlow! Send me a message to start a conversation.\nType /help for available commands.")
+        await update.message.reply_text("欢迎使用 DeerFlow！发送消息开始对话。\n输入 /help 查看可用命令。")
 
     async def _process_incoming_with_reply(self, chat_id: str, msg_id: int, inbound: InboundMessage) -> None:
         await self._send_running_reply(chat_id, msg_id)

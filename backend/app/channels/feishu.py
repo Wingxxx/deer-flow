@@ -287,7 +287,7 @@ class FeishuChannel(Channel):
             request = self._CreateImageRequest.builder().request_body(self._CreateImageRequestBody.builder().image_type("message").image(f).build()).build()
             response = await asyncio.to_thread(self._api_client.im.v1.image.create, request)
         if not response.success():
-            raise RuntimeError(f"Feishu image upload failed: code={response.code}, msg={response.msg}")
+            raise RuntimeError(f"飞书图片上传失败: code={response.code}, msg={response.msg}")
         return response.data.image_key
 
     async def _upload_file(self, path, filename: str) -> str:
@@ -308,7 +308,7 @@ class FeishuChannel(Channel):
             request = self._CreateFileRequest.builder().request_body(self._CreateFileRequestBody.builder().file_type(file_type).file_name(filename).file(f).build()).build()
             response = await asyncio.to_thread(self._api_client.im.v1.file.create, request)
         if not response.success():
-            raise RuntimeError(f"Feishu file upload failed: code={response.code}, msg={response.msg}")
+            raise RuntimeError(f"飞书文件上传失败: code={response.code}, msg={response.msg}")
         return response.data.file_key
 
     async def receive_file(self, msg: InboundMessage, thread_id: str, *, user_id: str | None = None) -> InboundMessage:
@@ -352,7 +352,7 @@ class FeishuChannel(Channel):
             response = await asyncio.to_thread(inner)
         except Exception:
             logger.exception("[Feishu] resource get request failed for resource_key=%s type=%s", file_key, type)
-            return f"Failed to obtain the [{type}]"
+            return f"获取[{type}]失败"
 
         if not response.success():
             logger.warning(
@@ -363,22 +363,22 @@ class FeishuChannel(Channel):
                 response.msg,
                 response.get_log_id(),
             )
-            return f"Failed to obtain the [{type}]"
+            return f"获取[{type}]失败"
 
         image_stream = getattr(response, "file", None)
         if image_stream is None:
             logger.warning("[Feishu] resource get returned no file stream: resource_key=%s, type=%s", file_key, type)
-            return f"Failed to obtain the [{type}]"
+            return f"获取[{type}]失败"
 
         try:
             content: bytes = await asyncio.to_thread(image_stream.read)
         except Exception:
             logger.exception("[Feishu] failed to read resource stream: resource_key=%s, type=%s", file_key, type)
-            return f"Failed to obtain the [{type}]"
+            return f"获取[{type}]失败"
 
         if not content:
             logger.warning("[Feishu] empty resource content: resource_key=%s, type=%s", file_key, type)
-            return f"Failed to obtain the [{type}]"
+            return f"获取[{type}]失败"
 
         paths = get_paths()
         effective_user_id = user_id or get_effective_user_id()
@@ -406,7 +406,7 @@ class FeishuChannel(Channel):
             await asyncio.to_thread(down_load)
         except Exception:
             logger.exception("[Feishu] failed to persist downloaded resource: %s, type=%s", resolved_target, type)
-            return f"Failed to obtain the [{type}]"
+            return f"获取[{type}]失败"
 
         virtual_path = f"{VIRTUAL_PATH_PREFIX}/uploads/{resolved_target.name}"
 
@@ -417,11 +417,11 @@ class FeishuChannel(Channel):
                 sandbox = sandbox_provider.get(sandbox_id)
                 if sandbox is None:
                     logger.warning("[Feishu] sandbox not found for thread_id=%s", thread_id)
-                    return f"Failed to obtain the [{type}]"
+                    return f"获取[{type}]失败"
                 sandbox.update_file(virtual_path, content)
         except Exception:
             logger.exception("[Feishu] failed to sync resource into non-local sandbox: %s", virtual_path)
-            return f"Failed to obtain the [{type}]"
+            return f"获取[{type}]失败"
 
         logger.info("[Feishu] downloaded resource mapped: file_key=%s -> %s", file_key, virtual_path)
         return virtual_path
@@ -502,7 +502,7 @@ class FeishuChannel(Channel):
             logger.warning("[Feishu] running card creation returned no message_id for source=%s, subsequent updates will fall back to new replies", source_message_id)
         return running_card_id
 
-    def _ensure_running_card_started(self, source_message_id: str, text: str = "Working on it...") -> asyncio.Task | None:
+    def _ensure_running_card_started(self, source_message_id: str, text: str = "正在处理...") -> asyncio.Task | None:
         """Start running-card creation once per source message."""
         running_card_id = self._running_card_ids.get(source_message_id)
         if running_card_id:
@@ -522,7 +522,7 @@ class FeishuChannel(Channel):
             self._running_card_tasks.pop(source_message_id, None)
         self._log_task_error(task, "create_running_card", source_message_id)
 
-    async def _ensure_running_card(self, source_message_id: str, text: str = "Working on it...") -> str | None:
+    async def _ensure_running_card(self, source_message_id: str, text: str = "正在处理...") -> str | None:
         """Ensure the in-thread running card exists and track its message ID."""
         running_card_id = self._running_card_ids.get(source_message_id)
         if running_card_id:
@@ -749,11 +749,11 @@ class FeishuChannel(Channel):
 
         state = await self._connection_repo.consume_oauth_state(provider="feishu", state=code)
         if state is None:
-            await self._reply_card(message_id, "Feishu connection code is invalid or expired.")
+            await self._reply_card(message_id, "飞书连接码无效或已过期。")
             return True
 
         if not user_id or not chat_id:
-            await self._reply_card(message_id, "Feishu connection could not be completed from this message.")
+            await self._reply_card(message_id, "无法通过此消息完成飞书连接。")
             return True
 
         await self._connection_repo.upsert_connection(
@@ -767,7 +767,7 @@ class FeishuChannel(Channel):
             },
             status="connected",
         )
-        await self._reply_card(message_id, "Feishu connected to DeerFlow.")
+        await self._reply_card(message_id, "飞书已连接到 DeerFlow。")
         return True
 
     def _on_message(self, event) -> None:

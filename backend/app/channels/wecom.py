@@ -30,7 +30,7 @@ class WeComChannel(Channel):
         self._ws_task: asyncio.Task | None = None
         self._ws_frames: dict[str, dict[str, Any]] = {}
         self._ws_stream_ids: dict[str, str] = {}
-        self._working_message = "Working on it..."
+        self._working_message = "正在处理..."
 
     @property
     def supports_streaming(self) -> bool:
@@ -64,7 +64,7 @@ class WeComChannel(Channel):
 
         self._bot_id = bot_id if isinstance(bot_id, str) and bot_id else None
         self._bot_secret = bot_secret if isinstance(bot_secret, str) and bot_secret else None
-        self._working_message = working_message if isinstance(working_message, str) and working_message else "Working on it..."
+        self._working_message = working_message if isinstance(working_message, str) and working_message else "正在处理..."
 
         if not self._bot_id or not self._bot_secret:
             logger.error("WeCom channel requires bot_id and bot_secret")
@@ -347,11 +347,11 @@ class WeComChannel(Channel):
 
         state = await self._connection_repo.consume_oauth_state(provider="wecom", state=code)
         if state is None:
-            await self._send_connection_reply(frame, "WeCom connection code is invalid or expired.")
+            await self._send_connection_reply(frame, "企业微信连接码无效或已过期。")
             return True
 
         if not user_id:
-            await self._send_connection_reply(frame, "WeCom connection could not be completed from this message.")
+            await self._send_connection_reply(frame, "无法通过此消息完成企业微信连接。")
             return True
 
         body = frame.get("body", {}) or {}
@@ -367,7 +367,7 @@ class WeComChannel(Channel):
             },
             status="connected",
         )
-        await self._send_connection_reply(frame, "WeCom connected to DeerFlow.")
+        await self._send_connection_reply(frame, "企业微信已连接到 DeerFlow。")
         return True
 
     async def _send_connection_reply(self, frame: dict[str, Any], text: str) -> None:
