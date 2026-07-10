@@ -1,6 +1,6 @@
 "use client";
 
-import { MonitorSmartphoneIcon, MoonIcon, SunIcon } from "lucide-react";
+import { GlobeIcon, MonitorSmartphoneIcon, MoonIcon, PaletteIcon, SunIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useMemo, type ComponentType, type SVGProps } from "react";
 
@@ -57,6 +57,7 @@ export function AppearanceSettingsPage() {
     <div className="space-y-8">
       <SettingsSection
         title={t.settings.appearance.themeTitle}
+        icon={PaletteIcon}
       >
         <div className="grid gap-3 lg:grid-cols-3">
           {themeOptions.map((option) => (
@@ -76,6 +77,7 @@ export function AppearanceSettingsPage() {
 
       <SettingsSection
         title={t.settings.appearance.languageTitle}
+        icon={GlobeIcon}
       >
         <Select
           value={locale}

@@ -30,7 +30,7 @@ export function AccountSettingsPage() {
 
   return (
     <div className="flex flex-col space-y-8 w-full">
-      <SettingsSection title={t.settings.account.profileTitle}>
+      <SettingsSection title={t.settings.account.profileTitle} icon={UserIcon}>
         <div className="flex flex-col items-center gap-6 mt-8 mb-6">
           {/* 通用个人信息图标 - 渐变背景 */}
           <div className="flex size-[80px] items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 shadow-sm">

@@ -48,7 +48,7 @@ export function WorkspaceHeader({ className }: { className?: string }) {
           const title = titleOfThread(thread).toLowerCase();
           return title.includes(q);
         })
-      : threads;
+      : threads.slice(0, 8);
     return [...source].sort((a, b) => {
       const aPinned = pinnedIds.indexOf(a.thread_id);
       const bPinned = pinnedIds.indexOf(b.thread_id);
