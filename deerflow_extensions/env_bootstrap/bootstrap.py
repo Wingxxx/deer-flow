@@ -265,7 +265,7 @@ def _rewrite_extensions_config_ads_paths(project_root: str) -> bool:
         _logger.warning("[EnvBootstrap] Failed to read extensions_config.json: %s", e)
         return False
 
-    ads = config.get("mcpServers", {}).get("ads")
+    ads = config.get("mcpServers", {}).get("mcp-server")
     if not ads:
         _logger.debug("[EnvBootstrap] No 'ads' MCP server entry, skip")
         return False
@@ -277,7 +277,7 @@ def _rewrite_extensions_config_ads_paths(project_root: str) -> bool:
             # 锁内重读，获取最新版本
             with open(config_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
-            ads = config.setdefault("mcpServers", {}).setdefault("ads", {})
+            ads = config.setdefault("mcpServers", {}).setdefault("mcp-server", {})
 
             changes: list[str] = []
 
