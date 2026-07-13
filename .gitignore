@@ -73,8 +73,6 @@ release/
 /.qoder/*
 !/.qoder/repowiki/zh/content/
 !/.qoder/repowiki/wiki_plan.yaml
-ads-agent-mcp/
-ads-agent-mcp/.ads-mcp/config.json
 mcp-agent-mcp/
 mcp-agent-mcp/.mcp-server/config.json
 training_logs/*

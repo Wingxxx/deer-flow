@@ -1,33 +1,5 @@
 {
-  "mcpInterceptors": [
-    "my_package.mcp.auth:build_auth_interceptor"
-  ],
   "mcpServers": {
-    "github": {
-      "enabled": false,
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-github"
-      ],
-      "env": {
-        "GITHUB_TOKEN": "$GITHUB_TOKEN"
-      },
-      "description": "GitHub MCP server for repository operations"
-    },
-    "postgres": {
-      "enabled": false,
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-postgres",
-        "postgresql://localhost/mydb"
-      ],
-      "env": {},
-      "description": "PostgreSQL database access"
-    },
     "#": "── 以下为部署示例（使用相对路径 + cwd 绑定确保路径稳定） ──",
     "mcp-server": {
       "enabled": true,
@@ -36,18 +8,16 @@
       "args": [
         "mcp-agent-mcp/dist/index.js"
       ],
-      "cwd": "$DEER_FLOW_PROJECT_ROOT",
       "env": {
-        "MCP_API_BASE_URL": "$MCP_API_BASE_URL",
-        "MCP_CONFIG_PATH": "mcp-agent-mcp/.mcp-server/config.json"
+        "ADS_CONFIG_PATH": "mcp-agent-mcp/.mcp-server/config.json"
       },
-      "description": "云桌面管理系统"
+      "description": "云桌面管理系统 - 支持终端列表查询、批量开关机、重启锁定、用户管理、镜像管理、策略管理、部门管理"
     },
     "deeprag": {
       "enabled": true,
       "type": "http",
-      "url": "$DEEPRAG_MCP_URL",
-      "description": "DeepRAG 知识库检索引擎"
+      "url": "http://127.0.0.1:86/mcp",
+      "description": "DeepRAG 知识库检索 - 支持文件检索、搜索、同步等功能"
     }
   },
   "skills": {

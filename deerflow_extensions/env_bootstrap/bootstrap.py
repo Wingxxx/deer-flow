@@ -73,7 +73,7 @@ def _resolve_project_root() -> str | None:
 def _resolve_ads_config() -> str | None:
     """基于 DEER_FLOW_PROJECT_ROOT 定位 ads-mcp 配置路径。
 
-    ADS MCP 的 config.json 一定位于项目根的 ads-agent-mcp/.ads-mcp/ 下，
+    ADS MCP 的 config.json 一定位于项目根的 mcp-agent-mcp/.mcp-server/ 下，
     `DEER_FLOW_PROJECT_ROOT` 已在 bootstrap_all() 中先于本 resolver 写入
     `_bootstrap_cache`（见 _BOOTSTRAP_VARS 顺序），不依赖 os.environ。
 
@@ -86,13 +86,13 @@ def _resolve_ads_config() -> str | None:
         if not root:
             _logger.debug("DEER_FLOW_PROJECT_ROOT not cached, skip ADS_MCP_CONFIG_PATH")
             return None
-        path = os.path.join(root, "ads-agent-mcp", ".ads-mcp", "config.json")
+        path = os.path.join(root, "mcp-agent-mcp", ".mcp-server", "config.json")
         # 非阻塞存在性校验（文件可能在后续阶段创建）
         if not os.path.isfile(path):
             _logger.warning(
                 "[EnvBootstrap] ADS_MCP_CONFIG_PATH=%s but file does not exist. "
-                "Ensure ads-agent-mcp is deployed at %s.",
-                path, os.path.join(root, "ads-agent-mcp"),
+                "Ensure mcp-agent-mcp is deployed at %s.",
+                path, os.path.join(root, "mcp-agent-mcp"),
             )
         return path
     except Exception:

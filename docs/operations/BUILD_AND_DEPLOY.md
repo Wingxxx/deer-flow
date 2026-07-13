@@ -45,7 +45,7 @@ cd /home/wing/wing/emto/2026/2026.3/DeerFlow/deer-flow
 - `frontend/` — Next.js standalone 生产构建（无 node_modules）
 - `backend-bin/` — **空目录占位**（后续由服务器编译产物填充）
 - `skills/` — Agent skills
-- `ads-agent-mcp/` — ADS MCP（如检测到已构建）
+- `mcp-agent-mcp/` — ADS MCP（如检测到已构建）
 - `scripts/` — 服务管理脚本（deerflow.sh + wait-for-port.sh）
 - `nginx/` — Nginx 配置
 - `config.yaml` / `config.example.yaml` — 主配置 + 模板
@@ -100,7 +100,7 @@ cp config.example.yaml config.yaml
 vim config.yaml  # 编辑 API keys + 添加 supports_thinking: true
 
 # 检查并修改 MCP 配置
-vim extensions_config.json  # 确认 ADS MCP 路径为 ../ads-agent-mcp/
+vim extensions_config.json  # 确认 ADS MCP 路径为 ../mcp-agent-mcp/
 
 # 启动服务（后台运行）
 ./scripts/deerflow.sh
@@ -197,10 +197,10 @@ release/
 │       ├── deerflow-gateway     # ELF 可执行文件（入口）
 │       └── _internal/           # 编译后的 .pyc / .so
 ├── skills/                      # Agent skills（rsync 复制）
-├── ads-agent-mcp/               # ADS MCP（可选，如有构建）
+├── mcp-agent-mcp/               # ADS MCP（可选，如有构建）
 │   ├── dist/
 │   ├── node_modules/
-│   └── .ads-mcp/config.json
+│   └── .mcp-server/config.json
 ├── scripts/
 │   ├── deerflow.sh              # 服务管理脚本（原名 server-release.sh）
 │   └── wait-for-port.sh         # 端口等待工具

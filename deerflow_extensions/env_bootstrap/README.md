@@ -7,7 +7,7 @@ DeerFlow 启动时自动探测并注入以下环境变量到 `.env` 文件和当
 | 变量 | 默认值 | 探测方式 |
 |------|--------|---------|
 | `DEER_FLOW_PROJECT_ROOT` | 项目根目录绝对路径（不再写入 .env，仅内部缓存供 ADS_MCP_CONFIG_PATH resolver 使用） | `boot._resolve_project_root()` + frozen 向上遍历修正（sentinel: config.yaml） |
-| `ADS_MCP_CONFIG_PATH` | `$DEER_FLOW_PROJECT_ROOT/ads-agent-mcp/.ads-mcp/config.json` | 基于 `DEER_FLOW_PROJECT_ROOT` 拼接（_BOOTSTRAP_VARS 中排序优先）。config 目录始终保持于项目根下 |
+| `ADS_MCP_CONFIG_PATH` | `$DEER_FLOW_PROJECT_ROOT/mcp-agent-mcp/.mcp-server/config.json` | 基于 `DEER_FLOW_PROJECT_ROOT` 拼接（_BOOTSTRAP_VARS 中排序优先）。config 目录始终保持于项目根下 |
 | `build_server_params` cwd 转发 | 自动注入 | monkey-patch `deerflow.mcp.client.build_server_params` |
 | **extensions_config.json 路径绝对化** | 自动改写 | ADS MCP 的 `args[0]`、`env.ADS_CONFIG_PATH` 从相对路径改写为绝对路径，**删除不再需要的 `cwd` 字段**。写入前创建 `.bak` 备份，使用原子写入（temp file + rename）保证安全 |
 

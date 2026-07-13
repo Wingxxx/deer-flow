@@ -146,7 +146,7 @@ mcp_servers:
       - /app/ads-mcp/dist/index.js
     env:
       ADS_API_BASE_URL: "http://192.168.1.139:80"
-      ADS_CONFIG_PATH: "/app/ads-mcp/.ads-mcp/config.json"
+      ADS_CONFIG_PATH: "/app/ads-mcp/.mcp-server/config.json"
 
   deeprag:
     type: http
@@ -228,7 +228,7 @@ ls ~/.hermes/skills/
       "args": ["/app/ads-mcp/dist/index.js"],
       "env": {
         "ADS_API_BASE_URL": "http://192.168.1.139:80",
-        "ADS_CONFIG_PATH": "/app/ads-mcp/.ads-mcp/config.json"
+        "ADS_CONFIG_PATH": "/app/ads-mcp/.mcp-server/config.json"
       },
       "description": "ADS云桌面管理系统"
     },

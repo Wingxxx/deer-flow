@@ -404,14 +404,14 @@ frontend:
 | 配置文件 | 路径（容器内） | 作用 |
 |----------|---------------|------|
 | `extensions_config.json` | `/app/extensions_config.json` | DeerFlow → MCP Server 的启动配置 |
-| `.ads-mcp/config.json` | `/app/ads-mcp/.ads-mcp/config.json` | ADS MCP 内部配置（API 地址、凭证） |
+| `.mcp-server/config.json` | `/app/ads-mcp/.mcp-server/config.json` | ADS MCP 内部配置（API 地址、凭证） |
 
 ADS MCP **优先读取自己的内部配置**，忽略 `extensions_config.json` 中的 `env.ADS_API_BASE_URL`。
 
 **诊断**：
 ```bash
 # 检查 MCP 内部配置
-docker exec deer-flow-gateway cat /app/ads-mcp/.ads-mcp/config.json
+docker exec deer-flow-gateway cat /app/ads-mcp/.mcp-server/config.json
 ```
 
 ### 解决方案
@@ -421,18 +421,18 @@ docker exec deer-flow-gateway cat /app/ads-mcp/.ads-mcp/config.json
 修改 `docker-compose-dev.yaml` 的 gateway command：
 ```yaml
 gateway:
-  command: sh -c "{ sed -i 's|http://127.0.0.1:80|https://192.168.1.54|g' /app/ads-mcp/.ads-mcp/config.json /app/ads-mcp/config.json && cd backend && ...; } > /app/logs/gateway.log 2>&1"
+  command: sh -c "{ sed -i 's|http://127.0.0.1:80|https://192.168.1.54|g' /app/ads-mcp/.mcp-server/config.json /app/ads-mcp/config.json && cd backend && ...; } > /app/logs/gateway.log 2>&1"
 ```
 
 同时修改 ADS MCP 源目录的配置文件（永久生效）：
 ```bash
 # 修改 Windows 源文件
-notepad "C:\Users\wing\Documents\Wing\git\ds2server\ds2server\ads-agent\mcp\.ads-mcp\config.json"
+notepad "C:\Users\wing\Documents\Wing\git\ds2server\ds2server\ads-agent\mcp\.mcp-server\config.json"
 ```
 
 ### 问题：ADS MCP 挂载为只读导致无法修改配置
 
-**症状**：`sed: couldn't open directory .ads-mcp: No such file or directory`
+**症状**：`sed: couldn't open directory .mcp-server: No such file or directory`
 
 **原因**：`docker-compose-dev.yaml` 中 ADS MCP 目录挂载为 `:ro`（只读）。
 

@@ -31,7 +31,7 @@
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `ADS_BASE_URL` | `http://ads:8080` | ADS 服务器地址，如 `https://192.168.1.54` |
-| `ADS_MCP_CONFIG_PATH` | `""` | ADS-MCP config.json 路径，如 `/home/wing/.hermes/mcp-servers/ads-mcp/.ads-mcp/config.json` |
+| `ADS_MCP_CONFIG_PATH` | `""` | ADS-MCP config.json 路径，如 `/home/wing/.hermes/mcp-servers/mcp-agent-mcp/.mcp-server/config.json` |
 
 ## MCP config.json 写入内容
 

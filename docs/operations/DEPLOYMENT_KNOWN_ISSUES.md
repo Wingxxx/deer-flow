@@ -71,14 +71,14 @@ cp -r styles $RELEASE_DIR/frontend/
 
 **根因**：`extensions_config.json` 中 `args` 的路径是 Docker 容器路径 `/app/ads-mcp/...`，裸机部署时不存在。
 
-**修复**：使用相对路径（Gateway 工作目录为 `backend/`，所以用 `../ads-agent-mcp/`）：
+**修复**：使用相对路径（Gateway 工作目录为 `backend/`，所以用 `../mcp-agent-mcp/`）：
 ```json
 {
   "mcpServers": {
     "ads": {
-      "args": ["../ads-agent-mcp/dist/index.js"],
+      "args": ["../mcp-agent-mcp/dist/index.js"],
       "env": {
-        "ADS_CONFIG_PATH": "../ads-agent-mcp/.ads-mcp/config.json"
+        "ADS_CONFIG_PATH": "../mcp-agent-mcp/.mcp-server/config.json"
       }
     }
   }
@@ -87,20 +87,20 @@ cp -r styles $RELEASE_DIR/frontend/
 
 ### 3.2 ADS MCP 源码路径不匹配
 
-**现象**：编译脚本在 `../ads-agent-mcp/` 找不到源码。
+**现象**：编译脚本在 `../mcp-agent-mcp/` 找不到源码。
 
-**根因**：`build-release.sh` 最初硬编码 `ADS_MCP_DIR="${REPO_ROOT}/../ads-agent-mcp"`，但 ADS MCP 仓库在 `deer-flow/ads-agent-mcp/` 同目录内。
+**根因**：`build-release.sh` 最初硬编码 `ADS_MCP_DIR="${REPO_ROOT}/../mcp-agent-mcp"`，但 ADS MCP 仓库在 `deer-flow/mcp-agent-mcp/` 同目录内。
 
 **修复**（`build-release.sh` 已修复）：
 ```bash
-ADS_MCP_DIR="${REPO_ROOT}/ads-agent-mcp"   # 同仓库内
+ADS_MCP_DIR="${REPO_ROOT}/mcp-agent-mcp"   # 同仓库内
 ```
 
-### 3.3 `.ads-mcp/config.json` 配置不完整
+### 3.3 `.mcp-server/config.json` 配置不完整
 
 **现象**：ADS MCP 启动后无正确 token。
 
-**修复**：确保 `ads-agent-mcp/.ads-mcp/config.json` 包含完整的 ADS Server 配置：
+**修复**：确保 `mcp-agent-mcp/.mcp-server/config.json` 包含完整的 ADS Server 配置：
 ```json
 {
   "ads": {
@@ -232,9 +232,9 @@ cd /usr/xccloud/deerflow
 #     - supports_thinking: true（否则 Pro/Ultra 无法使用）
 
 # [ ] .env 是否存在（serve.sh 自动加载）
-# [ ] extensions_config.json 路径是否正确（../ads-agent-mcp/）
-# [ ] ads-agent-mcp/.ads-mcp/config.json 的 url 是否正确
-# [ ] ads-agent-mcp/dist/index.js + node_modules/ 是否存在
+# [ ] extensions_config.json 路径是否正确（../mcp-agent-mcp/）
+# [ ] mcp-agent-mcp/.mcp-server/config.json 的 url 是否正确
+# [ ] mcp-agent-mcp/dist/index.js + node_modules/ 是否存在
 # [ ] docker/nginx/nginx.local.conf 是否存在（serve.sh 需要）
 # [ ] .venv 架构兼容
 

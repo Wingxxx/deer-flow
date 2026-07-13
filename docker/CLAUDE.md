@@ -31,7 +31,7 @@ HOME=/c/Users/wing
 
 # ADS 统一认证
 ADS_BASE_URL=http://ads:8080
-ADS_MCP_CONFIG_PATH=/home/wing/.hermes/mcp-servers/ads-mcp/.ads-mcp/config.json
+ADS_MCP_CONFIG_PATH=/home/wing/.hermes/mcp-servers/mcp-agent-mcp/.mcp-server/config.json
 ```
 
 **Why /c/ path format?** Docker Desktop on Windows uses MSYS2 paths. Always use `/c/Users/...` instead of `C:\Users\...` or `C:/Users/...`.

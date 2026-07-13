@@ -41,7 +41,7 @@ release/
 ├── nginx/                         # Nginx 配置（放入 /etc/nginx/conf.d/ 即可用）
 │   └── server.conf
 ├── skills/                        # Agent Skills
-├── ads-agent-mcp/                 # ADS MCP（可选）
+├── mcp-agent-mcp/                 # ADS MCP（可选）
 │
 └── data_collection_logs/          # 数据采集输出（运行时自动生成）
 ```
@@ -112,7 +112,7 @@ data_collection:
       "enabled": true,
       "type": "stdio",
       "command": "node",
-      "args": ["../ads-agent-mcp/dist/index.js"],
+      "args": ["../mcp-agent-mcp/dist/index.js"],
       "description": "ADS云桌面管理系统"
     },
     "deeprag": {
@@ -125,7 +125,7 @@ data_collection:
 }
 ```
 
-- **ADS MCP**：相对路径 `../ads-agent-mcp/dist/index.js`，如路径不符则需修改
+- **ADS MCP**：相对路径 `../mcp-agent-mcp/dist/index.js`，如路径不符则需修改
 - **DeepRAG**：HTTP 连接远程 MCP 服务器
 
 ### 3.4 启动前清单
@@ -356,10 +356,10 @@ models:
 `extensions_config.json` 中 `args` 路径指向的目录不存在：
 
 ```json
-"args": ["../ads-agent-mcp/dist/index.js"]
+"args": ["../mcp-agent-mcp/dist/index.js"]
 ```
 
-请确保 `ads-agent-mcp/` 在 release 同级，或修改路径。
+请确保 `mcp-agent-mcp/` 在 release 同级，或修改路径。
 
 ### 10.4 后端启动报 "No config file found"
 

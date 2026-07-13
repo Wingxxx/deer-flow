@@ -385,7 +385,7 @@ ADS MCP Server 有**自己的配置文件**，会忽略 `extensions_config.json`
 | 配置文件 | 容器内路径 | 用途 | 谁读取 |
 |----------|-----------|------|--------|
 | `extensions_config.json` | `/app/extensions_config.json` | DeerFlow 启动 MCP Server 的配置 | DeerFlow (gateway/langgraph) |
-| `ADS MCP 内部配置` | `/app/ads-mcp/.ads-mcp/config.json` | MCP Server 自己的 API 地址、凭证 | ADS MCP Server 本身 |
+| `ADS MCP 内部配置` | `/app/ads-mcp/.mcp-server/config.json` | MCP Server 自己的 API 地址、凭证 | ADS MCP Server 本身 |
 
 ### 症状
 
@@ -395,7 +395,7 @@ ADS MCP Server 有**自己的配置文件**，会忽略 `extensions_config.json`
 
 ```bash
 # 检查 ADS MCP 内部配置的 URL
-docker exec deer-flow-gateway cat /app/ads-mcp/.ads-mcp/config.json
+docker exec deer-flow-gateway cat /app/ads-mcp/.mcp-server/config.json
 
 # 如果显示 "url": "http://127.0.0.1:80" 说明未生效
 ```
@@ -422,7 +422,7 @@ docker exec deer-flow-gateway cat /app/ads-mcp/.ads-mcp/config.json
 
 **第二步**：修改 ADS MCP 源目录的内部配置（Windows 源文件）：
 ```bash
-notepad "C:\Users\wing\Documents\Wing\git\ds2server\ds2server\ads-agent\mcp\.ads-mcp\config.json"
+notepad "C:\Users\wing\Documents\Wing\git\ds2server\ds2server\ads-agent\mcp\.mcp-server\config.json"
 ```
 将 `"url": "http://127.0.0.1:80"` 改为 `"url": "https://192.168.1.54"`
 
@@ -432,7 +432,7 @@ gateway:
   volumes:
     # ADS MCP 目录必须可读写（不能用 :ro）
     - /home/wing/wing/git/ds2server/ds2server/ads-agent/mcp:/app/ads-mcp
-  command: sh -c "{ sed -i 's|http://127.0.0.1:80|https://192.168.1.54|g' /app/ads-mcp/.ads-mcp/config.json /app/ads-mcp/config.json && cd backend && ...; } > /app/logs/gateway.log 2>&1"
+  command: sh -c "{ sed -i 's|http://127.0.0.1:80|https://192.168.1.54|g' /app/ads-mcp/.mcp-server/config.json /app/ads-mcp/config.json && cd backend && ...; } > /app/logs/gateway.log 2>&1"
 ```
 
 **注意**：`langgraph` 服务的 ADS MCP 挂载可以是 `:ro`（只读），因为 gateway 会先修改。
