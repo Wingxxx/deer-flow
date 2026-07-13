@@ -565,8 +565,7 @@ export function RecentChatList() {
               />
               <Button
                 variant="outline"
-                size="icon"
-                className="size-9 shrink-0"
+                className="shrink-0 gap-1.5 px-3"
                 onClick={async () => {
                   const didCopy = await writeTextToClipboard(shareThreadUrl);
                   if (didCopy) {
@@ -579,6 +578,7 @@ export function RecentChatList() {
                 }}
               >
                 {shareCopied ? <Check className="size-4 text-green-500" /> : <Copy className="size-4" />}
+                <span className="text-sm">{t.common.copy ?? "复制链接"}</span>
               </Button>
             </div>
 
