@@ -18,7 +18,7 @@
 #   - frontend/                 (Next.js 生产构建，standalone 模式，无 node_modules)
 #   - backend-bin/              (PyInstaller 编译产物：二进制 + _internal/，无 .py 源码)
 #   - skills/                   (Agent skills)
-#   - ads-agent-mcp/            (可选 ADS MCP)
+#   - mcp-agent-mcp/            (可选 ADS MCP)
 #   - scripts/                  (服务管理：deerflow.sh + wait-for-port.sh)
 #   - nginx/                    (Nginx 配置：server.conf 放入 /etc/nginx/conf.d/)
 #   - config.yaml               (主配置，直接拷贝项目根目录 config.yaml)
@@ -67,7 +67,7 @@ fi
 # ── 创建目录结构 ────────────────────────────────────────────────────────────
 
 echo "[2/10] 创建目录结构..."
-mkdir -p "$RELEASE_DIR"/{frontend,backend-bin,skills,scripts,nginx,ads-agent-mcp}
+mkdir -p "$RELEASE_DIR"/{frontend,backend-bin,skills,scripts,nginx,mcp-agent-mcp}
 
 # ── 编译前端 ────────────────────────────────────────────────────────────────
 
@@ -360,7 +360,7 @@ echo "  ✓ config.yaml 已复制（skills.path 已设为 ./skills）"
 # 复制 MCP 配置
 cp "$REPO_ROOT/extensions_config.json" "$RELEASE_DIR/extensions_config.json"
 # 修正 ADS 路径和 URL（保留端口）
-sed -i 's|/app/ads-mcp/|ads-agent-mcp/|g' "$RELEASE_DIR/extensions_config.json"
+sed -i 's|/app/ads-mcp/|mcp-agent-mcp/|g' "$RELEASE_DIR/extensions_config.json"
 sed -E -i 's|https?://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(:[0-9]+)|http://127.0.0.1\1|g' "$RELEASE_DIR/extensions_config.json"
 # ADS_API_BASE_URL 在 release 下无用（config.json 优先级更高），删除避免混淆
 sed -i '/ADS_API_BASE_URL/d' "$RELEASE_DIR/extensions_config.json"
@@ -374,7 +374,7 @@ echo "  ✓ .env.example 已复制（部署后请根据模板创建 .env）"
 # ── ADS MCP（可选组件）───────────────────────────────────────────────────────
 
 echo "[9/10] ADS MCP..."
-ADS_MCP_DIR="${REPO_ROOT}/ads-agent-mcp"
+ADS_MCP_DIR="${REPO_ROOT}/mcp-agent-mcp"
 if [ -d "$ADS_MCP_DIR" ]; then
     echo "  检测到 ADS MCP..."
     if [ ! -d "$ADS_MCP_DIR/dist" ]; then
@@ -386,9 +386,9 @@ if [ -d "$ADS_MCP_DIR" ]; then
         rsync -av --no-g --no-o \
             --exclude='__pycache__' \
             --exclude='.git' \
-            "$ADS_MCP_DIR/" "$RELEASE_DIR/ads-agent-mcp/" || true
+            "$ADS_MCP_DIR/" "$RELEASE_DIR/mcp-agent-mcp/" || true
         # 修正 ADS 服务器地址为 127.0.0.1，清理 token
-        ADS_CONFIG="$RELEASE_DIR/ads-agent-mcp/.ads-mcp/config.json"
+        ADS_CONFIG="$RELEASE_DIR/mcp-agent-mcp/.mcp-server/config.json"
         if [ -f "$ADS_CONFIG" ]; then
             sed -i 's|http://[0-9.]*:[0-9]*|http://127.0.0.1:80|g' "$ADS_CONFIG"
             sed -i 's|"value": *"[^"]*"|"value": ""|g' "$ADS_CONFIG"
@@ -398,7 +398,7 @@ if [ -d "$ADS_MCP_DIR" ]; then
         echo "  ✓ ADS MCP 复制完成"
     fi
 else
-    echo "  ⏩ 未检测到 ADS MCP（deer-flow/ads-agent-mcp/ 不存在），跳过"
+    echo "  ⏩ 未检测到 ADS MCP（deer-flow/mcp-agent-mcp/ 不存在），跳过"
 fi
 
 # ── 复制使用文档 ────────────────────────────────────────────────────────────
@@ -443,7 +443,7 @@ echo "     → config.yaml 中模型配置需加 supports_thinking: true"
 echo ""
 echo "  2. ADS MCP 路径错误的 ENOENT"
 echo "     → extensions_config.json 中的 args 指向 /app/ads-mcp/"
-echo "     → 必须改为服务器实际路径或相对路径 ../ads-agent-mcp/"
+echo "     → 必须改为服务器实际路径或相对路径 ../mcp-agent-mcp/"
 echo ""
 echo "  3. 前端启动失败（Module not found: @/...）"
 echo "     → 检查 release/frontend/ 是否缺少 package.json 或 node_modules"

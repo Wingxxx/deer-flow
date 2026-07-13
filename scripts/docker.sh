@@ -176,7 +176,7 @@ init() {
 # Auto-detect host IP and update ADS MCP configuration
 # This ensures ADS MCP can connect to services on the host machine from inside Docker
 detect_and_update_ads_host_ip() {
-    local ads_mcp_dir="${PROJECT_ROOT}/ads-agent-mcp/.ads-mcp"
+    local ads_mcp_dir="${PROJECT_ROOT}/mcp-agent-mcp/.mcp-server"
     local ads_mcp_config="${ads_mcp_dir}/config.json"
     local extensions_config="${PROJECT_ROOT}/extensions_config.json"
 

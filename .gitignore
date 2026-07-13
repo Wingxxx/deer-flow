@@ -75,5 +75,7 @@ release/
 !/.qoder/repowiki/wiki_plan.yaml
 ads-agent-mcp/
 ads-agent-mcp/.ads-mcp/config.json
+mcp-agent-mcp/
+mcp-agent-mcp/.mcp-server/config.json
 training_logs/*
 backend/data_collection_logs/
