@@ -41,6 +41,7 @@ export interface Translations {
     exportAsMarkdown: string;
     exportAsJSON: string;
     exportSuccess: string;
+    copy: string;
   };
 
   home: {
