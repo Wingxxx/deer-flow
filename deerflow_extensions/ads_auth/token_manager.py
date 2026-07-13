@@ -39,11 +39,12 @@ async def sync_to_mcp_config(ads_token: str):
     config["ads"]["server"]["url"] = ADS_BASE_URL
 
     now = int(time.time())
+    existing_used_by = config.get("ads", {}).get("token", {}).get("usedBy", "deerflow")
     config["ads"]["token"] = {
         "value": ads_token,
         "expires": now + 1800,
         "loginTime": now,
-        "usedBy": "deerflow",
+        "usedBy": existing_used_by,
     }
 
     tmp = config_path + ".tmp"

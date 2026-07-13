@@ -179,7 +179,7 @@ if getattr(request.state, "_ads_authenticated", False):
 | `ads.token.value` | ADS `/jwt/login` 返回的 JWT | `eyJ0eXAiOiJKV1Qi...` |
 | `ads.token.expires` | `now + 1800` (30 分钟) | `1746001800` |
 | `ads.token.loginTime` | `time.time()` | `1746000000` |
-| `ads.token.usedBy` | 固定值 `"deerflow"` | `deerflow` |
+| `ads.token.usedBy` | 保留 config.json 已有值（不覆盖） | `new` / `default` |
 
 `ads.credentials` 保留不动。
 

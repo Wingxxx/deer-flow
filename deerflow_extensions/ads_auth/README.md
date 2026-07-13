@@ -35,7 +35,7 @@
 
 ## MCP config.json 写入内容
 
-登录成功后自动写入以下字段（`credentials` 保留不动）：
+登录成功后自动写入以下字段（`credentials` **不动**，`token.usedBy` **保留原值不覆盖**）：
 
 ```json
 {
@@ -45,11 +45,13 @@
       "value": "eyJ...",
       "expires": 1746001800,
       "loginTime": 1746000000,
-      "usedBy": "deerflow"
+      "usedBy": "new"
     }
   }
 }
 ```
+
+> **注意**：`usedBy` 保留 config.json 中已有值，不再硬编码覆盖。MCP 依赖该字段判断用哪组凭据重新登录（`retryLoginByUsedBy` 仅处理 `"new"` 和 `"default"`），覆盖会导致 token 过期后自动续期失效。
 
 ## 核心改动
 
