@@ -334,7 +334,7 @@ export function RecentChatList() {
                                 </SidebarMenuAction>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent className="w-48 rounded-lg" side={"right"} align={"start"}>
-                                <DropdownMenuItem onSelect={() => togglePin(thread.thread_id)}>
+                                <DropdownMenuItem onSelect={() => togglePin(thread.thread_id)} className="cursor-pointer">
                                   <Pin
                                     className={cn(
                                       "size-4",
@@ -345,12 +345,12 @@ export function RecentChatList() {
                                   />
                                   <span>{isPinned(thread.thread_id) ? t.common.unpin : t.common.pin}</span>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => handleRenameClick(thread.thread_id, titleOfThread(thread))}>
+                                <DropdownMenuItem onSelect={() => handleRenameClick(thread.thread_id, titleOfThread(thread))} className="cursor-pointer">
                                   <Pencil className="text-muted-foreground" />
                                   <span>{t.common.rename}</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onSelect={() => handleShare(thread)}>
+                                <DropdownMenuItem onSelect={() => handleShare(thread)} className="cursor-pointer">
                                   <Share2 className="text-muted-foreground" />
                                   <span>{t.common.share}</span>
                                 </DropdownMenuItem>
@@ -360,19 +360,19 @@ export function RecentChatList() {
                                     <span>{t.common.export}</span>
                                   </DropdownMenuSubTrigger>
                                   <DropdownMenuSubContent>
-                                    <DropdownMenuItem onSelect={() => handleExport(thread, "markdown")}>
+                                    <DropdownMenuItem onSelect={() => handleExport(thread, "markdown")} className="cursor-pointer">
                                       <FileText className="text-muted-foreground" />
                                       <span>{t.common.exportAsMarkdown}</span>
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => handleExport(thread, "json")}>
+                                    <DropdownMenuItem onSelect={() => handleExport(thread, "json")} className="cursor-pointer">
                                       <FileJson className="text-muted-foreground" />
                                       <span>{t.common.exportAsJSON}</span>
                                     </DropdownMenuItem>
                                   </DropdownMenuSubContent>
                                 </DropdownMenuSub>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onSelect={() => handleDelete(thread)}>
-                                  <Trash2 className="text-muted-foreground" />
+                                <DropdownMenuItem onSelect={() => handleDelete(thread)} className="text-red-500 hover:text-red-500 focus:text-red-500 hover:bg-red-50 focus:bg-red-50 cursor-pointer">
+                                  <Trash2 className="text-[#ec1313]" />
                                   <span>{t.common.delete}</span>
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
@@ -443,7 +443,7 @@ export function RecentChatList() {
                               </SidebarMenuAction>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent className="w-48 rounded-lg" side={"right"} align={"start"}>
-                              <DropdownMenuItem onSelect={() => togglePin(thread.thread_id)}>
+                              <DropdownMenuItem onSelect={() => togglePin(thread.thread_id)} className="cursor-pointer">
                                 <Pin
                                   className={cn(
                                     "size-4",
@@ -454,11 +454,11 @@ export function RecentChatList() {
                                 />
                                 <span>{isPinned(thread.thread_id) ? t.common.unpin : t.common.pin}</span>
                               </DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => handleRenameClick(thread.thread_id, titleOfThread(thread))}>
+                              <DropdownMenuItem onSelect={() => handleRenameClick(thread.thread_id, titleOfThread(thread))} className="cursor-pointer">
                                 <Pencil className="text-muted-foreground" />
                                 <span>{t.common.rename}</span>
                               </DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => handleShare(thread)}>
+                              <DropdownMenuItem onSelect={() => handleShare(thread)} className="cursor-pointer">
                                 <Share2 className="text-muted-foreground" />
                                 <span>{t.common.share}</span>
                               </DropdownMenuItem>
@@ -468,19 +468,19 @@ export function RecentChatList() {
                                   <span>{t.common.export}</span>
                                 </DropdownMenuSubTrigger>
                                 <DropdownMenuSubContent>
-                                  <DropdownMenuItem onSelect={() => handleExport(thread, "markdown")}>
+                                  <DropdownMenuItem onSelect={() => handleExport(thread, "markdown")} className="cursor-pointer">
                                     <FileText className="text-muted-foreground" />
                                     <span>{t.common.exportAsMarkdown}</span>
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onSelect={() => handleExport(thread, "json")}>
+                                  <DropdownMenuItem onSelect={() => handleExport(thread, "json")} className="cursor-pointer">
                                     <FileJson className="text-muted-foreground" />
                                     <span>{t.common.exportAsJSON}</span>
                                   </DropdownMenuItem>
                                 </DropdownMenuSubContent>
                               </DropdownMenuSub>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem onSelect={() => handleDelete(thread)}>
-                                <Trash2 className="text-muted-foreground" />
+                              <DropdownMenuItem onSelect={() => handleDelete(thread)} className="text-red-500 hover:text-red-500 focus:text-red-500 hover:bg-red-50 focus:bg-red-50 cursor-pointer">
+                                <Trash2 className="text-[#ec1313]" />
                                 <span>{t.common.delete}</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
