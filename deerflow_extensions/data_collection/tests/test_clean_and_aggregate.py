@@ -18,6 +18,8 @@ def make_raw(
     call_id=None,
     result=None,
     response_type="text",
+    user_id=None,
+    channel_user_id=None,
 ):
     d = {
         "session_id": session_id,
@@ -37,6 +39,10 @@ def make_raw(
         d["result"] = result
     if response_type:
         d["response_type"] = response_type
+    if user_id is not None:
+        d["user_id"] = user_id
+    if channel_user_id is not None:
+        d["channel_user_id"] = channel_user_id
     return d
 
 
@@ -333,3 +339,112 @@ class TestDataAggregator:
     def test_aggregate_session_empty_input(self):
         result = DataAggregator.aggregate_session([])
         assert result == []
+
+
+class TestIdentityPropagation:
+    """Test that user_id and channel_user_id propagate through aggregation."""
+
+    def test_metadata_contains_user_id(self):
+        samples = [
+            make_raw(
+                sample_type="agent_input",
+                session_id="sess-uid",
+                user_query="Hello",
+                user_id="pseudo-hash-abc",
+            ),
+            make_raw(
+                session_id="sess-uid",
+                sample_type="model_output",
+                raw_response="Hi",
+            ),
+        ]
+        result = DataAggregator._build_training_sample(samples)
+        assert result is not None
+        assert result["metadata"]["user_id"] == "pseudo-hash-abc"
+
+    def test_metadata_contains_channel_user_id(self):
+        samples = [
+            make_raw(
+                sample_type="agent_input",
+                session_id="sess-cuid",
+                user_query="Hello",
+                channel_user_id="pseudo-hash-chan",
+            ),
+            make_raw(
+                session_id="sess-cuid",
+                sample_type="model_output",
+                raw_response="Hi",
+            ),
+        ]
+        result = DataAggregator._build_training_sample(samples)
+        assert result is not None
+        assert result["metadata"]["channel_user_id"] == "pseudo-hash-chan"
+
+    def test_metadata_contains_both_ids(self):
+        samples = [
+            make_raw(
+                sample_type="agent_input",
+                session_id="sess-both",
+                user_query="Hello",
+                user_id="user-hash",
+                channel_user_id="chan-hash",
+            ),
+            make_raw(
+                session_id="sess-both",
+                sample_type="model_output",
+                raw_response="Hi",
+            ),
+        ]
+        result = DataAggregator._build_training_sample(samples)
+        assert result is not None
+        assert result["metadata"]["user_id"] == "user-hash"
+        assert result["metadata"]["channel_user_id"] == "chan-hash"
+
+    def test_old_records_without_identity_do_not_crash(self):
+        """Samples without user_id/channel_user_id keys are handled gracefully."""
+        samples = [
+            make_raw(
+                sample_type="agent_input",
+                session_id="sess-old",
+                user_query="Hello",
+            ),
+            make_raw(
+                session_id="sess-old",
+                sample_type="model_output",
+                raw_response="Hi",
+            ),
+        ]
+        result = DataAggregator._build_training_sample(samples)
+        assert result is not None
+        assert "user_id" not in result["metadata"]
+        assert "channel_user_id" not in result["metadata"]
+
+    def test_identity_from_first_agent_input_only(self):
+        """Identity is taken from the first agent_input sample (metadata init)."""
+        samples = [
+            make_raw(
+                sample_type="agent_input",
+                session_id="sess-first",
+                user_query="Q1",
+                user_id="first-user",
+            ),
+            make_raw(
+                sample_type="agent_input",
+                session_id="sess-first",
+                user_query="Q2",
+                user_id="second-user",  # should NOT overwrite
+            ),
+            make_raw(
+                session_id="sess-first",
+                sample_type="model_output",
+                raw_response="A1",
+            ),
+            make_raw(
+                session_id="sess-first",
+                sample_type="model_output",
+                raw_response="A2",
+            ),
+        ]
+        result = DataAggregator._build_training_sample(samples)
+        assert result is not None
+        assert result["metadata"]["user_id"] == "first-user"

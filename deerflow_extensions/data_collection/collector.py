@@ -6,6 +6,8 @@ Design principles:
   - Process-level singleton: single collector instance shared across the process
 """
 
+import hashlib
+import hmac
 import json
 import os
 import time
@@ -18,6 +20,29 @@ from typing import Any
 from deerflow_extensions.data_collection.config import load_config
 
 logger = logging.getLogger(__name__)
+
+CURRENT_SCHEMA_VERSION = 1
+
+
+def _pseudonymize(raw_id: str, salt: str) -> str:
+    """HMAC-SHA256 pseudonymization of an identity value.
+
+    Returns hex digest if both raw_id and salt are non-empty.
+    Returns raw_id unchanged if salt is empty (caller must ensure salt
+    is configured for proper pseudonymization).
+
+    Fail-open: catches UnicodeEncodeError/ValueError, returns raw_id.
+    """
+    if not raw_id or not salt:
+        return raw_id
+    try:
+        return hmac.new(
+            salt.encode("utf-8"),
+            raw_id.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+    except (UnicodeEncodeError, ValueError):
+        return raw_id
 
 
 class TrainingDataCollector:
@@ -43,7 +68,11 @@ class TrainingDataCollector:
             "tool_call_result": cfg.get("collect_tool_calls", True),
             "agent_intermediate_state": cfg.get("collect_intermediate_state", False),
             "final_response": cfg.get("collect_final_response", True),
+            "user_identity": cfg.get("collect_user_identity", False),
+            "channel_user_identity": cfg.get("collect_channel_user_id", False),
         }
+
+        self._current_identity: dict[str, str] = {}
 
         self._buffer: deque[dict] = deque()
         self._buffer_lock = threading.Lock()
@@ -89,6 +118,11 @@ class TrainingDataCollector:
         All semantic record methods delegate to this. The record is
         timestamped, buffered, and flushed asynchronously.
 
+        Identity fields (user_id, channel_user_id) are injected from
+        self._current_identity, set by the middleware before each call.
+        Identity injection is fail-open: any error silently drops identity
+        without affecting the record.
+
         Args:
             sample_type: One of agent_input, model_output, tool_call_request,
                 tool_call_result, agent_intermediate_state, final_response.
@@ -96,6 +130,16 @@ class TrainingDataCollector:
         """
         if not self._should_collect(sample_type):
             return
+
+        # Inject identity fields (fail-open: never propagate exceptions)
+        try:
+            if self._current_identity:
+                data = {**data, **self._current_identity}
+        except Exception:
+            pass
+
+        # Filter None values (conditional inclusion semantics)
+        data = {k: v for k, v in data.items() if v is not None}
 
         record = {
             "sample_type": sample_type,

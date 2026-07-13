@@ -113,6 +113,7 @@ def export_dataset(
     input_path: str,
     output_path: str,
     format: OutputFormat = "llamafactory_messages",
+    strip_identity: bool = False,
 ) -> None:
     """Export a training dataset to the specified format.
 
@@ -160,6 +161,12 @@ def export_dataset(
                 continue
 
             try:
+                # Strip identity before converter (fail-open: pop never raises)
+                if strip_identity:
+                    meta = sample.get("metadata", {})
+                    meta.pop("user_id", None)
+                    meta.pop("channel_user_id", None)
+
                 converted = convert_fn(sample)
             except Exception as e:
                 logger.warning("Failed to convert sample: %s", e)

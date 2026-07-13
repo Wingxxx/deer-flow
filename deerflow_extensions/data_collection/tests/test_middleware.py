@@ -288,3 +288,95 @@ class TestMiddlewareAsyncConcurrency:
         await asyncio.gather(*tasks)
 
         assert mock_collector.record_final_response.call_count == 10
+
+
+class TestMiddlewareIdentity:
+    """Test middleware identity extraction, caching, and cleanup."""
+
+    def test_prepare_identity_with_runtime_context(self):
+        """_prepare_identity_for_collector extracts user_id from runtime.context."""
+        mw = DataCollectionMiddleware()
+        mock_run = MagicMock()
+        mock_run.context = {"user_id": "user-123", "channel_user_id": "chan-456"}
+        mw.collector = MagicMock()
+        mw._collect_user_identity = True
+        mw._collect_channel_user_id = True
+        mw._pseudonymize_identity = False  # raw for test
+
+        mw._prepare_identity_for_collector({"config": {"configurable": {"thread_id": "tid-1"}}}, mock_run, "tid-1")
+
+        assert mw._session_identity.get("tid-1") == {"user_id": "user-123", "channel_user_id": "chan-456"}
+        assert mw.collector._current_identity == {"user_id": "user-123", "channel_user_id": "chan-456"}
+
+    def test_prepare_identity_no_runtime_does_not_crash(self):
+        """_prepare_identity_for_collector with runtime=None does not crash and returns empty."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw._collect_user_identity = True
+
+        mw._prepare_identity_for_collector({}, None, "tid-2")
+
+        assert mw.collector._current_identity == {}
+
+    def test_prepare_identity_with_pseudonymize(self):
+        """_prepare_identity_for_collector applies pseudonymization when enabled."""
+        mw = DataCollectionMiddleware()
+        mw._pseudonymize_identity = True
+        mw._identity_salt = "test-salt"
+        mw._collect_user_identity = True
+        mw.collector = MagicMock()
+        mock_run = MagicMock()
+        mock_run.context = {"user_id": "user-123"}
+
+        mw._prepare_identity_for_collector({}, mock_run, "tid-3")
+
+        cached = mw._session_identity.get("tid-3", {})
+        assert "user_id" in cached
+        assert cached["user_id"] != "user-123"  # pseudonymized
+        assert len(cached["user_id"]) == 64  # hex digest
+
+    def test_restore_identity_from_cache(self):
+        """_restore_identity_for_collector correctly restores cached identity."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw._session_identity["tid-4"] = {"user_id": "cached-user"}
+
+        mw._restore_identity_for_collector("tid-4")
+
+        assert mw.collector._current_identity == {"user_id": "cached-user"}
+
+    def test_restore_identity_unknown_session_clears(self):
+        """_restore_identity_for_collector with unknown session clears identity."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw.collector._current_identity = {"user_id": "stale"}
+
+        mw._restore_identity_for_collector("unknown-session")
+
+        assert mw.collector._current_identity == {}
+
+    def test_restore_identity_empty_session_clears(self):
+        """_restore_identity_for_collector with empty session id clears identity."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw.collector._current_identity = {"user_id": "stale"}
+
+        mw._restore_identity_for_collector("")
+
+        assert mw.collector._current_identity == {}
+
+    def test_after_agent_cleans_session_identity(self):
+        """after_agent pops the session from _session_identity."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw._session_identity["tid-5"] = {"user_id": "test"}
+        mw._step_counts["tid-5"] = 0
+        mw._session_start["tid-5"] = 0.0
+        mw._llm_calls["tid-5"] = 0
+        mw._tool_calls["tid-5"] = 0
+        mw._accumulated_tokens["tid-5"] = {}
+
+        state = {"config": {"configurable": {"thread_id": "tid-5"}}, "messages": []}
+        mw.after_agent(state)
+
+        assert "tid-5" not in mw._session_identity

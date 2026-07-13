@@ -69,6 +69,13 @@ DeerFlow 2.0 是围绕"超级智能体"框架的彻底重写，核心包含子�
 - **技能：** 新增面向维护者的 issue 与 PR 工作流技能。([#3554])
 - **技能：** 增强维护者编排（orchestrator）的评审工作流。([#3606])
 
+#### 训练数据采集
+- **数据采集：** 为训练数据采集新增 `user_id` / `channel_user_id` 字段，支持 HMAC-SHA256
+  伪匿名化、fail-open identity 注入、middleware Session Identity Cache，以及配置驱动的
+  可选开关（`collect_user_identity`、`collect_channel_user_id`、`pseudonymize_identity`、
+  `pseudonym_salt`）。Identity 通过 `record()` 统一注入层流经全部 6 个采集点（P1-P6），
+  语义方法签名零侵入。([#deerflow-extensions])
+
 ### 性能优化
 
 - **harness：** 把 thread 元数据过滤下推到 SQL，不再在 Python 侧后过滤。

@@ -354,3 +354,81 @@ class TestThreadSafety:
             t.join()
 
         assert len(errors) == 0
+
+
+class TestIdentityInjection:
+    """Test that identity fields are correctly injected via _current_identity."""
+
+    def test_identity_injected_in_record(self, collector):
+        collector._current_identity = {"user_id": "pseudo-hash-abc", "channel_user_id": "pseudo-hash-def"}
+        collector.record_agent_input(
+            session_id="sess-1",
+            user_query="Hello",
+            system_prompt="Be helpful",
+            history_context=[],
+        )
+        assert len(collector._buffer) == 1
+        record = collector._buffer[0]
+        assert record["user_id"] == "pseudo-hash-abc"
+        assert record["channel_user_id"] == "pseudo-hash-def"
+
+    def test_empty_identity_does_not_inject(self, collector):
+        collector._current_identity = {}
+        collector.record_agent_input(
+            session_id="sess-1",
+            user_query="Hello",
+            system_prompt="Be helpful",
+            history_context=[],
+        )
+        record = collector._buffer[0]
+        assert "user_id" not in record
+
+    def test_identity_fields_persist_in_flush(self, collector):
+        collector._current_identity = {"user_id": "hash-xyz"}
+        collector.record_agent_input(
+            session_id="sess-flush",
+            user_query="flush test",
+            system_prompt="test",
+            history_context=[],
+        )
+
+        import asyncio
+        asyncio.run(collector._flush())
+
+        import glob
+        daily_files = glob.glob(os.path.join(collector.output_dir, "daily", "*.jsonl"))
+        assert len(daily_files) > 0
+        import json
+        with open(daily_files[0], "r") as f:
+            line = json.loads(f.readline())
+        assert line["user_id"] == "hash-xyz"
+
+    def test_record_identity_all_types(self, collector):
+        """All semantic record types carry identity when _current_identity is set."""
+        collector._current_identity = {"user_id": "test-user"}
+        collector.record_model_output(
+            session_id="sess-1", step_number=1, raw_response="resp",
+            response_type="text", finish_reason="stop", tool_calls=[],
+            token_usage={}, thinking_content="", latency_ms=0.0,
+        )
+        collector.record_tool_call(
+            session_id="sess-1", step_number=1, tool_name="bash",
+            tool_params={}, call_id="c1", phase="request",
+        )
+        collector.record_final_response(
+            session_id="sess-1", final_response="done",
+            total_duration_ms=100, total_llm_calls=1, total_tool_calls=0,
+            total_tokens=0, resolution_status="completed",
+        )
+        for record in collector._buffer:
+            assert record["user_id"] == "test-user"
+
+    def test_collect_flags_user_identity(self, collector):
+        """Setting user_identity flag to False still records but without identity blocked by _should_collect."""
+        collector.collect_flags["user_identity"] = True
+        collector._current_identity = {"user_id": "flag-test"}
+        collector.record_agent_input(
+            session_id="sess-1", user_query="Hello", system_prompt="", history_context=[],
+        )
+        record = collector._buffer[0]
+        assert record["user_id"] == "flag-test"

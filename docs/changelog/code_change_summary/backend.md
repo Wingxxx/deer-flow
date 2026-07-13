@@ -723,3 +723,43 @@ PyInstaller `--onedir` 模式下，模块在 `_internal/topic_guardrail/`，数�
 - **前端元数据驱动**：`channels.ts` 定义 `CHANNELS` 数组 + `ChannelMeta`/`CredentialField` 类型，`ChannelSettingsPage` 根据 `credentialFields` 动态渲染输入表单
 - **零侵入扩展**：新增渠道只需在 `channels.ts` 加条目 + `router.py` `_CHANNEL_META` 加配置 + `_channel_test_fns` 注册测试函数
 - **config.yaml 凭据补齐**：`_set_channel_enabled_in_config()` 自动补齐缺失的凭据引用字段（如 `app_id: $FEISHU_APP_ID`），确保 ChannelService 能从 `.env` 正确读取
+
+---
+
+## 19. 2026-07-13: 训练数据采集增加 user_id / channel_user_id
+
+### 问题
+训练数据采集（data_collection）现有 6 个采集点（P1-P6）均不携带用户身份标识，无法进行按用户的后续分析、数据去重与质量控制。因涉及个人数据，需遵守 fail-open 铁律（identity 逻辑失效不影响现有采集）与隐私最小化原则。
+
+### 后端修改
+
+| 文件 | 变更类型 | 说明 |
+|------|---------|------|
+| `deerflow_extensions/data_collection/config.py` | 修改 | 新增 4 项身份采集配置（`collect_user_identity`/`collect_channel_user_id`/`pseudonymize_identity`/`pseudonym_salt`）+ 3 环境变量映射 + 语义校验 WARNING |
+| `deerflow_extensions/data_collection/collector.py` | 修改 | 新增 `_pseudonymize()` HMAC-SHA256 辅助函数 + `CURRENT_SCHEMA_VERSION=1` 模块常量 + `record()` 统一 identity 注入层 + `_current_identity` 实例属性 |
+| `deerflow_extensions/data_collection/middleware.py` | 修改 | 新增 `_session_identity` 缓存 + `_restore_identity_for_collector()` 辅助 + 6 个钩子全量 identity 注入（before/after_model、wrap_tool_call/awrap_tool_call、after_agent/aafter_agent）+ after_agent 清理 |
+| `deerflow_extensions/data_collection/scripts/clean_and_aggregate.py` | 修改 | `_build_training_sample()` metadata 传播 `user_id`/`channel_user_id` |
+| `deerflow_extensions/data_collection/scripts/export_formats.py` | 修改 | `export_dataset()` 新增 `strip_identity` 参数，在 converter 前 strip 身份字段 |
+
+### 测试文件
+
+| 文件 | 说明 |
+|------|------|
+| `tests/test_pseudonymize.py` (NEW) | 10 用例：HMAC 确定性/碰撞测试/空值/None |
+| `tests/test_fail_open.py` (NEW) | 5 用例：identity 异常隔离 |
+| `tests/test_e2e_user_id_collection.py` (NEW) | 3 用例：完整 E2E 链路 |
+| `tests/test_config.py` | 扩充：新配置默认值/环境变量覆盖/WARNING |
+| `tests/test_collector.py` | 扩充：identity 注入/None不写入/并发/plaintext 标记 |
+| `tests/test_middleware.py` | 扩充：session 缓存/6钩子注入/runtime=None |
+| `tests/test_middleware_integration.py` | 扩充：伪匿名化/明文/异步路径 |
+| `tests/test_clean_and_aggregate.py` | 扩充：metadata 传播/旧记录兼容/4种开关组合 |
+
+### 核心改动
+
+- **零侵入点**（侵入点数=0）：仅读取 upstream 3 个已有注入点（gateway `runtime_context["user_id"]`、channels `run_context_identity`、harness `_build_runtime_context` 的 setdefault 透传），不做任何修改
+- **Session Identity Cache**：middleware 的 `before_model` 从 `runtime.context` 提取 identity 后缓存到 `_session_identity[session_id]`，后续钩子通过 session_id 反查恢复，解决 `wrap_tool_call` 和 `after_agent` 无法访问 runtime 的问题
+- **Fail-Open 铁律**：每个 identity 代码路径独立 try/except，异常不向上传播，不影响现有采集
+- **Record() 统一注入层**：identity 不走 6 个语义方法签名，通过 `record()` 内统一从 `_current_identity` 注入
+- **HMAC-SHA256 伪匿名化**：`_pseudonymize()` 使用 `hmac.new(salt, raw_id, sha256).hexdigest()`，空 salt 产生 WARNING
+- **条件包含写入**：None 值时 record key 不存在（非 `null`）
+

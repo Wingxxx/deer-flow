@@ -1388,3 +1388,35 @@ channel_connections:
 #   failure_threshold: 5
 #   # Time in seconds before attempting to recover (default: 60)
 #   recovery_timeout_sec: 60
+
+# ============================================================================
+# Data Collection (deerflow_extensions)
+# ============================================================================
+# Training data collection for LLM distillation. All settings are opt-in and
+# disabled by default. Enable carefully — see PRIVACY.md for GDPR compliance.
+#
+# data_collection:
+#   enabled: false                         # Master enable switch
+#   output_dir: ./data_collection_logs     # Directory for JSONL output
+#   buffer_size: 500                       # Records per flush buffer
+#   flush_interval_sec: 5.0               # Async flush interval (seconds)
+#   max_file_size_mb: 100                  # Rotate daily file at this size
+#   collect_agent_input: true              # Record P1 (agent input)
+#   collect_model_output: true             # Record P2 (model output)
+#   collect_tool_calls: true               # Record P3+P4 (tool calls)
+#   collect_intermediate_state: false      # Record P5 (intermediate state)
+#   collect_final_response: true           # Record P6 (final response)
+#
+#   # ── User identity collection (opt-in, privacy-safe) ──
+#   # Record user_id from runtime.context (Web UI users).
+#   # DISABLED by default. Enable only after privacy review.
+#   collect_user_identity: false
+#   # Record channel_user_id from runtime.context (IM platform users).
+#   # Independently controlled. May contain raw platform identifiers.
+#   collect_channel_user_id: false
+#   # When true, identity fields are HMAC-SHA256 hashed with pseudonym_salt.
+#   # Pseudonymization, NOT anonymization — same input → same hash.
+#   pseudonymize_identity: true
+#   # Salt for HMAC-SHA256 hashing. Set via DATA_COLLECTION_PSEUDONYM_SALT
+#   # env var. Empty salt → hashes not linkable across sessions (WARNING logged).
+#   pseudonym_salt: ""

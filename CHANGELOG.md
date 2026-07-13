@@ -72,6 +72,14 @@ with **182 merged pull requests** since the first 2.0 milestone tag.
 - **skill:** Add maintainer issue and PR workflow skill. ([#3554])
 - **skill:** Strengthen the maintainer orchestrator review workflow. ([#3606])
 
+#### Data Collection
+- **data-collection:** Add `user_id` / `channel_user_id` collection with HMAC-SHA256
+  pseudonymization, fail-open identity injection, Session Identity Cache in middleware,
+  and config-driven opt-in switches (`collect_user_identity`, `collect_channel_user_id`,
+  `pseudonymize_identity`, `pseudonym_salt`). Identity flows through all 6 collection
+  points (P1-P6) via the `record()` uniform injection layer — zero intrusion on
+  semantic method signatures. ([#deerflow-extensions])
+
 ### Performance
 
 - **harness:** Push thread metadata filters into SQL instead of post-filtering

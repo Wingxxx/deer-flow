@@ -7,8 +7,11 @@ Configuration source priority (highest to lowest):
   4. DEFAULT_CONFIG defaults
 """
 
+import logging
 import os
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -23,6 +26,26 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "collect_intermediate_state": False,
     "collect_final_response": True,
     "role_extract_mode": "auto",
+    # ── User identity collection (opt-in, privacy-safe) ──
+    # Whether to record the authenticated user_id in training data.
+    # DISABLED by default. Set to True only after internal privacy review
+    # and with pseudonymize_identity enabled.
+    "collect_user_identity": False,
+    # Whether to record the IM channel platform user_id (channel_user_id).
+    # INDEPENDENTLY controlled from collect_user_identity.
+    # DISABLED by default. channel_user_id may contain raw platform
+    # identifiers (e.g., "user@example.com") — treat with extra care.
+    "collect_channel_user_id": False,
+    # When True, user_id/channel_user_id are HMAC-SHA256 hashed with
+    # pseudonym_salt before writing to disk. This is pseudonymization,
+    # NOT anonymization — same input always produces same hash,
+    # enabling per-user analytics without exposing raw identifiers.
+    # Default: True (enabled when identity collection is on).
+    "pseudonymize_identity": True,
+    # Salt for the pseudonymization HMAC. Set via DATA_COLLECTION_PSEUDONYM_SALT
+    # environment variable. An empty salt produces a WARNING at startup and
+    # means hashes will NOT be linkable across sessions.
+    "pseudonym_salt": "",
 }
 
 _ENV_VAR_MAP: dict[str, tuple[str, callable]] = {
@@ -31,6 +54,9 @@ _ENV_VAR_MAP: dict[str, tuple[str, callable]] = {
     "DATA_COLLECTION_BUFFER_SIZE": ("buffer_size", int),
     "DATA_COLLECTION_FLUSH_INTERVAL": ("flush_interval_sec", float),
     "DATA_COLLECTION_ROLE_EXTRACT_MODE": ("role_extract_mode", str),
+    "DATA_COLLECTION_COLLECT_USER_IDENTITY": ("collect_user_identity", lambda v: v.lower() == "true"),
+    "DATA_COLLECTION_COLLECT_CHANNEL_USER_ID": ("collect_channel_user_id", lambda v: v.lower() == "true"),
+    "DATA_COLLECTION_PSEUDONYM_SALT": ("pseudonym_salt", str),
 }
 
 
@@ -77,7 +103,21 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
         pass
 
     # Priority 3: Environment variable overrides (always applied)
-    return _apply_env_overrides(config)
+    config = _apply_env_overrides(config)
+
+    # Semantic validation warnings (fail-open: warn only, never raise)
+    if config.get("collect_user_identity") and not config.get("pseudonymize_identity"):
+        logger.warning(
+            "[DataCollection] collect_user_identity=ON but pseudonymize_identity=OFF — "
+            "raw user_id will be written in plaintext to daily JSONL files."
+        )
+    if config.get("pseudonymize_identity") and not config.get("pseudonym_salt"):
+        logger.warning(
+            "[DataCollection] pseudonym_salt is empty — hashes will NOT be linkable "
+            "across sessions. Set DATA_COLLECTION_PSEUDONYM_SALT env var."
+        )
+
+    return config
 
 
 def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:

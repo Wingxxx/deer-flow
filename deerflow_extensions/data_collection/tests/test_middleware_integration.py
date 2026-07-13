@@ -234,3 +234,127 @@ class TestMiddlewareAsyncIntegration:
 
         assert result is state
         mock_collector.record_agent_input.assert_called_once()
+
+
+class TestMiddlewareIdentityIntegration:
+    """Integration tests for middleware identity injection pipeline."""
+
+    def test_identity_flows_before_to_after_model(self):
+        """Identity extracted in before_model is available in after_model via cache."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw._collect_user_identity = True
+        mw._collect_channel_user_id = True
+        mw._pseudonymize_identity = False  # raw for test
+
+        mock_run = MagicMock()
+        mock_run.context = {"user_id": "user-789", "channel_user_id": "chan-789"}
+
+        state = {
+            "config": {"configurable": {"thread_id": "tid-flow"}},
+            "messages": [{"type": "user", "content": "hello"}],
+            "max_steps": 25,
+            "rag_context": "",
+        }
+
+        mw.before_model(state, mock_run)
+        # before_model sets _session_identity["tid-flow"] = {"user_id": "user-789", ...}
+
+        # Simulate after_model — it should restore from cache
+        mock_msg = MagicMock()
+        mock_msg.type = "ai"
+        mock_msg.content = "response"
+        mock_msg.additional_kwargs = {}
+        mock_msg.response_metadata = {}
+        after_state = {**state, "messages": [mock_msg]}
+
+        mw.after_model(after_state, mock_run)
+
+        # Verify identity was restored to collector before recording
+        assert mw.collector._current_identity == {"user_id": "user-789", "channel_user_id": "chan-789"}
+
+    def test_identity_survives_wrap_tool_call(self):
+        """Identity cached in before_model is available in wrap_tool_call."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw._collect_user_identity = True
+        mw._pseudonymize_identity = False
+
+        mock_run = MagicMock()
+        mock_run.context = {"user_id": "user-wtc"}
+
+        state = {
+            "config": {"configurable": {"thread_id": "tid-wtc"}},
+            "messages": [{"type": "user", "content": "hello"}],
+            "max_steps": 25,
+        }
+
+        mw.before_model(state, mock_run)
+        # Cache populated: _session_identity["tid-wtc"] = {"user_id": "user-wtc"}
+
+        # wrap_tool_call uses session_id from metadata to restore identity
+        mock_request = MagicMock()
+        mock_request.tool_call = {
+            "name": "bash",
+            "args": {"cmd": "ls"},
+            "id": "call-wtc",
+            "metadata": {"session_id": "tid-wtc"},
+        }
+
+        def handler(req):
+            return MagicMock(content="result")
+
+        mw.wrap_tool_call(mock_request, handler)
+
+        # Verify identity was restored
+        assert mw.collector._current_identity == {"user_id": "user-wtc"}
+
+    def test_identity_cleaned_in_after_agent(self):
+        """Identity cache is cleaned up after after_agent."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw._collect_user_identity = True
+        mw._pseudonymize_identity = False
+
+        mock_run = MagicMock()
+        mock_run.context = {"user_id": "user-cleanup"}
+
+        state = {
+            "config": {"configurable": {"thread_id": "tid-clean"}},
+            "messages": [{"type": "user", "content": "hello"}],
+            "max_steps": 25,
+        }
+
+        mw.before_model(state, mock_run)
+        assert "tid-clean" in mw._session_identity
+
+        mw.after_agent(state, mock_run)
+        assert "tid-clean" not in mw._session_identity
+
+    @pytest.mark.anyio
+    async def test_async_path_identity_injection(self):
+        """Async middleware methods correctly handle identity injection."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw._collect_user_identity = True
+        mw._pseudonymize_identity = False
+
+        mock_run = MagicMock()
+        mock_run.context = {"user_id": "async-user"}
+
+        state = {
+            "config": {"configurable": {"thread_id": "tid-async"}},
+            "messages": [{"type": "user", "content": "hello"}],
+            "max_steps": 25,
+        }
+
+        result = await mw.abefore_model(state, mock_run)
+        assert result is state
+        # Identity should be cached
+        assert "tid-async" in mw._session_identity
+        assert mw._session_identity["tid-async"]["user_id"] == "async-user"
+
+        result = await mw.aafter_agent(state, mock_run)
+        assert result is state
+        # Identity should be cleaned up
+        assert "tid-async" not in mw._session_identity

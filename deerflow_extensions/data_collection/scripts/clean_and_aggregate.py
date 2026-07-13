@@ -132,6 +132,11 @@ class DataAggregator:
                 if not metadata:
                     metadata["session_id"] = s.get("session_id", "")
                     metadata["create_time"] = s.get("create_time", "")
+                    # Propagate identity fields (may be absent)
+                    if "user_id" in s:
+                        metadata["user_id"] = s["user_id"]
+                    if "channel_user_id" in s:
+                        metadata["channel_user_id"] = s["channel_user_id"]
 
             elif sample_type == "model_output":
                 raw_response = (s.get("raw_response") or "").strip()

@@ -24,6 +24,10 @@ class TestDefaultConfig:
             "collect_intermediate_state",
             "collect_final_response",
             "role_extract_mode",
+            "collect_user_identity",
+            "collect_channel_user_id",
+            "pseudonymize_identity",
+            "pseudonym_salt",
         }
         assert set(DEFAULT_CONFIG.keys()) == expected_keys
 
@@ -39,6 +43,10 @@ class TestDefaultConfig:
         assert DEFAULT_CONFIG["collect_intermediate_state"] is False
         assert DEFAULT_CONFIG["collect_final_response"] is True
         assert DEFAULT_CONFIG["role_extract_mode"] == "auto"
+        assert DEFAULT_CONFIG["collect_user_identity"] is False
+        assert DEFAULT_CONFIG["collect_channel_user_id"] is False
+        assert DEFAULT_CONFIG["pseudonymize_identity"] is True
+        assert DEFAULT_CONFIG["pseudonym_salt"] == ""
 
 
 class TestLoadConfig:
@@ -83,6 +91,21 @@ class TestLoadConfig:
             assert result["enabled"] is False
             assert result["output_dir"] == DEFAULT_CONFIG["output_dir"]
             assert result["buffer_size"] == DEFAULT_CONFIG["buffer_size"]
+
+    def test_env_var_override_collect_user_identity(self):
+        with patch.dict(os.environ, {"DATA_COLLECTION_COLLECT_USER_IDENTITY": "true"}, clear=True):
+            cfg = load_config()
+            assert cfg["collect_user_identity"] is True
+
+    def test_env_var_override_collect_channel_user_id(self):
+        with patch.dict(os.environ, {"DATA_COLLECTION_COLLECT_CHANNEL_USER_ID": "true"}, clear=True):
+            cfg = load_config()
+            assert cfg["collect_channel_user_id"] is True
+
+    def test_env_var_override_pseudonym_salt(self):
+        with patch.dict(os.environ, {"DATA_COLLECTION_PSEUDONYM_SALT": "my-secret-salt"}, clear=True):
+            cfg = load_config()
+            assert cfg["pseudonym_salt"] == "my-secret-salt"
 
     def test_env_var_not_set_does_not_override(self):
         base = dict(DEFAULT_CONFIG)

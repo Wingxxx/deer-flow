@@ -2,7 +2,7 @@ import logging
 import time
 from typing import Any
 
-from deerflow_extensions.data_collection.collector import get_collector
+from deerflow_extensions.data_collection.collector import get_collector, _pseudonymize
 from deerflow_extensions.data_collection.config import load_config
 from deerflow_extensions.data_collection.role_parser import parse_messages
 from langchain.agents.middleware import AgentMiddleware
@@ -47,9 +47,24 @@ class DataCollectionMiddleware(AgentMiddleware):
             logger.debug("[DataCollection] Failed to get collector: %s", e)
             self.collector = None
 
+        # Identity collection config (loaded once, fail-open)
+        self._collect_user_identity = False
+        self._collect_channel_user_id = False
+        self._pseudonymize_identity = True
+        self._identity_salt = ""
+        self._session_identity: dict[str, dict] = {}
+
         try:
             config = load_config()
             self.role_extract_mode = config.get("role_extract_mode", "auto")
+            self._collect_user_identity = config.get("collect_user_identity", False)
+            self._collect_channel_user_id = config.get("collect_channel_user_id", False)
+            self._pseudonymize_identity = config.get("pseudonymize_identity", True)
+            self._identity_salt = config.get("pseudonym_salt", "")
+            # Register identity flags on the collector for gating
+            if self.collector is not None:
+                self.collector.collect_flags["user_identity"] = self._collect_user_identity
+                self.collector.collect_flags["channel_user_identity"] = self._collect_channel_user_id
         except Exception as e:
             logger.debug("[DataCollection] Failed to load config: %s", e)
             self.role_extract_mode = "auto"
@@ -60,6 +75,70 @@ class DataCollectionMiddleware(AgentMiddleware):
         self._tool_calls: dict[str, int] = {}
         self._accumulated_tokens: dict[str, dict] = {}
 
+    def _prepare_identity_for_collector(self, state: dict, runtime: Runtime | None, session_id: str) -> None:
+        """Extract user identity from runtime.context, pseudonymize, cache, and inject.
+
+        Sets collector._current_identity for the next record_*() call.
+        All failure modes are caught: no exception propagates.
+        """
+        if self.collector is None:
+            return
+
+        try:
+            should_collect_user = self._collect_user_identity
+            should_collect_channel = self._collect_channel_user_id
+
+            if not should_collect_user and not should_collect_channel:
+                self.collector._current_identity = {}
+                return
+
+            raw_user_id = None
+            raw_channel_user_id = None
+            if runtime is not None and runtime.context:
+                ctx = runtime.context
+                raw_user_id = str(ctx.get("user_id")) if ctx.get("user_id") is not None else None
+                raw_channel_user_id = str(ctx.get("channel_user_id")) if ctx.get("channel_user_id") is not None else None
+
+            identity: dict[str, str] = {}
+            if should_collect_user and raw_user_id is not None:
+                if self._pseudonymize_identity:
+                    identity["user_id"] = _pseudonymize(raw_user_id, self._identity_salt)
+                else:
+                    identity["user_id"] = raw_user_id
+            if should_collect_channel and raw_channel_user_id is not None:
+                if self._pseudonymize_identity:
+                    identity["channel_user_id"] = _pseudonymize(raw_channel_user_id, self._identity_salt)
+                else:
+                    identity["channel_user_id"] = raw_channel_user_id
+
+            # Cache for downstream hooks
+            if identity and session_id and session_id != "unknown":
+                self._session_identity[session_id] = dict(identity)
+
+            self.collector._current_identity = identity
+        except Exception:
+            # Fail-open: identity failure does not affect recording
+            if self.collector is not None:
+                self.collector._current_identity = {}
+
+    def _restore_identity_for_collector(self, session_id: str) -> None:
+        """Restore cached identity from _session_identity to collector.
+
+        Called by downstream hooks (after_model, wrap_tool_call, after_agent)
+        to ensure identity fields are present on records. Fail-open: any
+        exception silently drops identity without affecting the record.
+        """
+        if self.collector is None:
+            return
+        try:
+            if session_id and session_id in self._session_identity:
+                self.collector._current_identity = dict(self._session_identity[session_id])
+            else:
+                self.collector._current_identity = {}
+        except Exception:
+            if self.collector is not None:
+                self.collector._current_identity = {}
+
     def before_model(self, state: dict, runtime: Runtime | None = None) -> dict:
         if self.collector is None:
             return state
@@ -67,6 +146,9 @@ class DataCollectionMiddleware(AgentMiddleware):
         try:
             session_id = _get_thread_id_from_state_or_runtime(state, runtime)
             messages = state.get("messages", [])
+
+            # Extract and inject user identity (fail-open)
+            self._prepare_identity_for_collector(state, runtime, session_id)
 
             parsed = parse_messages(messages, mode=self.role_extract_mode)
             user_query = parsed["user_query"]
@@ -106,6 +188,7 @@ class DataCollectionMiddleware(AgentMiddleware):
 
         try:
             session_id = _get_thread_id_from_state_or_runtime(state, runtime)
+            self._restore_identity_for_collector(session_id)
             messages = state.get("messages", [])
             if not messages:
                 return state
@@ -179,6 +262,7 @@ class DataCollectionMiddleware(AgentMiddleware):
             tc = getattr(tool_call, "tool_call", {}) or {}
             metadata = tc.get("metadata", {}) or {}
             session_id = metadata.get("session_id", "unknown")
+            self._restore_identity_for_collector(session_id)
             tool_name = tc.get("name", "unknown")
             tool_params = tc.get("args", {})
             call_id = tc.get("id", "") or str(id(tool_call))
@@ -242,6 +326,7 @@ class DataCollectionMiddleware(AgentMiddleware):
             tc = getattr(tool_call, "tool_call", {}) or {}
             metadata = tc.get("metadata", {}) or {}
             session_id = metadata.get("session_id", "unknown")
+            self._restore_identity_for_collector(session_id)
             tool_name = tc.get("name", "unknown")
             tool_params = tc.get("args", {})
             call_id = tc.get("id", "") or str(id(tool_call))
@@ -298,6 +383,7 @@ class DataCollectionMiddleware(AgentMiddleware):
 
         try:
             session_id = _get_thread_id_from_state_or_runtime(state, runtime)
+            self._restore_identity_for_collector(session_id)
             messages = state.get("messages", [])
             final_msg = messages[-1] if messages else None
 
@@ -328,6 +414,8 @@ class DataCollectionMiddleware(AgentMiddleware):
                 self._accumulated_tokens,
             ]:
                 d.pop(session_id, None)
+
+            self._session_identity.pop(session_id, None)
 
         except Exception as e:
             logger.debug("[DataCollection] after_agent error: %s", e)

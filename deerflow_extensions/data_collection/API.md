@@ -19,8 +19,13 @@ Process-level singleton for async buffered writing of training data. All collect
 
 General-purpose record method. All semantic methods delegate here. The record is timestamped (UTC ISO-8601), buffered, and flushed asynchronously.
 
+**Identity injection:** When identity collection is enabled, `record()` automatically injects `user_id` and/or `channel_user_id` into `data` from the collector's `_current_identity` attribute (set by the middleware before each hook call). Identity keys are only present when:
+- Their corresponding `collect_*` flag is `True` (config-driven)
+- The runtime provided the value (may be absent for anonymous sessions)
+- The value is not `None` (conditional include — absent key ≠ `null` key)
+
 - `sample_type` -- One of: `agent_input`, `model_output`, `tool_call_request`, `tool_call_result`, `agent_intermediate_state`, `final_response`.
-- `data` -- Arbitrary JSON-serializable payload.
+- `data` -- Arbitrary JSON-serializable payload. Identity fields (`user_id`, `channel_user_id`) are auto-injected when configured.
 
 ---
 
@@ -165,6 +170,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "collect_tool_calls": True,
     "collect_intermediate_state": False,
     "collect_final_response": True,
+    # ── Identity collection (opt-in, privacy-safe) ──
+    "collect_user_identity": False,
+    "collect_channel_user_id": False,
+    "pseudonymize_identity": True,
+    "pseudonym_salt": "",
 }
 ```
 
@@ -205,21 +215,23 @@ Execute the full ETL pipeline for a given date. Loads raw JSONL from `daily/`, c
 
 ---
 
-### `export_dataset(input_path, output_path, format="llamafactory_messages") -> None`
+### `export_dataset(input_path, output_path, format="llamafactory_messages", strip_identity=False) -> None`
 
 ```python
 def export_dataset(
     input_path: str,
     output_path: str,
     format: OutputFormat = "llamafactory_messages",
+    strip_identity: bool = False,
 ) -> None
 ```
 
-Convert a messages-format JSONL dataset to another training framework format.
+Convert a messages-format JSONL dataset to another training framework format. When `strip_identity=True`, identity fields (`user_id`, `channel_user_id`, `session_id`) are removed from metadata **before** format conversion, preventing accidental propagation.
 
 - `input_path` -- Path to aggregated `train_data.jsonl`.
 - `output_path` -- Destination path for the converted JSONL.
 - `format` -- One of `"llamafactory_messages"` (pass-through), `"sharegpt"`, `"alpaca_simple"`.
+- `strip_identity` -- If `True`, strips identity fields from metadata before conversion (default: `False`). Applied before the converter, so no format converter can accidentally propagate identity fields.
 - **Raises** -- `FileNotFoundError`, `KeyError` (unknown format).
 
 ---

@@ -82,6 +82,24 @@ For most DeerFlow deployments, `auto` is recommended as it handles both LangGrap
 
 1. Standalone YAML file → 2. DeerFlow `config.yaml` → 3. Environment variables → 4. `DEFAULT_CONFIG` defaults
 
+### Identity collection (opt-in, privacy-safe)
+
+The system can optionally record `user_id` (Web UI users) and `channel_user_id` (IM platform users) in training data. All identity features are **disabled by default** and must be explicitly enabled:
+
+| Variable | Config Key | Type | Default | Description |
+|----------|-----------|------|---------|-------------|
+| `DATA_COLLECTION_COLLECT_USER_IDENTITY` | `collect_user_identity` | `bool` | `false` | Record authenticated user_id |
+| `DATA_COLLECTION_COLLECT_CHANNEL_USER_ID` | `collect_channel_user_id` | `bool` | `false` | Record IM platform channel_user_id |
+| — | `pseudonymize_identity` | `bool` | `true` | HMAC-SHA256 hash before writing |
+| `DATA_COLLECTION_PSEUDONYM_SALT` | `pseudonym_salt` | `str` | `""` | Salt for HMAC (empty → WARNING) |
+
+**Important security notes:**
+- `collect_user_identity=true + pseudonymize_identity=false` writes **raw user_id in plaintext** — a WARNING is logged at startup, and records carry a `_plaintext_identity: True` audit marker
+- `pseudonym_salt=""` when `pseudonymize_identity=true` produces a WARNING — hashes will NOT be linkable across sessions (each restart generates effectively unique hashes)
+- `channel_user_id` may contain platform PII (e.g., email addresses) — treat with extra care
+- Identity is **not** collected on any `record_*` method's parameter list — it flows through the `record()` uniform injection layer, zero intrusion on semantic method signatures
+- See [PRIVACY.md](./PRIVACY.md) for GDPR compliance details, DSAR procedures, and the three pseudonymization modes
+
 ## Data Directory Structure
 
 All collected data is written under the `output_dir` (default: `/data/deerflow/training_logs/`):
@@ -179,5 +197,8 @@ No other files are modified. The data collection directory and accumulated logs 
 - Collected data lives on local disk; set up external backup/offload for production deployments.
 - The collector uses thread-safe buffering with `threading.Lock` to support concurrent writes from multiple sessions.
 - Middleware methods support both sync and async execution paths for full LangGraph compatibility.
+- Identity fields (`user_id`, `channel_user_id`) are written to raw JSONL — **never include raw identity values in application logs, error reports, or any external pipeline** without going through the export layer's `strip_identity` parameter.
+- When exporting datasets for external fine-tuning, pass `strip_identity=True` to `export_dataset()` to strip `user_id`, `channel_user_id`, and `session_id` from the exported output — this happens before format conversion, so no converter can accidentally propagate identity fields.
+- The pseudonymization salt (`DATA_COLLECTION_PSEUDONYM_SALT`) must be kept secret and rotated periodically — leaking the salt allows hash-to-identity mapping. See PRIVACY.md for key rotation procedures.
 
 WING
