@@ -217,7 +217,7 @@ git commit -m "Fork sync: N upstream commits + conflict resolutions"
 | `frontend/src/components/workspace/workspace-nav-menu.tsx` | 🟡 中 | 扩展注册表集成 + 隐藏菜单按钮 |
 | `frontend/src/components/workspace/settings/account-settings-page.tsx` | 🟢 低 | ADS 字段隐藏注释 |
 | `frontend/src/app/workspace/workspace-content.tsx` | 🟢 低 | MobileSidebarTrigger 注入 |
-| `frontend/src/components/workspace/input-box.tsx` | 🟢 低 | input-suggestions 动态注册 import |
+| `frontend/src/components/workspace/input-box.tsx` | 🟢 低 | input-suggestions Context hook 订阅 import |
 | `frontend/src/components/query-client-provider.tsx` | 🟢 低 | TanStack Query 缓存配置 |
 | `docker/docker-compose-dev.yaml` | 🟡 中 | 自定义卷挂载 + PYTHONPATH + ADS env |
 | `docker/docker-compose.yaml` | 🟡 中 | 自定义卷挂载 |
@@ -248,7 +248,7 @@ git commit -m "Fork sync: N upstream commits + conflict resolutions"
 | 12 | `frontend/src/components/workspace/workspace-nav-menu.tsx` | `getSettingsExtensions()` + 隐藏菜单按钮(S5) | 注册表 + 注释隐藏 | 🟡 中 |
 | 13 | `frontend/src/components/workspace/settings/account-settings-page.tsx` | ADS 字段隐藏(email/role + 修改密码) | 注释隐藏 | ✅ 低 |
 | 14 | `frontend/src/app/workspace/workspace-content.tsx` | MobileSidebarTrigger 注入(2行) | JSX 行追加 | ✅ 低 |
-| 15 | `frontend/src/components/workspace/input-box.tsx` | input-suggestions 动态注册 import | import 行 + 动态渲染 | ✅ 低 |
+| 15 | `frontend/src/components/workspace/input-box.tsx` | input-suggestions Context hook 订阅 import | hook 导入 + 运行时渲染 | ✅ 低 |
 | 16 | `frontend/src/components/query-client-provider.tsx` | TanStack Query 缓存配置(gcTime/staleTime) | 配置对象 | ✅ 低 |
 | 21 | `frontend/src/app/layout.tsx` | BrandingProvider 包裹 + generateMetadata 动态标题 | BrandingProvider | 🟡 中 |
 | 22 | `frontend/src/components/workspace/workspace-header.tsx` | 品牌自定义 appName/appAbbreviation | useBranding hook | 🟡 中 |

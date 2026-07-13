@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, test, expect, beforeEach } from "@rstest/core";
 
 import {
   registerInputSuggestion,
@@ -11,7 +11,7 @@ describe("InputSuggestions Registry", () => {
     clearInputSuggestions();
   });
 
-  it("should register and retrieve a suggestion", () => {
+  test("should register and retrieve a suggestion", () => {
     registerInputSuggestion({
       id: "test",
       label: "Test",
@@ -25,7 +25,7 @@ describe("InputSuggestions Registry", () => {
     expect(all[0]!.group).toBe("main");
   });
 
-  it("should ignore duplicate id", () => {
+  test("should ignore duplicate id", () => {
     registerInputSuggestion({
       id: "test",
       label: "A",
@@ -44,7 +44,7 @@ describe("InputSuggestions Registry", () => {
     expect(getInputSuggestions()[0]!.label).toBe("A");
   });
 
-  it("should filter by group", () => {
+  test("should filter by group", () => {
     registerInputSuggestion({
       id: "a",
       label: "A",
@@ -64,7 +64,7 @@ describe("InputSuggestions Registry", () => {
     expect(all.filter((s) => s.group === "create")).toHaveLength(1);
   });
 
-  it("should return empty after clear", () => {
+  test("should return empty after clear", () => {
     registerInputSuggestion({
       id: "test",
       label: "A",
@@ -76,7 +76,7 @@ describe("InputSuggestions Registry", () => {
     expect(getInputSuggestions()).toHaveLength(0);
   });
 
-  it("should return empty when nothing registered", () => {
+  test("should return empty when nothing registered", () => {
     expect(getInputSuggestions()).toHaveLength(0);
   });
 });

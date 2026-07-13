@@ -7,60 +7,107 @@ import {
   SearchIcon,
   BarChart3Icon,
 } from "lucide-react";
-import { registerInputSuggestion } from "./registry";
+import type { LucideIcon } from "lucide-react";
+import type { InputSuggestionConfig } from "./types";
 
-registerInputSuggestion({
-  id: "product-consult",
-  label: "产品咨询",
-  prompt: "咨询关于ADS桌面云的[具体问题]",
-  icon: MonitorIcon,
-  group: "main",
-});
+// ─── 静态 iconMap ──────────────────────────────────────────
 
-registerInputSuggestion({
-  id: "tech-support",
-  label: "技术支持",
-  prompt: "排查[具体技术问题]的原因和解决方案",
-  icon: BugIcon,
-  group: "main",
-});
+const iconMap: Record<string, LucideIcon> = {
+  Monitor: MonitorIcon,
+  Bug: BugIcon,
+  GitMerge: GitMergeIcon,
+  FileText: FileTextIcon,
+  FileCode: FileCodeIcon,
+  Search: SearchIcon,
+  BarChart3: BarChart3Icon,
+};
 
-registerInputSuggestion({
-  id: "deployment",
-  label: "关联模板",
-  prompt: "使用终端关联模板 skill，处理[关联场景]的终端配置",
-  icon: GitMergeIcon,
-  group: "main",
-});
+// ─── 原型链污染防护 ────────────────────────────────────────
 
-registerInputSuggestion({
-  id: "ops-report",
-  label: "运维报告",
-  prompt: "生成关于[主题]的系统运维分析报告",
-  icon: FileTextIcon,
-  group: "create",
-});
+const BLOCKED_ICON_NAMES = new Set([
+  "constructor",
+  "__proto__",
+  "prototype",
+  "toString",
+  "valueOf",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+]);
 
-registerInputSuggestion({
-  id: "config-script",
-  label: "配置脚本",
-  prompt: "生成[场景]的ADS批量配置脚本",
-  icon: FileCodeIcon,
-  group: "create",
-});
+// ─── icon 解析 ──────────────────────────────────────────────
 
-registerInputSuggestion({
-  id: "knowledge-search",
-  label: "知识检索",
-  prompt: "从知识库检索[主题]的相关资料并总结",
-  icon: SearchIcon,
-  group: "create",
-});
+export function resolveIcon(
+  iconName: string,
+): LucideIcon | undefined {
+  const normalized = iconName.replace(/Icon$/i, "");
+  if (BLOCKED_ICON_NAMES.has(normalized)) {
+    console.warn(`[input-suggestions] Blocked icon name: "${iconName}"`);
+    return undefined;
+  }
+  return iconMap[normalized];
+}
 
-registerInputSuggestion({
-  id: "data-analysis",
-  label: "数据分析",
-  prompt: "分析[数据文件/主题]并生成可视化图表",
-  icon: BarChart3Icon,
-  group: "create",
-});
+// ─── 运行时校验 ──────────────────────────────────────────────
+
+const VALID_GROUPS = new Set(["main", "create"]);
+
+function isValidConfig(item: unknown): item is InputSuggestionConfig {
+  if (!item || typeof item !== "object") return false;
+  const obj = item as Record<string, unknown>;
+  if (!obj.id || typeof obj.id !== "string") {
+    console.warn(`[input-suggestions] Skipping item: missing or invalid "id"`);
+    return false;
+  }
+  if (!obj.label || typeof obj.label !== "string") {
+    console.warn(`[input-suggestions] Skipping item "${obj.id}": missing or invalid "label"`);
+    return false;
+  }
+  if (!obj.prompt || typeof obj.prompt !== "string" || obj.prompt.trim() === "") {
+    console.warn(`[input-suggestions] Skipping item "${obj.id}": missing, invalid or empty "prompt"`);
+    return false;
+  }
+  if (!obj.icon || typeof obj.icon !== "string") {
+    console.warn(`[input-suggestions] Skipping item "${obj.id}": missing or invalid "icon"`);
+    return false;
+  }
+  if (!obj.group || typeof obj.group !== "string" || !VALID_GROUPS.has(obj.group)) {
+    console.warn(`[input-suggestions] Skipping item "${obj.id}": invalid "group" "${String(obj.group)}"`);
+    return false;
+  }
+  return true;
+}
+
+// ─── fetch 加载 ────────────────────────────────────────────
+
+let _cached: InputSuggestionConfig[] | null = null;
+
+export function clearInputSuggestionsCache(): void {
+  _cached = null;
+}
+
+export async function loadInputSuggestionsConfig(): Promise<InputSuggestionConfig[]> {
+  if (_cached !== null) return _cached;
+
+  try {
+    const res = await fetch("/site.config.json", { cache: "no-store" });
+    if (!res.ok) {
+      console.warn(`[input-suggestions] Failed to fetch config: HTTP ${res.status}`);
+      return [];
+    }
+    const json: unknown = await res.json();
+    const raw = (json as Record<string, unknown>)?.["inputSuggestions"];
+    if (!Array.isArray(raw)) {
+      console.warn(`[input-suggestions] "inputSuggestions" is not an array, got: ${typeof raw}`);
+      return [];
+    }
+    const valid: InputSuggestionConfig[] = raw.filter(isValidConfig);
+    _cached = valid;
+    return valid;
+  } catch (err) {
+    console.warn(`[input-suggestions] Failed to load config:`, err);
+    return [];
+  }
+}
+
+

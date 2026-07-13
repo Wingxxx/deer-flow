@@ -59,7 +59,7 @@ The frontend is a stateful chat application. Users create **threads** (conversat
 - **`extensions/`** — 零侵入扩展目录（独立于官方源码，不与上游冲突）：
   - `env-settings/` — API Key 配置 UI + 渠道配置（/providers + /channels 分路径，7 厂商通用管理、模型选择、Key 连通性验证、清除配置）
   - `ads_auth/` — ADS 统一认证登录页
-  - `input-suggestions/` — 输入建议按钮自定义（registry 注册表 + config 配置）
+  - `input-suggestions/` — 输入建议按钮自定义（运行时 fetch site.config.json → Context 驱动重渲染）
   - `mobile-sidebar/` — 移动端侧栏浮动汉堡触发按钮
   - ~~`human-intervention/`~~ — ⚠️ **已封存** — AI 澄清请求交互式 UI，仅保留代码供参考
 - `hooks/` — Shared React hooks
@@ -115,13 +115,13 @@ Requires Node.js 22+ and pnpm 10.26.2+.
 `extensions/` 存放所有自定义扩展：
 - `ads_auth/` — ADS 统一认证登录页
 - `env-settings/` — API Key 配置 UI
-- `input-suggestions/` — 输入建议按钮（registry）
+- `input-suggestions/` — 输入建议按钮（运行时 fetch + Context 驱动）
 - `mobile-sidebar/` — 移动端侧栏按钮
 - ~~`human-intervention/`~~ — ⚠️ **已封存** — AI 澄清请求交互式 UI，仅保留代码供参考
 
 ### 已有注入点（优先使用）
 - `core/settings-extensions/registry.ts` — SettingsDialog 扩展注册
-- `core/input-suggestions/registry.ts` — 输入建议注册
+- `extensions/input-suggestions/registry.ts` — 输入建议注册表
 - ~~`src/app/workspace/chats/[thread_id]/page.tsx`~~ — ⚠️ **已封存** — useClarificationSubmit 注入已移除
 
 ### 绝对禁区

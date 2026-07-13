@@ -11,7 +11,7 @@
 | [ads_auth](./ads_auth/README.md) | ADS 统一认证登录，替换 DeerFlow 原生登录页 | LoginPage.tsx, middleware-handler.ts |
 | [branding](./branding/README.md) | 品牌自定义配置，替换应用名/欢迎语/登录页标题 | types.ts, config.ts, context.tsx |
 | [env-settings](./env-settings/README.md) | AI 模型 API Key 配置面板 + IM 渠道凭据管理（WeCom Bot） | provider-settings-page.tsx, providers.ts, hooks.ts |
-| [input-suggestions](./input-suggestions/README.md) | 输入建议按钮自定义系统，替换内置快捷按钮 | registry.ts, config.ts |
+| [input-suggestions](./input-suggestions/README.md) | 输入建议按钮自定义系统，替换内置快捷按钮 | registry.ts, config.ts, context.tsx |
 | [mobile-sidebar](./mobile-sidebar/README.md) | 移动端侧栏浮动汉堡触发按钮 | mobile-sidebar-trigger.tsx |
 | [human-intervention](./human-intervention/README.md) | 交互式人工介入 UI，Agent 澄清请求的交互式选择/输入/确认组件 | ClarificationProvider.tsx, ClarificationWidget.tsx, widgets/, schema.ts, hooks.ts |
 
@@ -51,11 +51,13 @@
 
 ### input-suggestions — 输入建议
 
-通过注册表模式实现输入建议按钮的自定义系统，替代内置的"小惊喜/写作/研究"等按钮。
+通过运行时配置 + Context-状态驱动-Registry 桥接模式实现输入建议按钮自定义系统，替代内置的"小惊喜/写作/研究"等按钮。
 
-- 注册表 API：`registerInputSuggestion()` / `getInputSuggestions()` / `clearInputSuggestions()`
-- 预注册 7 个按钮：产品咨询、技术支持、关联模板（main 组）；运维报告、配置脚本、知识检索、数据分析（create 组）
-- 每个按钮含 id、标签、提示词、图标、分组信息
+- **配置源**：`public/site.config.json` 的 `inputSuggestions` 数组（JSON 唯一强制源）
+- **运行时加载**：`config.ts` fetch 配置文件 → 校验 → 缓存 → icon 解析 → 注册
+- **Context 驱动重渲染**：`InputSuggestionsProvider` 在布局层挂载，`useInputSuggestionsReady()` hook 触发 UI 自动更新
+- **注册表 API**：`registerInputSuggestion()` / `getInputSuggestions()` / `clearInputSuggestions()`
+- **零渲染兜底**：配置缺失/网络失败时返回空数组，不显示任何按钮
 
 详见 [input-suggestions/README.md](./input-suggestions/README.md)。
 

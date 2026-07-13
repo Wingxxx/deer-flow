@@ -8,6 +8,7 @@ import type { Metadata } from "next";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { BrandingProvider } from "../../extensions/branding/context";
+import { InputSuggestionsProvider } from "../../extensions/input-suggestions/context";
 import { I18nProvider } from "@/core/i18n/context";
 import { detectLocaleServer } from "@/core/i18n/server";
 
@@ -38,7 +39,9 @@ export default async function RootLayout({
       <body>
         <ThemeProvider attribute="class" enableSystem disableTransitionOnChange>
           <BrandingProvider>
-            <I18nProvider initialLocale={locale}>{children}</I18nProvider>
+            <InputSuggestionsProvider>
+              <I18nProvider initialLocale={locale}>{children}</I18nProvider>
+            </InputSuggestionsProvider>
           </BrandingProvider>
         </ThemeProvider>
       </body>

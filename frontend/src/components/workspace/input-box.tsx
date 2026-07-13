@@ -66,7 +66,7 @@ import { cn } from "@/lib/utils";
 
 // --- EXTENSION IMPORT: input suggestions ---
 import { getInputSuggestions } from "../../../extensions/input-suggestions/registry";
-import "../../../extensions/input-suggestions/config";
+import { useInputSuggestionsReady } from "../../../extensions/input-suggestions/context";
 // --- EXTENSION IMPORT: end ---
 
 import {
@@ -923,6 +923,9 @@ function SuggestionList() {
     [textInput],
   );
 
+  // 订阅 Context：Provider 加载完成后触发重渲染
+  useInputSuggestionsReady();
+
   const allSuggestions = getInputSuggestions();
   const mainSuggestions = allSuggestions.filter(s => s.group === "main");
   const createSuggestions = allSuggestions.filter(s => s.group === "create");
@@ -966,7 +969,7 @@ function SuggestionList() {
       替换原因：硬编码的"小惊喜/写作/研究/收集/学习/网页/图片/视频"按钮与公司业务无关
       替换方案：通过 frontend/extensions/input-suggestions/ 注册业务相关按钮
       替换时间：2026-06-02
-      侵入点：顶部 import { getInputSuggestions } from "../../../extensions/input-suggestions/registry"
+      侵入点：L68-69 import { getInputSuggestions } from "../../../extensions/input-suggestions/registry" + useInputSuggestionsReady hook；layout.tsx 中 InputSuggestionsProvider 运行时 fetch site.config.json 并注入 registry；SuggestionList 通过 useInputSuggestionsReady() 订阅加载完成事件
       
       <ConfettiButton
         className="text-muted-foreground cursor-pointer rounded-full px-4 text-xs font-normal"

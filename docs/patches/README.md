@@ -13,7 +13,7 @@
 | **data_collection**（蒸馏数据采集） | `app.py` + `docker-compose*.yaml` + `entrypoint.sh` + `boot.py` + `pyproject.toml` | ✅ 低 | 5 个核心 + 1 个扩展 |
 | **ads_auth**（ADS 统一认证） | `app.py` + `auth_middleware.py` + `csrf_middleware.py` + `deps.py` + `docker-compose-dev.yaml` + `next.config.js` + `middleware.ts` + `types.ts` + `.env.example` | ✅ 低 | 9 个核心 |
 | **settings-dialog-ext**（SettingsDialog 扩展架构 + ADS 账号适配） | `settings-dialog.tsx` + `registry.ts` + `workspace-nav-menu.tsx` + `app.py` + `account-settings-page.tsx` | ✅ 低 | 4 个前端 + 1 个后端 |
-| **input-suggestions**（输入建议按钮自定义） | `input-box.tsx`（2 行 import + 渲染改用动态注册）+ `registry.ts` + `config.ts` | ✅ 极低 | **1 个前端核心 + 2 个扩展** |
+| **input-suggestions**（输入建议按钮自定义） | `input-box.tsx`（2 行 import + hook 订阅 + 渲染改用运行时模式）+ `registry.ts` + `config.ts` + `context.tsx` + `types.ts` | ✅ 极低 | **1 个前端核心 + 4 个扩展** |
 | topic_guardrail（回答范围限制） | `app.py`（boot_all_extensions）+ `deerflow_entry.py`（boot_topic_guardrail_early）+ `boot.py`（扩展目录）| ✅ 低 | **2 个核心 + 1 个扩展** |
 | ~~human_intervention~~（交互式人工介入）| `boot.py` + `workspace-content.tsx` + `page.tsx` + `message-list.tsx` | ⚠️ **已封存** — 侵入点已清理（0 个核心），仅保留扩展目录代码 |
 | **Boot Loader**（扩展统一注入） | `app.py`（精简为 1 次调用）+ `deerflow_entry.py`（精简）+ `entrypoint.sh`（移除 sitecustomize） | ✅ 低 | **3 个核心精简** |
@@ -166,8 +166,9 @@ grep -n "boot_topic_guardrail_early" backend/deerflow_entry.py
 echo "=== T6g: SensitiveWordMiddleware isinstance 守卫 ==="
 grep -n "isinstance.*SensitiveWordMiddleware" deerflow_extensions/patch_manager.py
 
-echo "=== IS1: input-box.tsx 扩展 import ==="
+echo "=== IS1: input-box.tsx 扩展 import (context hook) ==="
 grep -n "EXTENSION IMPORT" frontend/src/components/workspace/input-box.tsx
+grep -n "useInputSuggestionsReady" frontend/src/components/workspace/input-box.tsx
 
 echo "=== A11: workspace-content.tsx MobileSidebarTrigger ==="
 grep -n "MobileSidebarTrigger" frontend/src/app/workspace/workspace-content.tsx
