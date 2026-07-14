@@ -280,6 +280,9 @@ fi
     --hidden-import=langchain_deepseek \
     --hidden-import=langchain_google_genai \
     \
+    --hidden-import=tiktoken_ext \
+    --hidden-import=tiktoken_ext.openai_public \
+    \
     --hidden-import=deerflow.models.patched_openai \
     --hidden-import=deerflow.models.patched_deepseek \
     --hidden-import=deerflow.models.patched_minimax \
