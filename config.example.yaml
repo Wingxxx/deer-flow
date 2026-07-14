@@ -1407,13 +1407,13 @@ channel_connections:
 #   collect_intermediate_state: false      # Record P5 (intermediate state)
 #   collect_final_response: true           # Record P6 (final response)
 #
-#   # ── User identity collection (opt-in, privacy-safe) ──
+#   # ── User identity collection (privacy-safe) ──
 #   # Record user_id from runtime.context (Web UI users).
-#   # DISABLED by default. Enable only after privacy review.
-#   collect_user_identity: false
+#   # ENABLED by default. HMAC-pseudonymized when pseudonymize_identity=True.
+#   collect_user_identity: true
 #   # Record channel_user_id from runtime.context (IM platform users).
-#   # Independently controlled. May contain raw platform identifiers.
-#   collect_channel_user_id: false
+#   # ENABLED by default together with collect_user_identity.
+#   collect_channel_user_id: true
 #   # When true, identity fields are HMAC-SHA256 hashed with pseudonym_salt.
 #   # Pseudonymization, NOT anonymization — same input → same hash.
 #   pseudonymize_identity: true

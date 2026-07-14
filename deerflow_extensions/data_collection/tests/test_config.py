@@ -33,7 +33,7 @@ class TestDefaultConfig:
 
     def test_default_config_values(self):
         assert DEFAULT_CONFIG["enabled"] is True
-        assert DEFAULT_CONFIG["output_dir"] == "/data/deerflow/training_logs"
+        assert DEFAULT_CONFIG["output_dir"] == "./data_collection_logs"
         assert DEFAULT_CONFIG["buffer_size"] == 500
         assert DEFAULT_CONFIG["flush_interval_sec"] == 5.0
         assert DEFAULT_CONFIG["max_file_size_mb"] == 100
@@ -43,8 +43,8 @@ class TestDefaultConfig:
         assert DEFAULT_CONFIG["collect_intermediate_state"] is False
         assert DEFAULT_CONFIG["collect_final_response"] is True
         assert DEFAULT_CONFIG["role_extract_mode"] == "auto"
-        assert DEFAULT_CONFIG["collect_user_identity"] is False
-        assert DEFAULT_CONFIG["collect_channel_user_id"] is False
+        assert DEFAULT_CONFIG["collect_user_identity"] is True
+        assert DEFAULT_CONFIG["collect_channel_user_id"] is True
         assert DEFAULT_CONFIG["pseudonymize_identity"] is True
         assert DEFAULT_CONFIG["pseudonym_salt"] == ""
 
@@ -101,6 +101,16 @@ class TestLoadConfig:
         with patch.dict(os.environ, {"DATA_COLLECTION_COLLECT_CHANNEL_USER_ID": "true"}, clear=True):
             cfg = load_config()
             assert cfg["collect_channel_user_id"] is True
+
+    def test_env_var_override_collect_user_identity_to_false(self):
+        with patch.dict(os.environ, {"DATA_COLLECTION_COLLECT_USER_IDENTITY": "false"}, clear=True):
+            cfg = load_config()
+            assert cfg["collect_user_identity"] is False
+
+    def test_env_var_override_collect_channel_user_id_to_false(self):
+        with patch.dict(os.environ, {"DATA_COLLECTION_COLLECT_CHANNEL_USER_ID": "false"}, clear=True):
+            cfg = load_config()
+            assert cfg["collect_channel_user_id"] is False
 
     def test_env_var_override_pseudonym_salt(self):
         with patch.dict(os.environ, {"DATA_COLLECTION_PSEUDONYM_SALT": "my-secret-salt"}, clear=True):

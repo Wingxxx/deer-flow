@@ -82,19 +82,19 @@ For most DeerFlow deployments, `auto` is recommended as it handles both LangGrap
 
 1. Standalone YAML file → 2. DeerFlow `config.yaml` → 3. Environment variables → 4. `DEFAULT_CONFIG` defaults
 
-### Identity collection (opt-in, privacy-safe)
+### Identity collection (privacy-safe)
 
-The system can optionally record `user_id` (Web UI users) and `channel_user_id` (IM platform users) in training data. All identity features are **disabled by default** and must be explicitly enabled:
+The system records `user_id` (Web UI users) and `channel_user_id` (IM platform users) in training data by default. Identity values are HMAC-SHA256 pseudonymized when `pseudonymize_identity=True` (also the default).
 
 | Variable | Config Key | Type | Default | Description |
 |----------|-----------|------|---------|-------------|
-| `DATA_COLLECTION_COLLECT_USER_IDENTITY` | `collect_user_identity` | `bool` | `false` | Record authenticated user_id |
-| `DATA_COLLECTION_COLLECT_CHANNEL_USER_ID` | `collect_channel_user_id` | `bool` | `false` | Record IM platform channel_user_id |
+| `DATA_COLLECTION_COLLECT_USER_IDENTITY` | `collect_user_identity` | `bool` | `true` | Record authenticated user_id |
+| `DATA_COLLECTION_COLLECT_CHANNEL_USER_ID` | `collect_channel_user_id` | `bool` | `true` | Record IM platform channel_user_id |
 | — | `pseudonymize_identity` | `bool` | `true` | HMAC-SHA256 hash before writing |
 | `DATA_COLLECTION_PSEUDONYM_SALT` | `pseudonym_salt` | `str` | `""` | Salt for HMAC (empty → WARNING) |
 
 **Important security notes:**
-- `collect_user_identity=true + pseudonymize_identity=false` writes **raw user_id in plaintext** — a WARNING is logged at startup, and records carry a `_plaintext_identity: True` audit marker
+- `collect_user_identity=true + pseudonymize_identity=false` writes **raw user_id in plaintext** — a WARNING is logged at startup
 - `pseudonym_salt=""` when `pseudonymize_identity=true` produces a WARNING — hashes will NOT be linkable across sessions (each restart generates effectively unique hashes)
 - `channel_user_id` may contain platform PII (e.g., email addresses) — treat with extra care
 - Identity is **not** collected on any `record_*` method's parameter list — it flows through the `record()` uniform injection layer, zero intrusion on semantic method signatures

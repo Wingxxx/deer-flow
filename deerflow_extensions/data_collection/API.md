@@ -170,9 +170,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "collect_tool_calls": True,
     "collect_intermediate_state": False,
     "collect_final_response": True,
-    # ── Identity collection (opt-in, privacy-safe) ──
-    "collect_user_identity": False,
-    "collect_channel_user_id": False,
+    # ── Identity collection (privacy-safe) ──
+    "collect_user_identity": True,
+    "collect_channel_user_id": True,
     "pseudonymize_identity": True,
     "pseudonym_salt": "",
 }

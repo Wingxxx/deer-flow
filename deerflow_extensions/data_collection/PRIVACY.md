@@ -13,7 +13,7 @@ The system can optionally record two identity fields in training data:
 | `user_id` | `runtime.context.user_id` (Web UI) | UUID string | Low (synthetic identifier) |
 | `channel_user_id` | `runtime.context.channel_user_id` (IM) | Platform user ID, **may be email** | **High** |
 
-Both fields are **disabled by default**. No identity data is collected unless explicitly enabled via configuration.
+Both fields are **enabled by default**. However, when `pseudonymize_identity=True` (default), identity values are HMAC-SHA256 pseudonymized before writing. To disable identity collection, set `collect_user_identity: false` and `collect_channel_user_id: false`.
 
 ## Three pseudonymization modes
 
@@ -94,7 +94,7 @@ When rotating the pseudonymization salt:
 
 ## Best practices
 
-1. **Default-off**: identity collection is disabled by default — only enable after privacy review
+1. **Default-on**: identity collection is enabled by default (pseudonymized). Explicitly disable via config when identity fields are not needed
 2. **Pseudonymize always**: keep `pseudonymize_identity=true` in production
 3. **Separate salts**: use different salts per environment (dev/staging/prod)
 4. **Audit regularly**: scan raw JSONL for unexpected plaintext identity fields

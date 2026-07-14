@@ -48,8 +48,8 @@ class DataCollectionMiddleware(AgentMiddleware):
             self.collector = None
 
         # Identity collection config (loaded once, fail-open)
-        self._collect_user_identity = False
-        self._collect_channel_user_id = False
+        self._collect_user_identity = True
+        self._collect_channel_user_id = True
         self._pseudonymize_identity = True
         self._identity_salt = ""
         self._session_identity: dict[str, dict] = {}
@@ -57,8 +57,8 @@ class DataCollectionMiddleware(AgentMiddleware):
         try:
             config = load_config()
             self.role_extract_mode = config.get("role_extract_mode", "auto")
-            self._collect_user_identity = config.get("collect_user_identity", False)
-            self._collect_channel_user_id = config.get("collect_channel_user_id", False)
+            self._collect_user_identity = config.get("collect_user_identity", True)
+            self._collect_channel_user_id = config.get("collect_channel_user_id", True)
             self._pseudonymize_identity = config.get("pseudonymize_identity", True)
             self._identity_salt = config.get("pseudonym_salt", "")
             # Register identity flags on the collector for gating

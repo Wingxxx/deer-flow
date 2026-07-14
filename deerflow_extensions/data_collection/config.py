@@ -26,16 +26,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "collect_intermediate_state": False,
     "collect_final_response": True,
     "role_extract_mode": "auto",
-    # ── User identity collection (opt-in, privacy-safe) ──
+    # ── User identity collection (privacy-safe) ──
     # Whether to record the authenticated user_id in training data.
-    # DISABLED by default. Set to True only after internal privacy review
-    # and with pseudonymize_identity enabled.
-    "collect_user_identity": False,
+    # ENABLED by default. Identity is HMAC-pseudonymized when
+    # pseudonymize_identity=True (also the default).
+    "collect_user_identity": True,
     # Whether to record the IM channel platform user_id (channel_user_id).
-    # INDEPENDENTLY controlled from collect_user_identity.
-    # DISABLED by default. channel_user_id may contain raw platform
-    # identifiers (e.g., "user@example.com") — treat with extra care.
-    "collect_channel_user_id": False,
+    # ENABLED by default together with collect_user_identity.
+    "collect_channel_user_id": True,
     # When True, user_id/channel_user_id are HMAC-SHA256 hashed with
     # pseudonym_salt before writing to disk. This is pseudonymization,
     # NOT anonymization — same input always produces same hash,

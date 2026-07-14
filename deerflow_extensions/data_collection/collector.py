@@ -68,8 +68,8 @@ class TrainingDataCollector:
             "tool_call_result": cfg.get("collect_tool_calls", True),
             "agent_intermediate_state": cfg.get("collect_intermediate_state", False),
             "final_response": cfg.get("collect_final_response", True),
-            "user_identity": cfg.get("collect_user_identity", False),
-            "channel_user_identity": cfg.get("collect_channel_user_id", False),
+            "user_identity": cfg.get("collect_user_identity", True),
+            "channel_user_identity": cfg.get("collect_channel_user_id", True),
         }
 
         self._current_identity: dict[str, str] = {}
