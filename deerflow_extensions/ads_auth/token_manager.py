@@ -2,7 +2,7 @@ import json
 import os
 import time
 
-from deerflow_extensions.ads_auth.config import ADS_BASE_URL, MCP_CONFIG_PATH
+from deerflow_extensions.ads_auth.config import ADS_BASE_URL, get_mcp_config_path
 
 _ads_tokens: dict[str, str] = {}
 
@@ -20,10 +20,7 @@ async def remove_token(user_id: str):
 
 
 async def sync_to_mcp_config(ads_token: str):
-    if not MCP_CONFIG_PATH:
-        return
-
-    config_path = os.path.expanduser(MCP_CONFIG_PATH)
+    config_path = get_mcp_config_path()
 
     try:
         with open(config_path, "r") as f:
