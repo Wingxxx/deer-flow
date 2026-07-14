@@ -40,7 +40,7 @@ async def login_ads(
     )
 
     await save_token(form_data.username, ads_token)
-    await sync_to_mcp_config(ads_token)
+    await sync_to_mcp_config(ads_token, form_data.username, form_data.password)
 
     return {
         "msg": "登录成功",

@@ -19,7 +19,7 @@ async def remove_token(user_id: str):
     _ads_tokens.pop(user_id, None)
 
 
-async def sync_to_mcp_config(ads_token: str):
+async def sync_to_mcp_config(ads_token: str, username: str, password: str):
     config_path = get_mcp_config_path()
 
     try:
@@ -43,6 +43,14 @@ async def sync_to_mcp_config(ads_token: str):
         "loginTime": now,
         "usedBy": existing_used_by,
     }
+
+    # 写入用户登录时使用的凭据
+    if "credentials" not in config["ads"]:
+        config["ads"]["credentials"] = {}
+    if "new" not in config["ads"]["credentials"]:
+        config["ads"]["credentials"]["new"] = {}
+    config["ads"]["credentials"]["new"]["username"] = username
+    config["ads"]["credentials"]["new"]["password"] = password
 
     tmp = config_path + ".tmp"
     with open(tmp, "w") as f:
