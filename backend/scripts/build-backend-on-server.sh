@@ -304,6 +304,10 @@ fi
     --hidden-import=deerflow.community.jina_ai \
     --hidden-import=deerflow.community.image_search \
     \
+    --hidden-import=acp \
+    --hidden-import=aibot \
+    --hidden-import=ddgs \
+    \
     --hidden-import=deerflow.tools.builtins \
     --hidden-import=deerflow.tools.builtins.tool_search \
     --hidden-import=deerflow.tools.skill_manage_tool \
@@ -369,6 +373,7 @@ fi
     --collect-all=langchain \
     --collect-all=langchain_core \
     --collect-all=langgraph \
+    --collect-all=firecrawl \
     --collect-submodules=deerflow \
     \
     --exclude-module=tests \
