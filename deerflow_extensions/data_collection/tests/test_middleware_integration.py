@@ -237,10 +237,10 @@ class TestMiddlewareAsyncIntegration:
 
 
 class TestMiddlewareIdentityIntegration:
-    """Integration tests for middleware identity injection pipeline."""
+    """Integration tests for middleware identity injection pipeline with new return-value API."""
 
     def test_identity_flows_before_to_after_model(self):
-        """Identity extracted in before_model is available in after_model via cache."""
+        """Identity extracted in before_model is available in after_model via cache (identity= kwarg)."""
         mw = DataCollectionMiddleware()
         mw.collector = MagicMock()
         mw._collect_user_identity = True
@@ -258,9 +258,8 @@ class TestMiddlewareIdentityIntegration:
         }
 
         mw.before_model(state, mock_run)
-        # before_model sets _session_identity["tid-flow"] = {"user_id": "user-789", ...}
+        # before_model caches _session_identity["tid-flow"] = {"user_id": "user-789", ...}
 
-        # Simulate after_model — it should restore from cache
         mock_msg = MagicMock()
         mock_msg.type = "ai"
         mock_msg.content = "response"
@@ -270,11 +269,13 @@ class TestMiddlewareIdentityIntegration:
 
         mw.after_model(after_state, mock_run)
 
-        # Verify identity was restored to collector before recording
-        assert mw.collector._current_identity == {"user_id": "user-789", "channel_user_id": "chan-789"}
+        # Verify identity was passed as kwarg to model output
+        model_kwargs = mw.collector.record_model_output.call_args.kwargs
+        assert "identity" in model_kwargs
+        assert model_kwargs["identity"] == {"user_id": "user-789", "channel_user_id": "chan-789"}
 
     def test_identity_survives_wrap_tool_call(self):
-        """Identity cached in before_model is available in wrap_tool_call."""
+        """Identity cached in before_model is passed to wrap_tool_call."""
         mw = DataCollectionMiddleware()
         mw.collector = MagicMock()
         mw._collect_user_identity = True
@@ -290,9 +291,7 @@ class TestMiddlewareIdentityIntegration:
         }
 
         mw.before_model(state, mock_run)
-        # Cache populated: _session_identity["tid-wtc"] = {"user_id": "user-wtc"}
 
-        # wrap_tool_call uses session_id from metadata to restore identity
         mock_request = MagicMock()
         mock_request.tool_call = {
             "name": "bash",
@@ -306,8 +305,10 @@ class TestMiddlewareIdentityIntegration:
 
         mw.wrap_tool_call(mock_request, handler)
 
-        # Verify identity was restored
-        assert mw.collector._current_identity == {"user_id": "user-wtc"}
+        # Verify identity was passed as kwarg
+        request_kwargs = mw.collector.record_tool_call.call_args_list[0].kwargs
+        assert "identity" in request_kwargs
+        assert request_kwargs["identity"] == {"user_id": "user-wtc"}
 
     def test_identity_cleaned_in_after_agent(self):
         """Identity cache is cleaned up after after_agent."""
@@ -350,11 +351,32 @@ class TestMiddlewareIdentityIntegration:
 
         result = await mw.abefore_model(state, mock_run)
         assert result is state
-        # Identity should be cached
         assert "tid-async" in mw._session_identity
         assert mw._session_identity["tid-async"]["user_id"] == "async-user"
 
         result = await mw.aafter_agent(state, mock_run)
         assert result is state
-        # Identity should be cleaned up
         assert "tid-async" not in mw._session_identity
+
+    def test_identity_cleared_on_unknown_session_in_tool_call(self):
+        """tool_call with non-existent session passes identity=None (no crash)."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw._collect_user_identity = True
+
+        mock_request = MagicMock()
+        mock_request.tool_call = {
+            "name": "bash",
+            "args": {},
+            "id": "call-unknown",
+            "metadata": {"session_id": "nonexistent"},
+        }
+
+        def handler(req):
+            return MagicMock(content="result")
+
+        mw.wrap_tool_call(mock_request, handler)
+
+        request_kwargs = mw.collector.record_tool_call.call_args_list[0].kwargs
+        assert "identity" in request_kwargs
+        assert request_kwargs["identity"] is None

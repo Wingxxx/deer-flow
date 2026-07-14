@@ -357,15 +357,15 @@ class TestThreadSafety:
 
 
 class TestIdentityInjection:
-    """Test that identity fields are correctly injected via _current_identity."""
+    """Test that identity fields are correctly injected via identity= parameter."""
 
     def test_identity_injected_in_record(self, collector):
-        collector._current_identity = {"user_id": "pseudo-hash-abc", "channel_user_id": "pseudo-hash-def"}
         collector.record_agent_input(
             session_id="sess-1",
             user_query="Hello",
             system_prompt="Be helpful",
             history_context=[],
+            identity={"user_id": "pseudo-hash-abc", "channel_user_id": "pseudo-hash-def"},
         )
         assert len(collector._buffer) == 1
         record = collector._buffer[0]
@@ -373,27 +373,27 @@ class TestIdentityInjection:
         assert record["channel_user_id"] == "pseudo-hash-def"
 
     def test_empty_identity_does_not_inject(self, collector):
-        collector._current_identity = {}
         collector.record_agent_input(
             session_id="sess-1",
             user_query="Hello",
             system_prompt="Be helpful",
             history_context=[],
+            identity={},
         )
         record = collector._buffer[0]
         assert "user_id" not in record
 
     def test_identity_fields_persist_in_flush(self, collector):
-        collector._current_identity = {"user_id": "hash-xyz"}
         collector.record_agent_input(
             session_id="sess-flush",
             user_query="flush test",
             system_prompt="test",
             history_context=[],
+            identity={"user_id": "hash-xyz"},
         )
 
-        import asyncio
-        asyncio.run(collector._flush())
+        import asyncio as _aio
+        _aio.run(collector._flush())
 
         import glob
         daily_files = glob.glob(os.path.join(collector.output_dir, "daily", "*.jsonl"))
@@ -404,31 +404,91 @@ class TestIdentityInjection:
         assert line["user_id"] == "hash-xyz"
 
     def test_record_identity_all_types(self, collector):
-        """All semantic record types carry identity when _current_identity is set."""
-        collector._current_identity = {"user_id": "test-user"}
+        """All semantic record types carry identity when identity= is passed."""
         collector.record_model_output(
             session_id="sess-1", step_number=1, raw_response="resp",
             response_type="text", finish_reason="stop", tool_calls=[],
             token_usage={}, thinking_content="", latency_ms=0.0,
+            identity={"user_id": "test-user"},
         )
         collector.record_tool_call(
             session_id="sess-1", step_number=1, tool_name="bash",
             tool_params={}, call_id="c1", phase="request",
+            identity={"user_id": "test-user"},
         )
         collector.record_final_response(
             session_id="sess-1", final_response="done",
             total_duration_ms=100, total_llm_calls=1, total_tool_calls=0,
             total_tokens=0, resolution_status="completed",
+            identity={"user_id": "test-user"},
         )
         for record in collector._buffer:
             assert record["user_id"] == "test-user"
 
     def test_collect_flags_user_identity(self, collector):
-        """Setting user_identity flag to False still records but without identity blocked by _should_collect."""
+        """Setting user_identity flag to True, identity is injected via parameter."""
         collector.collect_flags["user_identity"] = True
-        collector._current_identity = {"user_id": "flag-test"}
         collector.record_agent_input(
             session_id="sess-1", user_query="Hello", system_prompt="", history_context=[],
+            identity={"user_id": "flag-test"},
         )
         record = collector._buffer[0]
         assert record["user_id"] == "flag-test"
+
+    def test_identity_none_value_filtered(self, collector):
+        """identity with None values: None values are filtered out."""
+        collector.record_agent_input(
+            session_id="sess-1",
+            user_query="Hello",
+            system_prompt="Be helpful",
+            history_context=[],
+            identity={"user_id": "keep-me", "channel_user_id": None},
+        )
+        record = collector._buffer[0]
+        assert record["user_id"] == "keep-me"
+        assert "channel_user_id" not in record
+
+    def test_identity_key_conflict_warning(self, collector, caplog):
+        """data keys overlapping with identity keys produce a WARNING."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        # Direct call to record() with overlapping keys
+        collector.record("agent_input", {"user_id": "from-data"}, identity={"user_id": "from-identity"})
+        assert "Identity keys" in caplog.text
+        # Identity should override data value
+        record = collector._buffer[0]
+        assert record["user_id"] == "from-identity"
+
+    def test_semantic_methods_forward_identity_to_record(self, collector):
+        """All 6 semantic methods forward identity= to record()."""
+        identity = {"user_id": "forward-test"}
+        collector.record_agent_input("sess", "q", "sp", [], identity=identity)
+        collector.record_model_output("sess", 1, "resp", "text", "stop", [], {}, "", 0.0, identity=identity)
+        collector.record_tool_call("sess", 1, "bash", {}, "c1", identity=identity)
+        collector.record_intermediate_state("sess", 1, 2, 0, {}, [], identity=identity)
+        collector.record_final_response("sess", "done", 100, 1, 0, 0, "completed", identity=identity)
+        for record in collector._buffer:
+            assert record.get("user_id") == "forward-test"
+
+    @pytest.mark.anyio
+    async def test_concurrent_identity_isolation(self, collector):
+        """Concurrent calls with different identities do not cross-contaminate."""
+        import asyncio as _aio
+
+        async def record_with_identity(session_id, uid):
+            collector.record_agent_input(
+                session_id=session_id,
+                user_query="test",
+                system_prompt="test",
+                history_context=[],
+                identity={"user_id": uid},
+            )
+
+        await _aio.gather(
+            record_with_identity("sess-a", "user-a"),
+            record_with_identity("sess-b", "user-b"),
+            record_with_identity("sess-c", "user-c"),
+        )
+
+        user_ids = {r["user_id"] for r in collector._buffer}
+        assert user_ids == {"user-a", "user-b", "user-c"}

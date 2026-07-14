@@ -1,0 +1,68 @@
+# ── DeerFlow Data Collection Configuration ──
+# Copy this file to data_collection.yaml and adjust as needed.
+# All keys can also be set via environment variables (DATA_COLLECTION_* prefix).
+# See README.md for full documentation.
+
+data_collection:
+  # Whether to enable training data collection
+  enabled: true
+
+  # Output directory (contains raw/daily/archive/aggregated/flagged subdirectories)
+  # The .pseudonym_salt file is also stored here
+  output_dir: "./data_collection_logs"
+
+  # In-memory buffer size (number of records before triggering a flush)
+  buffer_size: 500
+
+  # Periodic flush interval in seconds
+  flush_interval_sec: 5.0
+
+  # Maximum size of a single daily JSONL file in MB before automatic rotation
+  # Negative or zero values are clamped to 1 MB
+  max_file_size_mb: 100
+
+  # ── Collection point toggles ──
+
+  # P1: Collect agent input (user query, system prompt, history, RAG context)
+  collect_agent_input: true
+
+  # P2: Collect model output (raw response, token usage, finish reason, thinking)
+  collect_model_output: true
+
+  # P3+P4: Collect tool calls (request + result)
+  collect_tool_calls: true
+
+  # P5: Collect agent intermediate state (high volume, recommended to keep off)
+  collect_intermediate_state: false
+
+  # P6: Collect final agent response
+  collect_final_response: true
+
+  # ── Message parsing ──
+
+  # Role extraction mode for identifying user messages:
+  #   auto  - Recognizes both role="user" and type="human" (default, recommended)
+  #   human - Only recognizes type="human" (LangGraph HumanMessage format)
+  #   user  - Only recognizes role="user" (traditional format)
+  role_extract_mode: "auto"
+
+  # ── Identity collection (privacy-safe) ──
+
+  # Whether to record the authenticated user_id in training data
+  # When pseudonymize_identity=true, the value is HMAC-SHA256 hashed before writing
+  collect_user_identity: true
+
+  # Whether to record the IM platform channel_user_id in training data
+  # WARNING: channel_user_id may contain PII like email addresses
+  collect_channel_user_id: true
+
+  # Enable HMAC-SHA256 pseudonymization of identity fields
+  # Setting this to false while collect_user_identity=true requires the
+  # explicit environment variable DATA_COLLECTION_ALLOW_PLAINTEXT_IDENTITY=true
+  pseudonymize_identity: true
+
+  # HMAC salt for pseudonymization.
+  # Leave empty to auto-generate a random salt (secrets.token_hex(32)).
+  # The auto-generated salt is persisted to {output_dir}/.pseudonym_salt.
+  # Set DATA_COLLECTION_PSEUDONYM_SALT env var to override (highest priority).
+  pseudonym_salt: ""

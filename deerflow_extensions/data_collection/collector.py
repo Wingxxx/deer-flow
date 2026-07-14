@@ -72,8 +72,6 @@ class TrainingDataCollector:
             "channel_user_identity": cfg.get("collect_channel_user_id", True),
         }
 
-        self._current_identity: dict[str, str] = {}
-
         self._buffer: deque[dict] = deque()
         self._buffer_lock = threading.Lock()
         self._flush_thread: threading.Thread | None = None
@@ -112,14 +110,14 @@ class TrainingDataCollector:
         """Check whether the given sample type collection is enabled."""
         return self.collect_flags.get(sample_type, True)
 
-    def record(self, sample_type: str, data: dict) -> None:
+    def record(self, sample_type: str, data: dict, identity: dict | None = None) -> None:
         """General-purpose record method.
 
         All semantic record methods delegate to this. The record is
         timestamped, buffered, and flushed asynchronously.
 
-        Identity fields (user_id, channel_user_id) are injected from
-        self._current_identity, set by the middleware before each call.
+        Identity fields (user_id, channel_user_id) are injected from the
+        identity parameter, passed by the middleware as an explicit argument.
         Identity injection is fail-open: any error silently drops identity
         without affecting the record.
 
@@ -127,16 +125,26 @@ class TrainingDataCollector:
             sample_type: One of agent_input, model_output, tool_call_request,
                 tool_call_result, agent_intermediate_state, final_response.
             data: The data payload to record.
+            identity: Optional identity dict with user_id/channel_user_id.
+                When provided, merged into data before None filtering.
         """
         if not self._should_collect(sample_type):
             return
 
         # Inject identity fields (fail-open: never propagate exceptions)
-        try:
-            if self._current_identity:
-                data = {**data, **self._current_identity}
-        except Exception:
-            pass
+        if identity:
+            try:
+                # Key conflict detection (defensive; current 6 semantic methods
+                # do not include user_id/channel_user_id fields)
+                overlap = set(data.keys()) & set(identity.keys())
+                if overlap:
+                    logger.warning(
+                        "Identity keys %s conflict with data keys, identity will override",
+                        overlap,
+                    )
+                data = {**data, **identity}
+            except Exception:
+                pass
 
         # Filter None values (conditional inclusion semantics)
         data = {k: v for k, v in data.items() if v is not None}
@@ -168,6 +176,7 @@ class TrainingDataCollector:
         history_context: list,
         rag_context: str = "",
         agent_config: dict | None = None,
+        identity: dict | None = None,
     ) -> None:
         """Collection point P1: Agent input."""
         self.record("agent_input", {
@@ -177,7 +186,7 @@ class TrainingDataCollector:
             "history_context": history_context,
             "rag_context": rag_context,
             "agent_config": agent_config or {},
-        })
+        }, identity=identity)
 
     def record_model_output(
         self,
@@ -190,6 +199,7 @@ class TrainingDataCollector:
         token_usage: dict | None,
         thinking_content: str | None,
         latency_ms: float,
+        identity: dict | None = None,
     ) -> None:
         """Collection point P2: Model output."""
         self.record("model_output", {
@@ -202,7 +212,7 @@ class TrainingDataCollector:
             "token_usage": token_usage or {},
             "thinking_content": thinking_content or "",
             "latency_ms": round(latency_ms, 1),
-        })
+        }, identity=identity)
 
     def record_tool_call(
         self,
@@ -215,6 +225,7 @@ class TrainingDataCollector:
         error: str | None = None,
         duration_ms: float = 0.0,
         phase: str = "request",
+        identity: dict | None = None,
     ) -> None:
         """Collection points P3+P4: Tool call request and result.
 
@@ -233,7 +244,7 @@ class TrainingDataCollector:
         if phase == "result":
             data["result"] = tool_result
             data["error"] = error
-        self.record(sample_type, data)
+        self.record(sample_type, data, identity=identity)
 
     def record_intermediate_state(
         self,
@@ -244,6 +255,7 @@ class TrainingDataCollector:
         accumulated_tokens: dict,
         tools_called: list,
         loop_detected: bool = False,
+        identity: dict | None = None,
     ) -> None:
         """Collection point P5: Agent intermediate state."""
         self.record("agent_intermediate_state", {
@@ -254,7 +266,7 @@ class TrainingDataCollector:
             "accumulated_tokens": accumulated_tokens,
             "tools_called": tools_called,
             "loop_detected": loop_detected,
-        })
+        }, identity=identity)
 
     def record_final_response(
         self,
@@ -265,6 +277,7 @@ class TrainingDataCollector:
         total_tool_calls: int,
         total_tokens: int,
         resolution_status: str,
+        identity: dict | None = None,
     ) -> None:
         """Collection point P6: Final response."""
         self.record("final_response", {
@@ -275,7 +288,7 @@ class TrainingDataCollector:
             "total_tool_calls": total_tool_calls,
             "total_tokens": total_tokens,
             "resolution_status": resolution_status,
-        })
+        }, identity=identity)
 
     # ------------------------------------------------------------------
     # Flush & lifecycle management

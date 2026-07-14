@@ -1,5 +1,6 @@
 import asyncio
-from unittest.mock import MagicMock
+import logging
+from unittest.mock import MagicMock, patch
 
 import pytest
 from deerflow_extensions.data_collection.middleware import DataCollectionMiddleware
@@ -291,10 +292,10 @@ class TestMiddlewareAsyncConcurrency:
 
 
 class TestMiddlewareIdentity:
-    """Test middleware identity extraction, caching, and cleanup."""
+    """Test middleware identity extraction, caching, and cleanup with new return-value API."""
 
     def test_prepare_identity_with_runtime_context(self):
-        """_prepare_identity_for_collector extracts user_id from runtime.context."""
+        """_prepare_identity_for_collector returns identity dict extracted from runtime.context."""
         mw = DataCollectionMiddleware()
         mock_run = MagicMock()
         mock_run.context = {"user_id": "user-123", "channel_user_id": "chan-456"}
@@ -303,23 +304,25 @@ class TestMiddlewareIdentity:
         mw._collect_channel_user_id = True
         mw._pseudonymize_identity = False  # raw for test
 
-        mw._prepare_identity_for_collector({"config": {"configurable": {"thread_id": "tid-1"}}}, mock_run, "tid-1")
+        result = mw._prepare_identity_for_collector(
+            {"config": {"configurable": {"thread_id": "tid-1"}}}, mock_run, "tid-1"
+        )
 
+        assert result == {"user_id": "user-123", "channel_user_id": "chan-456"}
         assert mw._session_identity.get("tid-1") == {"user_id": "user-123", "channel_user_id": "chan-456"}
-        assert mw.collector._current_identity == {"user_id": "user-123", "channel_user_id": "chan-456"}
 
     def test_prepare_identity_no_runtime_does_not_crash(self):
-        """_prepare_identity_for_collector with runtime=None does not crash and returns empty."""
+        """_prepare_identity_for_collector with runtime=None returns None."""
         mw = DataCollectionMiddleware()
         mw.collector = MagicMock()
         mw._collect_user_identity = True
 
-        mw._prepare_identity_for_collector({}, None, "tid-2")
+        result = mw._prepare_identity_for_collector({}, None, "tid-2")
 
-        assert mw.collector._current_identity == {}
+        assert result is None
 
     def test_prepare_identity_with_pseudonymize(self):
-        """_prepare_identity_for_collector applies pseudonymization when enabled."""
+        """_prepare_identity_for_collector applies pseudonymization and returns result."""
         mw = DataCollectionMiddleware()
         mw._pseudonymize_identity = True
         mw._identity_salt = "test-salt"
@@ -328,42 +331,44 @@ class TestMiddlewareIdentity:
         mock_run = MagicMock()
         mock_run.context = {"user_id": "user-123"}
 
-        mw._prepare_identity_for_collector({}, mock_run, "tid-3")
+        result = mw._prepare_identity_for_collector({}, mock_run, "tid-3")
+
+        assert result is not None
+        assert "user_id" in result
+        assert result["user_id"] != "user-123"  # pseudonymized
+        assert len(result["user_id"]) == 64  # hex digest
 
         cached = mw._session_identity.get("tid-3", {})
         assert "user_id" in cached
-        assert cached["user_id"] != "user-123"  # pseudonymized
-        assert len(cached["user_id"]) == 64  # hex digest
+        assert cached["user_id"] == result["user_id"]
 
     def test_restore_identity_from_cache(self):
-        """_restore_identity_for_collector correctly restores cached identity."""
+        """_restore_identity_for_collector returns cached identity dict."""
         mw = DataCollectionMiddleware()
         mw.collector = MagicMock()
         mw._session_identity["tid-4"] = {"user_id": "cached-user"}
 
-        mw._restore_identity_for_collector("tid-4")
+        result = mw._restore_identity_for_collector("tid-4")
 
-        assert mw.collector._current_identity == {"user_id": "cached-user"}
+        assert result == {"user_id": "cached-user"}
 
-    def test_restore_identity_unknown_session_clears(self):
-        """_restore_identity_for_collector with unknown session clears identity."""
+    def test_restore_identity_unknown_session_returns_none(self):
+        """_restore_identity_for_collector with unknown session returns None."""
         mw = DataCollectionMiddleware()
         mw.collector = MagicMock()
-        mw.collector._current_identity = {"user_id": "stale"}
 
-        mw._restore_identity_for_collector("unknown-session")
+        result = mw._restore_identity_for_collector("unknown-session")
 
-        assert mw.collector._current_identity == {}
+        assert result is None
 
-    def test_restore_identity_empty_session_clears(self):
-        """_restore_identity_for_collector with empty session id clears identity."""
+    def test_restore_identity_empty_session_returns_none(self):
+        """_restore_identity_for_collector with empty session id returns None."""
         mw = DataCollectionMiddleware()
         mw.collector = MagicMock()
-        mw.collector._current_identity = {"user_id": "stale"}
 
-        mw._restore_identity_for_collector("")
+        result = mw._restore_identity_for_collector("")
 
-        assert mw.collector._current_identity == {}
+        assert result is None
 
     def test_after_agent_cleans_session_identity(self):
         """after_agent pops the session from _session_identity."""
@@ -380,3 +385,152 @@ class TestMiddlewareIdentity:
         mw.after_agent(state)
 
         assert "tid-5" not in mw._session_identity
+
+    # ── New tests: hook-level identity passing ──
+
+    def test_before_model_passes_identity_to_record(self):
+        """before_model passes the identity= kwarg to record_agent_input."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw._collect_user_identity = True
+        mw._collect_channel_user_id = True
+        mw._pseudonymize_identity = False
+
+        mock_run = MagicMock()
+        mock_run.context = {"user_id": "hook-user", "channel_user_id": "hook-chan"}
+
+        state = {
+            "config": {"configurable": {"thread_id": "tid-hook"}},
+            "messages": [{"type": "user", "content": "hello"}],
+            "max_steps": 25,
+            "rag_context": "",
+        }
+
+        mw.before_model(state, mock_run)
+
+        call_kwargs = mw.collector.record_agent_input.call_args.kwargs
+        assert "identity" in call_kwargs
+        assert call_kwargs["identity"] == {"user_id": "hook-user", "channel_user_id": "hook-chan"}
+
+    def test_after_model_passes_identity_to_both_records(self):
+        """after_model passes identity= to both record_model_output and record_intermediate_state."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw._collect_user_identity = True
+        mw._pseudonymize_identity = False
+
+        mock_run = MagicMock()
+        mock_run.context = {"user_id": "after-user"}
+
+        state = {
+            "config": {"configurable": {"thread_id": "tid-after"}},
+            "messages": [{"type": "user", "content": "hello"}],
+            "max_steps": 25,
+            "rag_context": "",
+        }
+
+        mw.before_model(state, mock_run)
+
+        mock_msg = MagicMock()
+        mock_msg.type = "ai"
+        mock_msg.content = "response"
+        mock_msg.additional_kwargs = {}
+        mock_msg.response_metadata = {}
+        after_state = {**state, "messages": [mock_msg]}
+
+        mw.after_model(after_state, mock_run)
+
+        model_kwargs = mw.collector.record_model_output.call_args.kwargs
+        assert "identity" in model_kwargs
+        assert model_kwargs["identity"] == {"user_id": "after-user"}
+
+        inter_kwargs = mw.collector.record_intermediate_state.call_args.kwargs
+        assert "identity" in inter_kwargs
+        assert inter_kwargs["identity"] == {"user_id": "after-user"}
+
+    def test_wrap_tool_call_passes_identity_to_both_phases(self):
+        """wrap_tool_call passes identity= to both request and result record_tool_call."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw._collect_user_identity = True
+        mw._pseudonymize_identity = False
+
+        mock_run = MagicMock()
+        mock_run.context = {"user_id": "tool-user"}
+
+        state = {
+            "config": {"configurable": {"thread_id": "tid-tool"}},
+            "messages": [{"type": "user", "content": "hello"}],
+            "max_steps": 25,
+        }
+
+        mw.before_model(state, mock_run)
+
+        mock_request = MagicMock()
+        mock_request.tool_call = {
+            "name": "bash",
+            "args": {"cmd": "ls"},
+            "id": "call-tool",
+            "metadata": {"session_id": "tid-tool"},
+        }
+
+        def handler(req):
+            return MagicMock(content="result")
+
+        mw.wrap_tool_call(mock_request, handler)
+
+        assert mw.collector.record_tool_call.call_count == 2
+        request_kwargs = mw.collector.record_tool_call.call_args_list[0].kwargs
+        assert "identity" in request_kwargs
+        assert request_kwargs["identity"] == {"user_id": "tool-user"}
+
+        result_kwargs = mw.collector.record_tool_call.call_args_list[1].kwargs
+        assert "identity" in result_kwargs
+        assert result_kwargs["identity"] == {"user_id": "tool-user"}
+
+    def test_after_agent_passes_identity_to_final_response(self):
+        """after_agent passes identity= to record_final_response."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw._collect_user_identity = True
+        mw._pseudonymize_identity = False
+
+        mock_run = MagicMock()
+        mock_run.context = {"user_id": "final-user"}
+
+        state = {
+            "config": {"configurable": {"thread_id": "tid-final"}},
+            "messages": [{"type": "user", "content": "hello"}],
+            "max_steps": 25,
+        }
+
+        mw.before_model(state, mock_run)
+        mw.after_agent(state, mock_run)
+
+        call_kwargs = mw.collector.record_final_response.call_args.kwargs
+        assert "identity" in call_kwargs
+        assert call_kwargs["identity"] == {"user_id": "final-user"}
+
+    def test_restore_returns_copy_not_reference(self):
+        """_restore_identity_for_collector returns a copy, not a reference."""
+        mw = DataCollectionMiddleware()
+        mw.collector = MagicMock()
+        mw._session_identity["tid-copy"] = {"user_id": "original"}
+
+        result = mw._restore_identity_for_collector("tid-copy")
+        assert result == {"user_id": "original"}
+
+        # Mutate the returned dict — should not affect the cache
+        result["user_id"] = "mutated"
+        assert mw._session_identity["tid-copy"]["user_id"] == "original"
+
+    def test_load_config_failure_disables_identity(self):
+        """When load_config raises, identity collection is disabled (fail-closed)."""
+        with patch("deerflow_extensions.data_collection.middleware.load_config", side_effect=RuntimeError("boom")):
+            mw = DataCollectionMiddleware()
+            assert mw._collect_user_identity is False
+            assert mw._collect_channel_user_id is False
+            assert mw._pseudonymize_identity is False
+            if mw.collector is not None:
+                assert mw.collector.collect_flags["user_identity"] is False
+                assert mw.collector.collect_flags["channel_user_identity"] is False

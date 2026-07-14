@@ -9,6 +9,7 @@ Configuration source priority (highest to lowest):
 
 import logging
 import os
+import secrets
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -51,11 +52,52 @@ _ENV_VAR_MAP: dict[str, tuple[str, callable]] = {
     "DATA_COLLECTION_OUTPUT_DIR": ("output_dir", str),
     "DATA_COLLECTION_BUFFER_SIZE": ("buffer_size", int),
     "DATA_COLLECTION_FLUSH_INTERVAL": ("flush_interval_sec", float),
+    "DATA_COLLECTION_MAX_FILE_SIZE_MB": ("max_file_size_mb", lambda v: max(int(v), 1)),
     "DATA_COLLECTION_ROLE_EXTRACT_MODE": ("role_extract_mode", str),
+    "DATA_COLLECTION_COLLECT_AGENT_INPUT": ("collect_agent_input", lambda v: v.lower() == "true"),
+    "DATA_COLLECTION_COLLECT_MODEL_OUTPUT": ("collect_model_output", lambda v: v.lower() == "true"),
+    "DATA_COLLECTION_COLLECT_TOOL_CALLS": ("collect_tool_calls", lambda v: v.lower() == "true"),
+    "DATA_COLLECTION_COLLECT_INTERMEDIATE_STATE": ("collect_intermediate_state", lambda v: v.lower() == "true"),
+    "DATA_COLLECTION_COLLECT_FINAL_RESPONSE": ("collect_final_response", lambda v: v.lower() == "true"),
     "DATA_COLLECTION_COLLECT_USER_IDENTITY": ("collect_user_identity", lambda v: v.lower() == "true"),
     "DATA_COLLECTION_COLLECT_CHANNEL_USER_ID": ("collect_channel_user_id", lambda v: v.lower() == "true"),
+    "DATA_COLLECTION_PSEUDONYMIZE_IDENTITY": ("pseudonymize_identity", lambda v: v.lower() == "true"),
     "DATA_COLLECTION_PSEUDONYM_SALT": ("pseudonym_salt", str),
 }
+
+
+def _load_or_create_salt(output_dir: str) -> str:
+    """Load pseudonym salt from file, or create and persist a new one.
+
+    Priority: env var DATA_COLLECTION_PSEUDONYM_SALT > persisted file > auto-generate.
+    Returns 64-char hex string.
+    """
+    salt_file = os.path.join(output_dir, ".pseudonym_salt")
+    try:
+        if os.path.exists(salt_file):
+            with open(salt_file, "r", encoding="utf-8") as f:
+                salt = f.read().strip()
+                if salt and len(salt) >= 32:
+                    return salt
+    except Exception:
+        pass
+    # Generate new salt and persist
+    salt = secrets.token_hex(32)
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+        with open(salt_file, "w", encoding="utf-8") as f:
+            f.write(salt)
+        logger.info(
+            "[DataCollection] Generated and persisted new pseudonym_salt to %s. "
+            "Set DATA_COLLECTION_PSEUDONYM_SALT to override.",
+            salt_file,
+        )
+    except Exception as e:
+        logger.warning(
+            "[DataCollection] Failed to persist salt file: %s. "
+            "Salt will NOT survive restart.", e
+        )
+    return salt
 
 
 def load_config(config_path: str | None = None) -> dict[str, Any]:
@@ -103,16 +145,24 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
     # Priority 3: Environment variable overrides (always applied)
     config = _apply_env_overrides(config)
 
-    # Semantic validation warnings (fail-open: warn only, never raise)
-    if config.get("collect_user_identity") and not config.get("pseudonymize_identity"):
-        logger.warning(
-            "[DataCollection] collect_user_identity=ON but pseudonymize_identity=OFF — "
-            "raw user_id will be written in plaintext to daily JSONL files."
-        )
+    # Auto-generate salt when none configured (secure-by-default)
     if config.get("pseudonymize_identity") and not config.get("pseudonym_salt"):
-        logger.warning(
-            "[DataCollection] pseudonym_salt is empty — hashes will NOT be linkable "
-            "across sessions. Set DATA_COLLECTION_PSEUDONYM_SALT env var."
+        output_dir = config.get("output_dir", "./data_collection_logs")
+        config["pseudonym_salt"] = _load_or_create_salt(output_dir)
+
+    # Plaintext identity gate — requires explicit confirmation
+    if config.get("collect_user_identity") and not config.get("pseudonymize_identity"):
+        allow_plaintext = os.environ.get("DATA_COLLECTION_ALLOW_PLAINTEXT_IDENTITY", "").lower() == "true"
+        if not allow_plaintext:
+            raise ValueError(
+                "collect_user_identity=ON but pseudonymize_identity=OFF. "
+                "This would write raw user_id in plaintext to daily JSONL files. "
+                "Set DATA_COLLECTION_ALLOW_PLAINTEXT_IDENTITY=true to explicitly "
+                "acknowledge this risk, or set pseudonymize_identity=true."
+            )
+        logger.critical(
+            "[DataCollection] PLAINTEXT IDENTITY MODE — raw user_id will be written to JSONL. "
+            "DATA_COLLECTION_ALLOW_PLAINTEXT_IDENTITY=true confirmed."
         )
 
     return config
