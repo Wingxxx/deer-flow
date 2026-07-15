@@ -3,12 +3,10 @@
 import {
   AlertCircleIcon,
   CheckCircle2Icon,
-  CopyIcon,
   EyeIcon,
   EyeOffIcon,
   Loader2Icon,
   MessageSquareIcon,
-  ScanQrCodeIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
@@ -25,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { SettingsSection } from "@/components/workspace/settings/settings-section";
 
-import { generateQrDataUrl } from "./adapters/channel-adapter";
+import { InviteSection } from "./invite-section";
 import {
   useChannelSettings,
   useDeleteChannel,
@@ -47,12 +45,6 @@ export function ChannelSettingsPage() {
     text: string;
   } | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [bindingInfo, setBindingInfo] = useState<{
-    code: string;
-    instruction: string;
-    qrDataUrl?: string;
-  } | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const channelInfo = settings?.channels?.[selectedChannelId];
   const selectedCredentialFields = channelInfo?.credentialFields ?? [];
@@ -81,14 +73,11 @@ export function ChannelSettingsPage() {
     setFormValues({});
     setShowFields({});
     setStatusMessage(null);
-    setBindingInfo(null);
-    setCopied(false);
   }, []);
 
   const handleSave = useCallback(async () => {
     if (!hasAnyValue) return;
     setStatusMessage(null);
-    setBindingInfo(null);
     try {
       const result = await updateMutation.mutateAsync({
         channel: selectedChannelId,
@@ -99,19 +88,6 @@ export function ChannelSettingsPage() {
         type: result.success ? "success" : "error",
         text: result.message,
       });
-      if (result.connectInfo) {
-        let qrDataUrl: string | undefined;
-        try {
-          qrDataUrl = await generateQrDataUrl(result.connectInfo.code);
-        } catch {
-          // QR code generation failure should not block the flow.
-        }
-        setBindingInfo({
-          code: result.connectInfo.code,
-          instruction: result.connectInfo.instruction,
-          qrDataUrl,
-        });
-      }
     } catch (err) {
       setStatusMessage({
         type: "error",
@@ -351,62 +327,19 @@ export function ChannelSettingsPage() {
                 </div>
               )}
 
-              {/* Binding Code Guidance */}
-              {bindingInfo && (
-                <div className="rounded-md border border-blue-200 bg-blue-50 p-4 space-y-3 dark:border-blue-800 dark:bg-blue-950/30">
-                  <p className="text-sm font-medium text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
-                    <ScanQrCodeIcon className="size-4" />
-                    请完成连接码绑定
-                  </p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400">
-                    在企业微信中向 DeerFlow Bot 发送以下指令完成账号绑定：
-                  </p>
-
-                  <div className="flex items-start gap-4">
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <code className="block bg-background rounded px-3 py-2 text-sm font-mono select-all break-all">
-                        /connect {bindingInfo.code}
-                      </code>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(`/connect ${bindingInfo.code}`);
-                          setCopied(true);
-                          setTimeout(() => setCopied(false), 2000);
-                        }}
-                      >
-                        <CopyIcon className="size-3.5 mr-1" />
-                        {copied ? "已复制" : "复制绑定码"}
-                      </Button>
-                    </div>
-
-                    {bindingInfo.qrDataUrl && (
-                      <div className="shrink-0">
-                        <img
-                          src={bindingInfo.qrDataUrl}
-                          alt="绑定码二维码"
-                          className="size-24 rounded border bg-white dark:bg-white"
-                        />
-                        <p className="text-[10px] text-center text-blue-500 mt-0.5">
-                          扫码复制绑定码
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-blue-600 dark:text-blue-400">
-                    未绑定前，向 Bot 发送消息会被拦截。绑定码有效期 10 分钟。
-                  </p>
-                </div>
-              )}
-
               {/* Bottom Tip */}
               <div className="text-muted-foreground border-t pt-3 text-xs">
                 配置保存后自动启用渠道。企业微信/飞书/钉钉/微信渠道还需在对应 IM 应用中完成连接码绑定。清除配置后自动禁用。
               </div>
             </div>
+
+            {/* Invite Section */}
+            <InviteSection
+              key={selectedChannelId}
+              provider={selectedChannelId}
+              hasCredentials={!!hasCredentials}
+              authMode={channelInfo?.authMode ?? ""}
+            />
           </div>
         )}
       </SettingsSection>

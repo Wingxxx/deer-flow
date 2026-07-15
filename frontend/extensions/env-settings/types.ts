@@ -54,14 +54,23 @@ export interface ChannelUpdateInput {
   credentials: Record<string, string>;
 }
 
-/** Result returned by saveChannel — includes optional binding code info. */
+/** Result returned by saveChannel — includes optional binding code info.
+ * @deprecated Auto-pop on save removed. Use generateInviteCode() from adapter instead. */
 export interface ChannelSaveResult {
   success: boolean;
   message: string;
-  /** When the channel needs a binding code to complete connection. */
+  /** When the channel needs a binding code to complete connection.
+   * @deprecated Auto-pop on save removed. Use InviteSection's generate flow instead. */
   connectInfo?: {
     code: string;
     instruction: string;
     expiresIn: number;
   };
+}
+
+/** Result of generateInviteCode() — POST /api/channels/{provider}/connect */
+export interface InviteCodeResult {
+  code: string;
+  instruction: string;
+  expiresIn: number;
 }

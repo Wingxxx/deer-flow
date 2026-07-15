@@ -856,6 +856,86 @@ ls frontend/extensions/human-intervention/hooks.ts
 ```
 
 ---
+### WS6f — invite-section.tsx 邀请成员卡片（2026-07-15）
+
+**文件**: `frontend/extensions/env-settings/`
+**风险**: ✅ 极低（扩展目录，零侵入）
+
+新增邀请码生成卡片组件 `invite-section.tsx`，在渠道凭据配置完成后显示「邀请成员」区域。
+
+#### 新增文件
+
+- `frontend/extensions/env-settings/invite-section.tsx`（295 行）— 三态机组件
+
+#### 修改的文件
+
+##### types.ts
+
+- 标记 `ChannelSaveResult.connectInfo` 为 `@deprecated`
+- 新增 `InviteCodeResult { code, instruction, expiresIn }` 接口
+
+##### channel-adapter.ts
+
+- `AdaptedChannelInfo` 新增 `authMode: string` 字段
+- `mapProvider()` 透传 `p.auth_mode`
+- `saveChannel()` 移除 `connectInfo` 自动提取和返回（不再绑定 auto-fetch 逻辑）
+- 新增 `generateInviteCode(provider) → InviteCodeResult` 函数
+
+##### hooks.ts
+
+- 新增 `useGenerateInvite()` mutation hook
+
+##### channel-settings-page.tsx
+
+- 删除 `bindingInfo` / `copied` 状态管理
+- 删除 `handleSave` 中的 `connectInfo` 自动提取
+- 删除旧的绑定码指导 JSX（约 50 行）
+- 插入 `<InviteSection key={selectedChannelId} ...>` 组件
+
+#### 组件设计
+
+**三态机**: `IDLE → ACTIVE → EXPIRED`
+
+- **IDLE**: 显示标题 + 副标题 + 「暂无邀请码」+ 生成按钮
+- **ACTIVE**: 显示绑定码 + 二维码 + 倒计时（10 分钟）+ 复制按钮 + 重新生成
+- **EXPIRED**: 显示已过期 + 重新生成按钮
+
+**竞态防护**:
+
+- `generationIdRef` 递增原子锁 — 快速双击不触发重复请求
+- `mountedRef` 防止卸载后 `setState`
+
+**性能优化**:
+
+- `deadlineRef` 存储绝对 Timestamp，倒计时 tick 不依赖闭包
+- `qrCacheRef` 缓存已生成的 QR DataURL
+- `pollRef` 管理连接轮询生命周期
+
+**渠道切换重置**: `key={selectedChannelId}` 确保组件卸载/挂载时回到 IDLE
+
+#### 验证命令
+
+```bash
+# TypeScript 类型检查（仅扩展目录）
+grep -n "tsc" Makefile && npx tsc --noEmit --pretty 2>&1 | head -30
+
+# 确认 invite-section.tsx 存在
+ls frontend/extensions/env-settings/invite-section.tsx
+
+# 确认 bindingInfo 已从 channel-settings-page 删除
+grep -c "bindingInfo" frontend/extensions/env-settings/channel-settings-page.tsx
+# 应输出 0
+
+# 确认 connectInfo 已标记 deprecated
+grep -c "@deprecated" frontend/extensions/env-settings/types.ts
+# 应输出 2
+
+# 确认 key={selectedChannelId}
+grep -n "InviteSection" frontend/extensions/env-settings/channel-settings-page.tsx
+```
+
+---
+
 ## 验证命令（human-intervention 封存状态检查）
 
 ```bash

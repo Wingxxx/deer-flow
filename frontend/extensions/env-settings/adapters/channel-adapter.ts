@@ -24,7 +24,7 @@ import type {
   ChannelRuntimeConfigValues,
 } from "@/core/channels/types";
 
-import type { ChannelSaveResult } from "../types";
+import type { ChannelSaveResult, InviteCodeResult } from "../types";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,6 +42,8 @@ export interface AdaptedChannelInfo {
   credentialFields: Array<{ key: string; label: string }>;
   /** Error reason when the provider is unavailable. */
   error: string;
+  /** Auth mode from upstream (e.g. "binding_code", "deep_link"). */
+  authMode: string;
 }
 
 /** Mirror of the old ChannelSettingsResponse for drop-in compat. */
@@ -96,6 +98,7 @@ function mapProvider(
     running: (p.connectable ?? false),
     configured: p.configured,
     connectionStatus,
+    authMode: p.auth_mode,
     credentials: (p.credential_values as Record<string, string>) ?? {},
     credentialFields: (p.credential_fields ?? []).map((f) => ({
       key: f.name,
@@ -148,6 +151,7 @@ export async function listChannels(): Promise<AdaptedChannelSettingsResponse> {
       credentials: {},
       credentialFields: FALLBACK_CREDENTIAL_FIELDS[id] ?? [],
       error: "",
+      authMode: "",
     };
   }
 
@@ -185,32 +189,7 @@ export async function saveChannel(
       ? `${result.display_name} 配置成功并已连接`
       : `${result.display_name} 配置已保存`;
 
-    // Auto-fetch binding code for binding_code channels that need it.
-    let connectInfo: ChannelSaveResult["connectInfo"] | undefined;
-    if (
-      result.auth_mode === "binding_code" &&
-      !connected &&
-      result.connectable
-    ) {
-      try {
-        const connectResp = await connectChannelProvider(
-          input.channel,
-        );
-        connectInfo = {
-          code: connectResp.code,
-          instruction: connectResp.instruction,
-          expiresIn: connectResp.expires_in,
-        };
-      } catch {
-        // Silently skip — user can still manually initiate connect.
-      }
-    }
-
-    return {
-      success: true,
-      message: baseMessage,
-      connectInfo,
-    };
+    return { success: true, message: baseMessage };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "保存失败";
     return { success: false, message: msg };
@@ -232,6 +211,22 @@ export async function deleteChannel(
     const msg = err instanceof Error ? err.message : "清除失败";
     return { success: false, message: msg };
   }
+}
+
+/**
+ * Generate an invite/binding code for a channel provider.
+ * Calls POST /api/channels/{provider}/connect.
+ * The code is valid for 10 minutes (backend default).
+ */
+export async function generateInviteCode(
+  provider: string,
+): Promise<InviteCodeResult> {
+  const resp = await connectChannelProvider(provider);
+  return {
+    code: resp.code,
+    instruction: resp.instruction,
+    expiresIn: resp.expires_in,
+  };
 }
 
 /**

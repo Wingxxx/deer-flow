@@ -11,6 +11,7 @@ import {
   saveChannel,
   deleteChannel,
   verifyChannel,
+  generateInviteCode,
 } from "./adapters/channel-adapter";
 import type { ProviderSettingsUpdateRequest, ChannelUpdateInput } from "./types";
 
@@ -86,5 +87,15 @@ export function useVerifyChannel() {
   return useMutation({
     mutationFn: ({ channel, credentials }: { channel: string; credentials?: Record<string, string> }) =>
       verifyChannel(channel, credentials),
+  });
+}
+
+export function useGenerateInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (provider: string) => generateInviteCode(provider),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: channelConnectionsQueryKey });
+    },
   });
 }
