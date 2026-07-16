@@ -30,16 +30,39 @@ export default function ADSLoginPage() {
   const nextPath = validateNext(searchParams.get("next")) ?? "/workspace";
 
   useEffect(() => {
+    // When the CSRF handler in fetcher.ts force-redirects here with
+    // ?csrf_forced=1, skip the auto-redirect check entirely.  Even if
+    // the backend logout's Set-Cookie doesn't survive the proxy
+    // rewrite, we must NOT bounce the user back to workspace — the
+    // whole point is to show the login form.
+    if (searchParams.get("csrf_forced") === "1") {
+      setIsLoading(false);
+      return;
+    }
+
+    // Layer-2 guard: if the csrf_token cookie is missing while the
+    // user is still authenticated, this is a CSRF-forced redirect
+    // (the user deleted the csrf_token cookie, or it expired).  In
+    // that case we MUST NOT bounce back to workspace — every POST
+    // would fail again with 403.  The user needs to re-login to get
+    // a fresh csrf_token.
     fetch("/api/v1/auth/me", { credentials: "include" })
       .then((r) => {
         if (r.ok) {
-          router.push(nextPath);
+          // Still have the csrf_token cookie -> safe to auto-redirect.
+          if (document.cookie.includes("csrf_token=")) {
+            router.push(nextPath);
+          } else {
+            // csrf_token is missing — user was kicked here by a CSRF
+            // 403; show the login form so they can get a fresh token.
+            setIsLoading(false);
+          }
         } else {
           setIsLoading(false);
         }
       })
       .catch(() => setIsLoading(false));
-  }, [router, nextPath]);
+  }, [router, nextPath, searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

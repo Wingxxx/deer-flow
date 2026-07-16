@@ -85,6 +85,43 @@ export async function fetch(
     throw new Error("Unauthorized");
   }
 
+  // CSRF token missing/mismatch — session is stale, force re-login.
+  if (res.status === 403) {
+    let isCsrfError = false;
+    try {
+      const body = await res.clone().json();
+      isCsrfError =
+        typeof body?.detail === "string" &&
+        /CSRF/i.test(body.detail);
+    } catch {
+      // ignore parse errors — let the caller handle non-CSRF 403s
+    }
+    if (isCsrfError) {
+      // Clear session via backend logout first. This is an auth-exempt
+      // endpoint so it works without a CSRF token. MUST await —
+      // window.location.href cancels in-flight requests.
+      try {
+        await globalThis.fetch("/api/v1/auth/logout", {
+          method: "POST",
+          credentials: "include",
+        });
+      } catch {
+        // best-effort — proceed with redirect even if logout fails
+      }
+
+      // Append ?csrf_forced=1 so ADSLoginPage knows this is a forced
+      // CSRF-triggered redirect and skips its auto-redirect check.
+      // Without this, ADSLoginPage calls GET /api/v1/auth/me which
+      // can STILL return 200 if the access_token cookie survives the
+      // proxy's Set-Cookie rewrite, causing an endless loop back to
+      // workspace.
+      const base = buildLoginUrl(window.location.pathname);
+      const sep = base.includes("?") ? "&" : "?";
+      window.location.href = base + sep + "csrf_forced=1";
+      throw new Error("CSRF validation failed");
+    }
+  }
+
   return res;
 }
 

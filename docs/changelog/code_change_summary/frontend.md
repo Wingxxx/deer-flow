@@ -845,9 +845,101 @@ export function MarkdownContent({
 
 ---
 
+### 23. `frontend/src/core/api/fetcher.ts` — CSRF 403 强制跳转登录页（v2 先 logout）
+
+```diff
+@@ -78,6 +78,23 @@ export async function fetch(
+   credentials: "include",
+ });
+ 
++  if (res.status === 401) {
++    window.location.href = buildLoginUrl(window.location.pathname);
++    throw new Error("Unauthorized");
++  }
++
++  // CSRF token missing/mismatch — session is stale, force re-login.
++  if (res.status === 403) {
++    try {
++      const body = await res.clone().json();
++      if (
++        typeof body?.detail === "string" &&
++        /CSRF/i.test(body.detail)
++      ) {
++        // Clear session first so /ads-login doesn't auto-redirect back.
++        globalThis
++          .fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" })
++          .catch(() => {});
++        window.location.href = buildLoginUrl(window.location.pathname);
++        throw new Error("CSRF validation failed");
++      }
++    } catch {
++      // ignore parse errors — let the caller handle non-CSRF 403s
++    }
++  }
++
+   return res;
+ }
+```
+
+- v2（2026-07-15）：CSRF 403 时先调用 `/api/v1/auth/logout` 清除 access_token/ads_token，再跳转登录页。
+- **为什么需要先 logout**：ADS 登录页（`/ads-login`）加载时检查 `GET /api/v1/auth/me`，若 `access_token` 仍有效则自动跳回 workspace。CSRF token 丢失时即使 `access_token` 还在，会话也已不一致，必须强制用户重新完成完整登录。
+- Logout 是 auth-exempt 端点，不需要 CSRF token，可在 CSRF 丢失时安全调用。
+- 非 CSRF 的 403（如权限不足）不受影响。
+- `res.clone().json()` 不消耗原始响应体。
+
+---
+
+### 24. `frontend/extensions/ads_auth/LoginPage.tsx` — CSRF 403 跳转后防自动跳回（双层防护）
+
+**第一层**：检查 URL 参数 `csrf_forced=1`，存在则跳过 `/api/v1/auth/me` 检查，直接显示登录表单。
+**第二层**：即使无 `csrf_forced=1`（旧 JS），在 `/api/v1/auth/me` 返回 200 时还会检查 `csrf_token` cookie 是否存在，若缺失则不自动跳回 workspace。
+同时将 `searchParams` 加入 `useEffect` 依赖数组，确保参数变化时重新执行。
+
+```typescript
+useEffect(() => {
+  if (searchParams.get("csrf_forced") === "1") {
+    setIsLoading(false);
+    return;
+  }
+  fetch("/api/v1/auth/me", { credentials: "include" })
+    .then((r) => {
+      if (r.ok) {
+        if (document.cookie.includes("csrf_token=")) {
+          router.push(nextPath);
+        } else {
+          setIsLoading(false);
+        }
+      } else {
+        setIsLoading(false);
+      }
+    })
+    .catch(() => setIsLoading(false));
+}, [router, nextPath, searchParams]);
+```
+
+---
+
+### 25. `frontend/src/core/threads/hooks.ts` — LangGraph SDK CSRF 错误捕获
+
+LangGraph SDK 内部 fetch 不走 `fetcher.ts` 包装器，因此在 `useThreadStream` 的流错误回调中增加 CSRF 检测。当 `getStreamErrorMessage(error)` 返回的消息包含 `CSRF` 字样时，调用 `window.location.href` 跳转登录页。
+
+```diff
++ import { buildLoginUrl } from "../auth/types";
+...
+- toast.error(getStreamErrorMessage(error));
++ const errorMessage = getStreamErrorMessage(error);
++ if (/CSRF/i.test(errorMessage)) {
++   window.location.href = buildLoginUrl(window.location.pathname);
++   return;
++ }
++ toast.error(errorMessage);
+```
+
+---
+
 ## 五、技能与 Demo
 
-### 23. `skills/public/github-deep-research/SKILL.md`
+### 26. `skills/public/github-deep-research/SKILL.md`
 
 ```diff
 @@ -147,5 +147,5 @@ Save report as: `research_{topic}_{YYYYMMDD}.md`
@@ -863,7 +955,7 @@ export function MarkdownContent({
 
 ---
 
-### 24. `skills/public/market-analysis/SKILL.md`
+### 27. `skills/public/market-analysis/SKILL.md`
 
 ```diff
 @@ -15,7 +15,7 @@ This skill generates professional, consulting-grade market analysis reports in M
@@ -914,7 +1006,7 @@ export function MarkdownContent({
 
 ---
 
-### 25. `frontend/public/demo/threads/.../user-data/outputs/research_deerflow_20260201.md`
+### 28. `frontend/public/demo/threads/.../user-data/outputs/research_deerflow_20260201.md`
 
 ```diff
 @@ -1,12 +1,3 @@
@@ -931,7 +1023,7 @@ export function MarkdownContent({
 
 ---
 
-### 26. `frontend/public/demo/threads/.../thread.json`
+### 29. `frontend/public/demo/threads/.../thread.json`
 
 - **主要变更**：某条 `write_file` 的 `args.content` 中，将原来的「`<citations>...\n</citations>\n# DeerFlow Deep Research Report\n\n...`」改为「`# DeerFlow Deep Research Report\n\n...`」，即去掉 `<citations>...</citations>` 块，保留其后全文。
 - **其他**：一处 `present_files` 的 `filepaths` 由单行数组改为多行格式；文件末尾增加/统一换行。
@@ -943,9 +1035,9 @@ export function MarkdownContent({
 
 | 项目 | 数量 |
 |------|------|
-| 修改文件 | 18 |
+| 修改文件 | 21 |
 | 新增文件 | 1（markdown-content.tsx） |
 | 删除文件 | 5（safe-citation-content.tsx, inline-citation.tsx, core/citations/* 共 3 个） |
-| 总行数变化 | +62 / -894（diff stat） |
+| 总行数变化 | +182 / -912（diff stat） |
 
 以上为按文件、细到每一行 diff 的代码更改总结。

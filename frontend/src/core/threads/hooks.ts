@@ -16,6 +16,7 @@ import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 
 import { getAPIClient } from "../api";
 import { fetch } from "../api/fetcher";
+import { buildLoginUrl } from "../auth/types";
 import { getBackendBaseURL } from "../config";
 import { useI18n } from "../i18n/hooks";
 import { isHiddenFromUIMessage } from "../messages/utils";
@@ -686,7 +687,13 @@ export function useThreadStream({
       setOptimisticMessages([]);
       setOptimisticThreadId(null);
       setLiveMessagesThreadId(null);
-      toast.error(getStreamErrorMessage(error));
+      const errorMessage = getStreamErrorMessage(error);
+      // CSRF token missing/mismatch — session is stale, force re-login.
+      if (/CSRF/i.test(errorMessage)) {
+        window.location.href = buildLoginUrl(window.location.pathname);
+        return;
+      }
+      toast.error(errorMessage);
       pendingUsageBaselineMessageIdsRef.current = new Set(
         messagesRef.current
           .map(messageIdentity)

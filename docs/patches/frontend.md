@@ -936,6 +936,101 @@ grep -n "InviteSection" frontend/extensions/env-settings/channel-settings-page.t
 
 ---
 
+---
+
+## FIX3：CSRF 403 双层防护跳转（fetcher + ADSLoginPage + SDK hooks）
+
+### 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `frontend/src/core/api/fetcher.ts` | CSRF 403 时先 logout 再跳转，URL 追加 `csrf_forced=1` |
+| `frontend/extensions/ads_auth/LoginPage.tsx` | 两层防护：检查 `csrf_forced=1` URL 参数 + 检查 `csrf_token` cookie 存在性 |
+| `frontend/src/core/threads/hooks.ts` | LangGraph SDK 请求捕获 CSRF 错误时跳转登录页 |
+
+**风险**: ✅ 极低（各文件改动均为条件分支，不影响正常路径）
+
+---
+
+### 改动详情
+
+#### a）`fetcher.ts` — v3：重定向 URL 追加 `csrf_forced=1`
+
+在 logout 之后、`window.location.href` 跳转之前，对 `buildLoginUrl()` 的结果追加 `csrf_forced=1` 参数，
+使得 ADSLoginPage 能识别这是被 CSRF 踢过来的，跳过自动跳回逻辑。
+
+```typescript
+const base = buildLoginUrl(window.location.pathname);
+const sep = base.includes("?") ? "&" : "?";
+window.location.href = base + sep + "csrf_forced=1";
+```
+
+#### b）`LoginPage.tsx` — 双层防护
+
+**第一层（csrf_forced=1）**：useEffect 最先检查 URL 参数，存在则直接显示登录表单，
+不走 `/api/v1/auth/me` 检查。
+
+**第二层（csrf_token cookie 检测）**：即使旧 JS 没有 `csrf_forced=1`，
+在 `/api/v1/auth/me` 返回 200（已登录）时还会检查 `csrf_token` cookie 是否存在。
+若缺失（用户手动删除或过期），说明是被 CSRF 踢过来的，不跳回 workspace。
+
+```typescript
+// Layer-1: csrf_forced=1 URL 参数
+if (searchParams.get("csrf_forced") === "1") {
+  setIsLoading(false);
+  return;
+}
+
+// Layer-2: csrf_token cookie 检测
+fetch("/api/v1/auth/me", { credentials: "include" })
+  .then((r) => {
+    if (r.ok) {
+      if (document.cookie.includes("csrf_token=")) {
+        router.push(nextPath);  // 正常场景——有 csrf_token
+      } else {
+        setIsLoading(false);    // 被 CSRF 踢过来的——不跳转
+      }
+    } else {
+      setIsLoading(false);
+    }
+  })
+```
+
+#### c）`hooks.ts` — LangGraph SDK CSRF 错误检测
+
+LangGraph SDK 的内部 fetch 不走 `fetcher.ts` 包装器，因此在 `useThreadStream` 的流错误回调中
+增加 CSRF 检测：当错误消息含 `CSRF` 字样时，调用 `window.location.href` 跳转登录页。
+
+```typescript
+const errorMessage = getStreamErrorMessage(error);
+if (/CSRF/i.test(errorMessage)) {
+  window.location.href = buildLoginUrl(window.location.pathname);
+  return;
+}
+toast.error(errorMessage);
+```
+
+### 原因
+
+重启 Gateway 后浏览器 `csrf_token` cookie 可能丢失或过期，
+此时任何写操作（POST/PUT/DELETE/PATCH）都会被 CSRF 中间件拦截返回 403。
+之前只处理了 401，403 静默失败让用户卡在页面无法操作。
+
+- v1：直接跳转登录页，但 ADSLoginPage 检查 `/api/v1/auth/me` 返回 200（access_token 仍有效），自动跳回 workspace
+- v2：先 logout 再跳转，但浏览器缓存旧 JS 导致不执行 logout
+- v3（当前）：三层兜底 — ① `csrf_forced=1` URL 参数（新 JS） ② `csrf_token` cookie 检测 ③ SDK 流错误回调
+
+### 验证命令
+
+```bash
+# fetcher.ts 有 csrf_forced=1
+ grep -n "csrf_forced" frontend/src/core/api/fetcher.ts
+# LoginPage 有双层检查
+ grep -n "csrf_forced|cookie.includes(\"csrf_token\")" frontend/extensions/ads_auth/LoginPage.tsx
+# hooks 有 CSRF 检测
+ grep -n "CSRF" frontend/src/core/threads/hooks.ts
+```
+
 ## 验证命令（human-intervention 封存状态检查）
 
 ```bash

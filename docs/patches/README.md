@@ -33,7 +33,7 @@
 | 模块 | 文件 | 包含补丁 | 说明 |
 |------|------|---------|------|
 | **后端** | [backend.md](backend.md) | D1, A1, A2, A3, A3b, A10, T1, T5, T6, T7, FIX2, **H1** | `app.py`、`auth_middleware.py`、`csrf_middleware.py`、`routers/auth.py`、`deps.py`、`deerflow_entry.py`、`boot.py`、`sandbox/tools.py` |
-| **前端** | [frontend.md](frontend.md) | A6, A7, A8, A10, A11, A12, S1, S2, S3, S4, S5, IS1, WS, G1, B1, FIX1, **H2, H3** | `next.config.js`、`middleware.ts`、`types.ts`、`server.ts`、`workspace-content.tsx`、`query-client-provider.tsx`、`settings-dialog.tsx`、`registry.ts`、`workspace-nav-menu.tsx`、`account-settings-page.tsx`、`input-box.tsx`、`globals.css`、`layout.tsx`、`workspace-header.tsx`、`welcome.tsx`、`dialog.tsx`、`env-settings/`、`message-list.tsx` |
+| **前端** | [frontend.md](frontend.md) | A6, A7, A8, A10, A11, A12, S1, S2, S3, S4, S5, IS1, WS, G1, B1, FIX1, FIX3, **H2, H3** | `next.config.js`、`middleware.ts`、`types.ts`、`server.ts`、`workspace-content.tsx`、`query-client-provider.tsx`、`settings-dialog.tsx`、`registry.ts`、`workspace-nav-menu.tsx`、`account-settings-page.tsx`、`input-box.tsx`、`globals.css`、`layout.tsx`、`workspace-header.tsx`、`welcome.tsx`、`dialog.tsx`、`fetcher.ts`、`env-settings/`、`message-list.tsx` |
 | **Docker** | [docker.md](docker.md) | D2, D3, A4 | `docker-compose-dev.yaml`、`docker-compose.yaml` |
 | **脚本** | [scripts.md](scripts.md) | D4 | `entrypoint.sh` |
 | **配置** | [config.md](config.md) | A9, D5, C1 | `.env.example`、`pyproject.toml`、`config.example.yaml` |
