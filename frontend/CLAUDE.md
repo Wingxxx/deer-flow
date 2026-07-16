@@ -57,7 +57,7 @@ The frontend is a stateful chat application. Users create **threads** (conversat
   - `mcp/` — Model Context Protocol integration
   - `models/` — TypeScript types and data models
 - **`extensions/`** — 零侵入扩展目录（独立于官方源码，不与上游冲突）：
-  - `env-settings/` — API Key 配置 UI + 渠道配置（/providers + /channels 分路径，7 厂商通用管理、模型选择、Key 连通性验证、清除配置）
+  - `env-settings/` — API Key 配置 UI + 渠道配置（/providers + /channels 分路径，7 厂商通用管理、模型选择、Key 连通性验证、清除配置）+ 邀请码生成（4 国内渠道差异化：企业微信/飞书/钉钉/微信，含 QR 码、倒计时、微信降级）
   - `ads_auth/` — ADS 统一认证登录页
   - `input-suggestions/` — 输入建议按钮自定义（运行时 fetch site.config.json → Context 驱动重渲染）
   - `mobile-sidebar/` — 移动端侧栏浮动汉堡触发按钮

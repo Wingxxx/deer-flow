@@ -856,7 +856,7 @@ ls frontend/extensions/human-intervention/hooks.ts
 ```
 
 ---
-### WS6f — invite-section.tsx 邀请成员卡片（2026-07-15）
+### WS6f — invite-section.tsx 邀请成员卡片（2026-07-15）（注：全部文件在扩展目录内，非核心改动，见 patches/README.md L27）
 
 **文件**: `frontend/extensions/env-settings/`
 **风险**: ✅ 极低（扩展目录，零侵入）

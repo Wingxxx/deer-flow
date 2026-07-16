@@ -23,6 +23,7 @@ env-settings/
 ├── hooks.ts                 # TanStack Query hooks
 ├── channels.ts              # @deprecated 渠道元数据（已由适配器替代）
 ├── providers.ts             # 7 家 AI 厂商元数据定义
+├── invite-section.tsx       # InviteSection 三态机组件
 └── types.ts                 # TypeScript 类型定义
 ```
 
@@ -133,11 +134,42 @@ API Keys 设置面板 UI 组件，包含：
 - **动态凭据表单**：根据当前渠道的 `credentialFields` 元数据自动渲染输入框（字段名、标签均由元数据驱动）
 - **密码输入**：凭据输入框支持显示/隐藏切换，显示掩码当前值，Secret 类字段绝不回传前端
 - **保存**：值不变跳过 + 输入裁剪 + 保存后自动启用渠道
-- **绑定码自动引导**：保存凭据后，若渠道使用 `binding_code` 认证模式且未连接，自动调用上游 API 获取连接码 + 生成二维码。页面显示蓝色绑定引导卡片：左侧为 `/connect {code}` 指令文本和复制按钮，右侧为 96×96 像素二维码（手机扫码后可直接复制绑定码）；引导卡片明确提示"未绑定前，向 Bot 发送消息会被拦截。绑定码有效期 10 分钟。"
+- **邀请码生成**：凭据保存后，通过 [`<InviteSection>`](#invite-sectiontsx) 组件处理邀请码生成与展示。组件内部封装三态机（IDLE→ACTIVE→EXPIRED）、渠道感知渲染（企业微信/飞书/钉钉差异化标题与图标）、微信无 QR 降级、竞态防护（双击锁 + unmount 防泄漏）等逻辑，channel-settings-page 仅负责传递 `provider` / `hasCredentials` / `authMode` 作为 props
 - **状态徽章**：根据 `connectionStatus` 和渠道运行状态实时显示「已连接」「已启用·待绑定」「已配置但未启用」「已配置」四种状态
 - **验证连通性**：调用渠道专用连通性测试函数
 - **清除配置**：确认弹窗后清除凭据 + 同步停止渠道
 - **状态反馈**：操作成功/失败消息提示，绑定码引导卡片在切换渠道时自动清除
+
+### invite-section.tsx — InviteSection
+
+邀请码生成卡片组件，在渠道凭据保存后显示「邀请成员」区域。
+
+**Props**:
+
+| Prop | 类型 | 说明 |
+|------|------|------|
+| `provider` | `string` | 渠道 ID（`wecom` / `feishu` / `dingtalk` / `wechat`） |
+| `hasCredentials` | `boolean` | 当前渠道是否已配置凭据 |
+| `authMode` | `string` | 渠道认证模式，仅 `"binding_code"` 时渲染组件 |
+
+**三态机**: `IDLE → ACTIVE → EXPIRED`
+
+- **IDLE**: 标题「邀请成员」+ 副标题 + 「暂无邀请码」空状态 + 「生成邀请码」按钮
+- **ACTIVE**: 蓝色引导卡片 — `/connect {code}` 指令文本 + 复制按钮 + 96×96 QR 码 + 倒计时（10 分钟）+ 「重新生成」按钮；后台轮询连接状态，连接成功后自动回 IDLE 并刷新缓存
+- **EXPIRED**: 「邀请码已过期」+ 「重新生成」按钮
+
+**渠道感知**: 根据 `provider` 差异化渲染图标（wecom: Building2 / feishu: Bird / dingtalk: MessageSquare / wechat: MessageCircle）。标题、描述、按钮文案均为渠道无关的通用文案，避免硬编码渠道名。
+
+**微信降级**: `wechat` 渠道不生成 QR 码（个人号聊天场景扫码链路极弱），`qrDataUrl` 保持 `null`，QR 区域不渲染。此决策为 UX 优化，非技术能力限制。
+
+**竞态防护**:
+
+- `generationIdRef` 递增原子锁 — 快速双击不触发重复 POST /connect
+- `mountedRef` 防止卸载后 `setState`（组件因 `key={selectedChannelId}` 在切换渠道时 unmount）
+- `deadlineRef` 存储绝对 Timestamp，倒计时 tick 不依赖闭包
+- `qrCacheRef` 缓存已生成的 QR DataURL，避免重复编码
+
+**Gate**: 仅当 `hasCredentials && authMode === "binding_code"` 时渲染，否则 `return null`。
 
 ### extension.ts
 
