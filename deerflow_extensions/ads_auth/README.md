@@ -11,7 +11,7 @@
   → DeerFlow 转发 POST /jwt/login (form-encoded)
   → ADS 返回 JWT (HS256, 30分钟过期)
   → DeerFlow 将 JWT 设为 HttpOnly Cookie
-  → 同时写入 ADS-MCP 的 config.json
+  → 写入 credentials 到 ADS-MCP 的 config.json
   → 后续请求由 ADSProxyMiddleware 验证 JWT
 ```
 
@@ -23,7 +23,7 @@
 | `ads_auth.py` | 调 ADS `/jwt/login` 拿 JWT，httpx 异步请求 |
 | `middleware.py` | `ADSProxyMiddleware` — FastAPI ASGI 中间件，唯一认证关口 |
 | `router.py` | `POST /api/v1/auth/login/ads` 登录端点 |
-| `token_manager.py` | 内存 token 存储 + 写 MCP config.json |
+| `token_manager.py` | 内存 token 存储 + 写 credentials 到 MCP config.json |
 | `startup.py` | 注入逻辑：`app.include_router()` — 通过 `boot.py` Boot Loader 统一触发 |
 
 ## 环境变量
@@ -35,23 +35,23 @@
 
 ## MCP config.json 写入内容
 
-登录成功后自动写入以下字段（`credentials` **不动**，`token.usedBy` **保留原值不覆盖**）：
+登录成功后自动写入以下字段（仅 `credentials.new` 和 `server.url`，不再写入 token）：
 
 ```json
 {
   "ads": {
     "server": { "url": "http://ads:8080" },
-    "token": {
-      "value": "eyJ...",
-      "expires": 1746001800,
-      "loginTime": 1746000000,
-      "usedBy": "new"
+    "credentials": {
+      "new": {
+        "username": "admin",
+        "password": "Admin#123"
+      }
     }
   }
 }
 ```
 
-> **注意**：`usedBy` 保留 config.json 中已有值，不再硬编码覆盖。MCP 依赖该字段判断用哪组凭据重新登录（`retryLoginByUsedBy` 仅处理 `"new"` 和 `"default"`），覆盖会导致 token 过期后自动续期失效。
+> **注意**：mcp-server 改版后不再从 config.json 读取 token，自行管理 token 生命周期。DeerFlow 仅负责写入凭据供 mcp-server 自动登录使用。
 
 ## 核心改动
 

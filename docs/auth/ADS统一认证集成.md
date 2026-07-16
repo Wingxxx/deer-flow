@@ -176,12 +176,10 @@ if getattr(request.state, "_ads_authenticated", False):
 | 字段 | 来源 | 示例 |
 |------|------|------|
 | `ads.server.url` | `ADS_BASE_URL` 环境变量 | `https://192.168.1.54` |
-| `ads.token.value` | ADS `/jwt/login` 返回的 JWT | `eyJ0eXAiOiJKV1Qi...` |
-| `ads.token.expires` | `now + 1800` (30 分钟) | `1746001800` |
-| `ads.token.loginTime` | `time.time()` | `1746000000` |
-| `ads.token.usedBy` | 保留 config.json 已有值（不覆盖） | `new` / `default` |
+| `ads.credentials.new.username` | 登录表单 | `admin` |
+| `ads.credentials.new.password` | 登录表单 | `Admin#123` |
 
-`ads.credentials` 保留不动。
+> mcp-server 改版后不再从 config.json 读取 token，自行管理 token 生命周期。DeerFlow 仅写入 credentials 和 server.url。
 
 ## 被替换的功能
 

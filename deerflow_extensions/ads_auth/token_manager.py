@@ -1,6 +1,5 @@
 import json
 import os
-import time
 
 from deerflow_extensions.ads_auth.config import ADS_BASE_URL, get_mcp_config_path
 
@@ -19,7 +18,7 @@ async def remove_token(user_id: str):
     _ads_tokens.pop(user_id, None)
 
 
-async def sync_to_mcp_config(ads_token: str, username: str, password: str):
+async def sync_to_mcp_config(username: str, password: str):
     config_path = get_mcp_config_path()
 
     try:
@@ -34,15 +33,6 @@ async def sync_to_mcp_config(ads_token: str, username: str, password: str):
         config["ads"]["server"] = {}
 
     config["ads"]["server"]["url"] = ADS_BASE_URL
-
-    now = int(time.time())
-    existing_used_by = config.get("ads", {}).get("token", {}).get("usedBy", "deerflow")
-    config["ads"]["token"] = {
-        "value": ads_token,
-        "expires": now + 1800,
-        "loginTime": now,
-        "usedBy": existing_used_by,
-    }
 
     # 写入用户登录时使用的凭据
     if "credentials" not in config["ads"]:

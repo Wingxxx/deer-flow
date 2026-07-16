@@ -333,7 +333,7 @@
 | `ads_auth.py` | 调 ADS `/jwt/login` 拿 JWT |
 | `middleware.py` | ADSProxyMiddleware，唯一认证关口 |
 | `router.py` | `POST /login/ads` 端点 |
-| `token_manager.py` | token 存储 + 写 MCP config.json |
+| `token_manager.py` | token 存储 + 写 credentials 到 MCP config.json |
 | `startup.py` | 中间件安装逻辑（幂等，try/except 降级） |
 | `sitecustomize.py` | Python 自启动入口 |
 
