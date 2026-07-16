@@ -31,7 +31,7 @@ class DiscordChannelConnectionConfig(BaseModel):
 
 
 class BindingCodeChannelConnectionConfig(BaseModel):
-    enabled: bool = False
+    enabled: bool = True
 
     @property
     def configured(self) -> bool:
