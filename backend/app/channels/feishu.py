@@ -158,6 +158,17 @@ class FeishuChannel(Channel):
         logger.info("[Feishu] using domain: %s", domain)
         self._main_loop = asyncio.get_event_loop()
 
+        # 新增 —— 验证凭证（使用 lark-oapi 原生 ainternal）
+        try:
+            resp = await self._api_client.auth.v3.tenant_access_token.ainternal(
+                self._lark.api.auth.v3.InternalTenantAccessTokenRequest.builder().build()
+            )
+            if not resp.success():
+                raise ValueError(f"Feishu auth failed: {resp.msg} (code={resp.code})")
+        except Exception:
+            logger.error("Feishu credential verification failed: invalid app_id or app_secret")
+            return
+
         self._running = True
         self.bus.subscribe_outbound(self._on_outbound)
 
@@ -172,6 +183,24 @@ class FeishuChannel(Channel):
         )
         self._thread.start()
         logger.info("Feishu channel started")
+
+    async def validate_credentials(self) -> bool:
+        """验证 Feishu 凭证：调 tenant_access_token ainternal 接口。"""
+        try:
+            import lark_oapi as lark
+
+            app_id = str(self.config.get("app_id", ""))
+            app_secret = str(self.config.get("app_secret", ""))
+            domain = str(self.config.get("domain", "https://open.feishu.cn"))
+            if not app_id or not app_secret:
+                return False
+            client = lark.Client.builder().app_id(app_id).app_secret(app_secret).domain(domain).build()
+            resp = await client.auth.v3.tenant_access_token.ainternal(
+                lark.api.auth.v3.InternalTenantAccessTokenRequest.builder().build()
+            )
+            return resp.success()
+        except Exception:
+            return False
 
     def _run_ws(self, app_id: str, app_secret: str, domain: str) -> None:
         """Construct and run the lark WS client in a thread with a fresh event loop.

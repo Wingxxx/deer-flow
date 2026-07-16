@@ -16,7 +16,6 @@
 
 import os
 import sys
-from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -31,7 +30,7 @@ _src_dir = os.path.dirname(_test_dir)
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
 
-from router import (
+from router import (  # noqa: E402
     _mask_value,
     _read_env_value,
     _set_channel_enabled_in_config,
@@ -311,7 +310,7 @@ class TestSanitizeChannelCredentials:
 
 
 class TestSetChannelEnabledInConfig:
-    """_set_channel_enabled_in_config —— 启用时补齐凭据，禁用时清理凭据"""
+    """_set_channel_enabled_in_config —— 启用时仅写 enabled=true，禁用时清理凭据"""
 
     @pytest.fixture
     def config_file(self, tmp_path):
@@ -328,21 +327,20 @@ class TestSetChannelEnabledInConfig:
     # -- enable variants --
 
     def test_enable_adds_credential_fields(self, config_file):
-        """UT15: 启用渠道时自动补齐凭据引用字段"""
+        """UT15: 启用渠道仅写 enabled=true，凭据由 runtime-config.json 管理"""
         _set_channel_enabled_in_config("wecom", enabled=True)
         cfg = self._read_cfg(config_file)
         wecom = cfg["channels"]["wecom"]
         assert wecom["enabled"] is True
-        assert wecom["bot_id"] == "$WECOM_BOT_ID"
-        assert wecom["bot_secret"] == "$WECOM_BOT_SECRET"
+        assert "bot_id" not in wecom
 
     def test_enable_idempotent_no_duplicate(self, config_file):
-        """UT16: 已补齐的渠道再次启用不重复添加"""
+        """UT16: 已启用的渠道再次启用不重复操作"""
         _set_channel_enabled_in_config("wecom", enabled=True)
         _set_channel_enabled_in_config("wecom", enabled=True)
         cfg = self._read_cfg(config_file)
         wecom = cfg["channels"]["wecom"]
-        assert list(wecom.keys()) == ["enabled", "bot_id", "bot_secret"]
+        assert list(wecom.keys()) == ["enabled"]
 
     # -- disable variants --
 
@@ -377,15 +375,14 @@ class TestSetChannelEnabledInConfig:
         assert cfg["channels"]["unknown"].get("some_key") == "val"
 
     def test_enable_then_disable_then_enable(self, config_file):
-        """UT20: 启用→禁用→再启用，凭据字段可重建"""
+        """UT20: 启用→禁用→再启用，凭据字段不自动重建"""
         _set_channel_enabled_in_config("wecom", enabled=True)
         _set_channel_enabled_in_config("wecom", enabled=False)
         _set_channel_enabled_in_config("wecom", enabled=True)
         cfg = self._read_cfg(config_file)
         wecom = cfg["channels"]["wecom"]
         assert wecom["enabled"] is True
-        assert wecom["bot_id"] == "$WECOM_BOT_ID"
-        assert wecom["bot_secret"] == "$WECOM_BOT_SECRET"
+        assert "bot_id" not in wecom
 
 
 # ---------------------------------------------------------------------------

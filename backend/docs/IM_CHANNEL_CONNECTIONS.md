@@ -79,6 +79,18 @@ channel_connections:
 
 `channel_connections` does not duplicate provider secrets. It only controls the browser-facing connect UI and stores per-user binding records. Telegram needs `bot_username` only so the frontend can open a deep link.
 
+## Credential Validation
+
+POST `/api/v1/channels/{provider}/runtime-config` saves credentials and immediately validates them:
+- Success: the channel starts and becomes "running"
+- Failure: returns HTTP 400 (`credential_invalid`), HTTP 504 (`network_timeout`), or HTTP 500 (`internal_error`)
+- If the service is not running, credentials are stored without validation (deferred validation)
+
+Feishu validates via `lark.Client.auth.v3.tenant_access_token.ainternal()`,
+DingTalk via `api.dingtalk.com/v1.0/oauth2/accessToken`,
+WeChat via `ilink/bot/get_bot_info` (skipped in QR-code mode),
+WeCom via WebSocket auth Future with 5s timeout.
+
 When `channel_connections.enabled` and `require_bound_identity` are true, auth-enabled deployments reject ordinary unbound IM messages before creating a DeerFlow thread or run. Users must connect the channel from DeerFlow Settings first. Auth-disabled local mode still routes channel messages to the auth-disabled default user, and legacy open-bot behavior can be restored explicitly with `require_bound_identity: false`.
 
 Upgrade note: existing auth-enabled deployments that already have `channel_connections.enabled: true` will start rejecting ordinary unbound IM messages after this field is introduced because `require_bound_identity` defaults to true. Legacy operator-owned/open-bot deployments that intentionally allow unbound platform users to create DeerFlow runs should set `require_bound_identity: false` before upgrading and restart the service.

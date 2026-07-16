@@ -687,7 +687,7 @@ def test_configure_provider_runtime_rolls_back_visible_state_when_start_fails(tm
     }
     runtime_config_store = ChannelRuntimeConfigStore(tmp_path / "channels" / "runtime-config.json")
     runtime_config_store.set_provider_config("slack", existing_runtime_config)
-    service = SimpleNamespace(configure_channel=AsyncMock(return_value=False))
+    service = SimpleNamespace(configure_channel=AsyncMock(return_value=(False, "credential_invalid")))
     monkeypatch.setattr("app.channels.service.get_channel_service", lambda: service)
     app = _make_app(
         config,
@@ -703,7 +703,7 @@ def test_configure_provider_runtime_rolls_back_visible_state_when_start_fails(tm
         )
 
     assert response.status_code == 400
-    assert "Failed to start Slack channel" in response.json()["detail"]
+    assert "rejected credentials" in response.json()["detail"]
     service.configure_channel.assert_awaited_once_with(
         "slack",
         {
@@ -927,7 +927,7 @@ def test_disconnect_provider_runtime_config_suppresses_file_config_and_stops_cha
         },
     )
     service = SimpleNamespace(
-        configure_channel=AsyncMock(return_value=True),
+        configure_channel=AsyncMock(return_value=(True, None)),
         remove_channel=AsyncMock(return_value=True),
     )
     monkeypatch.setattr("app.channels.service.get_channel_service", lambda: service)
@@ -1083,7 +1083,7 @@ def test_configure_provider_runtime_does_not_clobber_concurrent_config_update(tm
             **app.state.channels_config,
             "telegram": {"enabled": True, "bot_token": "tg-token"},
         }
-        return True
+        return (True, None)
 
     service = SimpleNamespace(configure_channel=configure_channel)
     monkeypatch.setattr("app.channels.service.get_channel_service", lambda: service)

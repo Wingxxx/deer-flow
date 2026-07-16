@@ -52,6 +52,19 @@ class Channel(ABC):
     async def stop(self) -> None:
         """Gracefully stop the channel."""
 
+    async def validate_credentials(self) -> bool:
+        """Validate that the channel's credentials are usable.
+
+        Default implementation returns True (assumes credentials are valid).
+        Channels that support synchronous credential validation (e.g. DingTalk,
+        Feishu, WeChat, WeCom) should override this to call the platform API
+        before stopping the existing connection.
+
+        This method MUST NOT set ``_running``, register callbacks, or start
+        background tasks — it only performs the API validation call.
+        """
+        return True
+
     # -- outbound ----------------------------------------------------------
 
     @abstractmethod

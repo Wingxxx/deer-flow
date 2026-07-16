@@ -9,7 +9,7 @@ import yaml
 from dotenv import dotenv_values, find_dotenv, set_key
 from fastapi import APIRouter, HTTPException
 from filelock import FileLock
-from httpx import AsyncClient
+from httpx import AsyncClient, HTTPStatusError, TimeoutException
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ class ProviderSettingsUpdateRequest(BaseModel):
 
 class EnvSettingsUpdateResponse(BaseModel):
     success: bool = Field(default=True)
-    message: str = Field(default="API Key saved successfully")
+    message: str = Field(default="配置已保存")
 
 
 class VerifyRequest(BaseModel):
@@ -73,7 +73,7 @@ class VerifyResponse(BaseModel):
 
 class DeleteResponse(BaseModel):
     success: bool = Field(default=True)
-    message: str = Field(default="Config cleared")
+    message: str = Field(default="配置已清除")
 
 
 class ChannelVerifyRequest(BaseModel):
@@ -147,31 +147,31 @@ _CHANNEL_META: dict[str, dict] = {
         "name": "企业微信",
         "env_prefix": "WECOM",
         "credential_fields": [
-            {"key": "bot_id", "label": "Bot ID"},
-            {"key": "bot_secret", "label": "Bot Secret"},
+            {"key": "bot_id", "label": "企业微信 Bot ID"},
+            {"key": "bot_secret", "label": "企业微信 Bot Secret"},
         ],
     },
     "feishu": {
         "name": "飞书",
         "env_prefix": "FEISHU",
         "credential_fields": [
-            {"key": "app_id", "label": "App ID"},
-            {"key": "app_secret", "label": "App Secret"},
+            {"key": "app_id", "label": "飞书 App ID"},
+            {"key": "app_secret", "label": "飞书 App Secret"},
         ],
     },
     "dingtalk": {
         "name": "钉钉",
         "env_prefix": "DINGTALK",
         "credential_fields": [
-            {"key": "client_id", "label": "Client ID"},
-            {"key": "client_secret", "label": "Client Secret"},
+            {"key": "client_id", "label": "钉钉 Client ID"},
+            {"key": "client_secret", "label": "钉钉 Client Secret"},
         ],
     },
     "wechat": {
         "name": "微信",
         "env_prefix": "WECHAT",
         "credential_fields": [
-            {"key": "bot_token", "label": "Bot Token"},
+            {"key": "bot_token", "label": "微信 Bot Token"},
         ],
     },
 }
@@ -337,7 +337,7 @@ def _unset_env_value(key: str) -> None:
 
 def _validate_provider(provider_id: str) -> None:
     if provider_id not in PROVIDERS:
-        raise HTTPException(status_code=404, detail=f"Provider '{provider_id}' not found")
+        raise HTTPException(status_code=404, detail=f"厂商 '{provider_id}' 不存在")
 
 
 def _build_provider_info(provider_id: str, meta: dict) -> ProviderInfo:
@@ -413,30 +413,37 @@ async def _test_wecom_connect(bot_id: str, bot_secret: str) -> tuple[bool, str]:
         try:
             await asyncio.wait_for(auth_future, timeout=10.0)
             return (True, "连接成功")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return (False, "认证超时，请检查 Bot ID 和 Secret")
         finally:
             client.disconnect()
     except ImportError:
         return (False, "wecom-aibot-python-sdk 未安装")
     except Exception as e:
-        return (False, f"连接失败: {str(e)}")
+        logger.warning("WeCom connect test failed: %s", e)
+        return (False, "连接失败，请检查 Bot ID 和 Secret 是否正确")
 
 
 async def _test_feishu_connect(app_id: str, app_secret: str) -> tuple[bool, str]:
     try:
         import lark_oapi as lark
 
-        client = lark.Client.builder().app_id(app_id).app_secret(app_secret).build()
-        resp = client.app.v2.app.get(lark.AppGetRequest())
+        client = lark.Client.builder().app_id(app_id).app_secret(app_secret).domain("https://open.feishu.cn").build()
+        resp = await client.auth.v3.tenant_access_token.ainternal(
+            lark.api.auth.v3.InternalTenantAccessTokenRequest.builder().build()
+        )
         if resp.success():
             return (True, "连接成功")
+        elif resp.msg and "invalid" in resp.msg.lower():
+            return (False, "认证失败，请检查 App ID 和 App Secret 是否正确")
         else:
-            return (False, resp.msg or "认证失败")
+            logger.warning("Feishu connect test failed, resp.msg: %s", resp.msg)
+            return (False, "认证失败，请检查 App ID 和 App Secret 是否正确")
     except ImportError:
         return (False, "lark-oapi 未安装")
     except Exception as e:
-        return (False, f"连接失败: {str(e)}")
+        logger.warning("Feishu connect test failed: %s", e)
+        return (False, "连接失败，请检查 App ID 和 App Secret 是否正确")
 
 
 async def _test_dingtalk_connect(client_id: str, client_secret: str) -> tuple[bool, str]:
@@ -455,16 +462,41 @@ async def _test_dingtalk_connect(client_id: str, client_secret: str) -> tuple[bo
             if data.get("errcode") == 0 and data.get("access_token"):
                 return (True, "连接成功")
             errmsg = data.get("errmsg", "未知错误")
-            return (False, f"认证失败: {errmsg}")
+            logger.warning("DingTalk connect test failed, errmsg: %s", errmsg)
+            return (False, "认证失败，请检查 Client ID 和 Client Secret 是否正确")
     except Exception as e:
-        return (False, f"连接失败: {str(e)}")
+        logger.warning("DingTalk connect test failed: %s", e)
+        return (False, "连接失败，请检查 Client ID 和 Client Secret 是否正确")
 
 
 async def _test_wechat_connect(bot_token: str) -> tuple[bool, str]:
     token = bot_token.strip()
     if len(token) < 8:
         return (False, "Bot Token 长度不足，请检查配置")
-    return (True, "格式验证通过（连接性需启动后确认）")
+    try:
+        async with AsyncClient(timeout=10) as http:
+            resp = await http.get(
+                "https://ilinkai.weixin.qq.com/ilink/bot/get_bot_info",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "AuthorizationType": "ilink_bot_token",
+                    "Content-Type": "application/json",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, dict) and data.get("errcode", 0) != 0:
+                errmsg = data.get("errmsg", "认证失败")
+                logger.warning("WeChat connect test failed, errmsg: %s", errmsg)
+                return (False, "认证失败，请检查 Bot Token 是否正确")
+            return (True, "连接成功")
+    except TimeoutException:
+        return (False, "连接超时")
+    except HTTPStatusError:
+        return (False, "认证失败（HTTP 401），请检查 Bot Token")
+    except Exception as e:
+        logger.warning("WeChat connect test failed: %s", e)
+        return (False, "连接失败，请检查 Bot Token 是否正确")
 
 
 def _sanitize_channel_credentials(
@@ -480,7 +512,7 @@ def _sanitize_channel_credentials(
         if not raw:
             raise HTTPException(
                 status_code=422,
-                detail=f"'{field['label']}' is required and cannot be empty",
+                detail=f"'{field['label']}' 不能为空",
             )
         cleaned[key] = raw
     return cleaned
@@ -544,6 +576,19 @@ def _set_channel_enabled_in_config(channel_id: str, enabled: bool) -> bool:
     return True
 
 
+_RESTART_REASON_MAP: dict[str | None, str] = {
+    None: "未知错误",
+    "unknown_channel": "渠道配置丢失，请重新保存",
+    "internal_error": "内部错误",
+    "credential_invalid": "凭证校验失败",
+    "network_timeout": "连接超时",
+}
+
+
+def _fmt_reason(reason: str | None) -> str:
+    return _RESTART_REASON_MAP.get(reason, reason or "未知错误")
+
+
 _channel_test_fns: dict[str, Callable] = {
     "wecom": _test_wecom_connect,
     "feishu": _test_feishu_connect,
@@ -555,7 +600,7 @@ _channel_test_fns: dict[str, Callable] = {
 def _get_test_fn(channel_id: str):
     fn = _channel_test_fns.get(channel_id)
     if fn is None:
-        raise HTTPException(status_code=400, detail=f"Verification not available for channel '{channel_id}'")
+        raise HTTPException(status_code=400, detail=f"渠道 '{channel_id}' 不支持连通性验证")
     return fn
 
 
@@ -584,7 +629,7 @@ async def update_provider_settings(request: ProviderSettingsUpdateRequest) -> En
     prefix = meta["env_prefix"]
     key = request.api_key.strip()
     if not key:
-        raise HTTPException(status_code=422, detail="API Key cannot be empty")
+        raise HTTPException(status_code=422, detail="API Key 不能为空")
     try:
         with _get_env_lock():
             _write_env_value(f"{prefix}_API_KEY", key)
@@ -602,7 +647,7 @@ async def update_provider_settings(request: ProviderSettingsUpdateRequest) -> En
         return EnvSettingsUpdateResponse(success=True, message=msg)
     except Exception as e:
         logger.error("Failed to save API Key: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to save API Key: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"保存 API Key 失败: {str(e)}")
 
 
 @router.delete(
@@ -652,11 +697,11 @@ async def verify_provider_key(provider: str, request: VerifyRequest = None) -> V
                 headers={"Authorization": f"Bearer {api_key}"},
             )
             if resp.status_code == 200:
-                return VerifyResponse(valid=True, message=f"{meta['name']} API Key is valid and reachable")
+                return VerifyResponse(valid=True, message=f"{meta['name']} API Key 有效且可访问")
             elif resp.status_code == 401:
-                return VerifyResponse(valid=False, message=f"{meta['name']} API Key is invalid (401 Unauthorized)")
+                return VerifyResponse(valid=False, message=f"{meta['name']} API Key 无效 (401)")
             elif resp.status_code == 403:
-                return VerifyResponse(valid=False, message=f"{meta['name']} API Key 无权限 (403 Forbidden)")
+                return VerifyResponse(valid=False, message=f"{meta['name']} API Key 无权限 (403)")
             elif resp.status_code == 404:
                 return VerifyResponse(valid=True, message=f"{meta['name']} API Key 格式正确（端点返回 404，密钥可能有效）")
             elif resp.status_code == 429:
@@ -690,7 +735,7 @@ async def get_channels() -> ChannelSettingsResponse:
 async def update_channel_settings(request: ChannelUpdateRequest) -> EnvSettingsUpdateResponse:
     channel_id = request.channel
     if channel_id not in _CHANNEL_META:
-        raise HTTPException(status_code=404, detail=f"Channel '{channel_id}' not found")
+        raise HTTPException(status_code=404, detail=f"渠道 '{channel_id}' 不存在")
 
     meta = _CHANNEL_META[channel_id]
     prefix = meta["env_prefix"]
@@ -735,14 +780,14 @@ async def update_channel_settings(request: ChannelUpdateRequest) -> EnvSettingsU
                     ok, err = await test_fn(**cleaned)
                     if ok:
                         service._config[channel_id].update(cleaned)
-                        await service.restart_channel(channel_id)
-                        msg += "，渠道已自动重启"
+                        ok, reason = await service.restart_channel(channel_id)
+                        msg += "，渠道已自动重启" if ok else f"（新参数仍无法启动渠道：{_fmt_reason(reason)}）"
                     else:
                         msg += f"（新参数校验失败：{err}，旧渠道正常运行不受影响）"
                 else:
                     service._config[channel_id].update(cleaned)
-                    ok = await service.restart_channel(channel_id)
-                    msg += "，渠道已自动重启" if ok else "（新参数仍无法启动渠道）"
+                    ok, reason = await service.restart_channel(channel_id)
+                    msg += "，渠道已自动重启" if ok else f"（新参数仍无法启动渠道：{_fmt_reason(reason)}）"
             else:
                 msg += "（ChannelService 未运行，重启 DeerFlow 后生效）"
         except HTTPException:
@@ -773,7 +818,7 @@ async def update_channel_settings(request: ChannelUpdateRequest) -> EnvSettingsU
 )
 async def delete_channel_settings(channel: str) -> DeleteResponse:
     if channel not in _CHANNEL_META:
-        raise HTTPException(status_code=404, detail=f"Channel '{channel}' not found")
+        raise HTTPException(status_code=404, detail=f"渠道 '{channel}' 不存在")
 
     meta = _CHANNEL_META[channel]
     prefix = meta["env_prefix"]
@@ -819,7 +864,7 @@ async def delete_channel_settings(channel: str) -> DeleteResponse:
 )
 async def verify_channel_settings(channel: str, request: ChannelVerifyRequest = None) -> VerifyResponse:
     if channel not in _CHANNEL_META:
-        raise HTTPException(status_code=404, detail=f"Channel '{channel}' not found")
+        raise HTTPException(status_code=404, detail=f"渠道 '{channel}' 不存在")
 
     meta = _CHANNEL_META[channel]
     prefix = meta["env_prefix"]

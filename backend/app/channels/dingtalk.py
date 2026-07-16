@@ -166,6 +166,13 @@ class DingTalkChannel(Channel):
         if self._card_template_id:
             logger.info("[DingTalk] AI Card mode enabled (template=%s)", self._card_template_id)
 
+        # 新增 —— 验证凭证（复用 _get_access_token 调 api.dingtalk.com/v1.0/oauth2/accessToken）
+        try:
+            await self._get_access_token()
+        except Exception:
+            logger.error("DingTalk credential verification failed: invalid client_id or client_secret")
+            return
+
         self._running = True
         self.bus.subscribe_outbound(self._on_outbound)
 
@@ -176,6 +183,14 @@ class DingTalkChannel(Channel):
         )
         self._thread.start()
         logger.info("DingTalk channel started")
+
+    async def validate_credentials(self) -> bool:
+        """验证 DingTalk 凭证：调 oauth2/accessToken 接口。"""
+        try:
+            await self._get_access_token()
+            return True
+        except Exception:
+            return False
 
     async def stop(self) -> None:
         self._running = False

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 _STATE_TTL_SECONDS = 600
 _MAX_PENDING_CONNECT_CODES_PER_PROVIDER = 5
 _MASKED_CREDENTIAL_VALUE = "********"
-_ADMIN_REQUIRED_DETAIL = "Admin privileges required to manage channel runtime credentials."
+_ADMIN_REQUIRED_DETAIL = "渠道运行时凭据管理需要管理员权限"
 
 
 class ChannelCredentialFieldResponse(BaseModel):
@@ -133,7 +133,7 @@ _RUNTIME_REQUIREMENTS: dict[str, tuple[str, ...]] = {
 def _get_user_id(request: Request) -> str:
     user = getattr(request.state, "user", None)
     if user is None:
-        raise HTTPException(status_code=401, detail="Authentication required")
+        raise HTTPException(status_code=401, detail="需要登录认证")
     return str(user.id)
 
 
@@ -193,7 +193,7 @@ def _get_repository(request: Request, config: ChannelConnectionsConfig) -> Chann
 
     sf = get_session_factory()
     if sf is None:
-        raise HTTPException(status_code=503, detail="Channel connection persistence is not available")
+        raise HTTPException(status_code=503, detail="渠道连接持久化不可用")
 
     repo = ChannelConnectionRepository(sf)
     request.app.state.channel_connection_repo = repo
@@ -203,7 +203,7 @@ def _get_repository(request: Request, config: ChannelConnectionsConfig) -> Chann
 def _provider_config(config: ChannelConnectionsConfig, provider: str):
     provider_config = getattr(config, provider, None)
     if provider_config is None:
-        raise HTTPException(status_code=404, detail="Unknown channel provider")
+        raise HTTPException(status_code=404, detail="未知的渠道提供者")
     return provider_config
 
 
@@ -332,7 +332,7 @@ async def _create_state(
     if not inserted:
         raise HTTPException(
             status_code=429,
-            detail="Too many pending channel connection codes. Wait for existing codes to expire or use one of them.",
+            detail="待处理的连接码过多，请等待现有码过期或使用其中一个",
         )
     return state
 
@@ -342,7 +342,7 @@ def _connect_instruction(provider: str, code: str) -> str:
         return f"Send /start {code} to the DeerFlow Telegram bot."
     meta = _PROVIDER_META.get(provider)
     if meta is None:
-        raise HTTPException(status_code=404, detail="Unknown channel provider")
+        raise HTTPException(status_code=404, detail="未知的渠道提供者")
     return f"Send /connect {code} to the DeerFlow {meta['display_name']} bot."
 
 
@@ -352,7 +352,7 @@ def _connect_url(config: ChannelConnectionsConfig, provider: str, code: str) -> 
         return f"https://t.me/{provider_config.bot_username}?start={code}"
     if _PROVIDER_META.get(provider, {}).get("auth_mode") == "binding_code":
         return None
-    raise HTTPException(status_code=404, detail="Unknown channel provider")
+    raise HTTPException(status_code=404, detail="未知的渠道提供者")
 
 
 def _connection_updated_at(connection: dict[str, Any]) -> datetime:
@@ -379,7 +379,7 @@ def _newest_connection_by_provider(connections: list[dict[str, Any]]) -> dict[st
 def _credential_fields(provider: str) -> list[ChannelCredentialFieldResponse]:
     fields = _CREDENTIAL_FIELDS.get(provider)
     if fields is None:
-        raise HTTPException(status_code=404, detail="Unknown channel provider")
+        raise HTTPException(status_code=404, detail="未知的渠道提供者")
     return [ChannelCredentialFieldResponse(**field) for field in fields]
 
 
@@ -464,11 +464,11 @@ def _required_runtime_values(
             missing.append(field.label)
         cleaned[field.name] = value
     if missing:
-        raise HTTPException(status_code=400, detail=f"Missing required channel configuration: {', '.join(missing)}")
+        raise HTTPException(status_code=400, detail=f"缺少必要的渠道配置：{', '.join(missing)}")
     return cleaned
 
 
-async def _restart_runtime_channel_if_available(provider: str, runtime_config: dict[str, Any]) -> bool | None:
+async def _restart_runtime_channel_if_available(provider: str, runtime_config: dict[str, Any]) -> tuple[bool, str | None] | None:
     try:
         from app.channels.service import get_channel_service
     except Exception:
@@ -494,7 +494,8 @@ async def _sync_runtime_channel_after_removal(provider: str, channels_config: di
 
     runtime_config = channels_config.get(provider)
     if isinstance(runtime_config, dict) and runtime_config.get("enabled", False):
-        return await service.configure_channel(provider, runtime_config)
+        ok, _ = await service.configure_channel(provider, runtime_config)
+        return ok
     return await service.remove_channel(provider)
 
 
@@ -542,7 +543,7 @@ async def get_channel_connections(request: Request) -> ChannelConnectionsRespons
 async def disconnect_channel_connection(connection_id: str, request: Request) -> Response:
     config = await _get_channel_connections_config(request)
     if not config.enabled:
-        raise HTTPException(status_code=400, detail="Channel connections are disabled")
+        raise HTTPException(status_code=400, detail="渠道连接功能未启用")
 
     repo = _get_repository(request, config)
     disconnected = await repo.disconnect_connection(
@@ -550,7 +551,7 @@ async def disconnect_channel_connection(connection_id: str, request: Request) ->
         owner_user_id=_get_user_id(request),
     )
     if not disconnected:
-        raise HTTPException(status_code=404, detail="Channel connection not found")
+        raise HTTPException(status_code=404, detail="渠道连接未找到")
     return Response(status_code=204)
 
 
@@ -559,11 +560,11 @@ async def disconnect_channel_provider_runtime(provider: str, request: Request) -
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
     config = await _get_channel_connections_config(request)
     if not config.enabled:
-        raise HTTPException(status_code=400, detail="Channel connections are disabled")
+        raise HTTPException(status_code=400, detail="渠道连接功能未启用")
 
     provider_config = _provider_config(config, provider)
     if not provider_config.enabled:
-        raise HTTPException(status_code=400, detail="Channel provider is not enabled")
+        raise HTTPException(status_code=400, detail="渠道提供者未启用")
 
     try:
         repo = _get_repository(request, config)
@@ -579,7 +580,7 @@ async def disconnect_channel_provider_runtime(provider: str, request: Request) -
     stopped = await _sync_runtime_channel_after_removal(provider, candidate_channels_config)
     if stopped is False:
         display_name = _PROVIDER_META[provider]["display_name"]
-        raise HTTPException(status_code=400, detail=f"Failed to stop {display_name} channel. Try again.")
+        raise HTTPException(status_code=400, detail=f"停止 {display_name} 渠道失败，请重试")
 
     # Revoke the DB connection rows before committing the store/cache so a repo
     # failure cannot leave the store and cache saying "disconnected" while the
@@ -606,7 +607,7 @@ async def connect_channel_provider(provider: str, request: Request) -> ChannelCo
     config = await _get_channel_connections_config(request)
     channels_config = await _get_channels_config(request)
     if not config.enabled:
-        raise HTTPException(status_code=400, detail="Channel connections are disabled")
+        raise HTTPException(status_code=400, detail="渠道连接功能未启用")
 
     provider_config = _provider_config(config, provider)
     if provider_config.enabled and _runtime_channel_configured(provider, channels_config):
@@ -614,11 +615,11 @@ async def connect_channel_provider(provider: str, request: Request) -> ChannelCo
 
     status, unavailable_reason = _provider_status(config, channels_config, provider)
     if not status["enabled"]:
-        raise HTTPException(status_code=400, detail="Channel provider is not enabled")
+        raise HTTPException(status_code=400, detail="渠道提供者未启用")
     if unavailable_reason:
         raise HTTPException(status_code=400, detail=unavailable_reason)
     if not status["configured"]:
-        raise HTTPException(status_code=400, detail="Channel provider is not configured")
+        raise HTTPException(status_code=400, detail="渠道提供者未配置")
 
     repo = _get_repository(request, config)
     code = await _create_state(
@@ -645,11 +646,11 @@ async def configure_channel_provider_runtime(
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
     config = await _get_channel_connections_config(request)
     if not config.enabled:
-        raise HTTPException(status_code=400, detail="Channel connections are disabled")
+        raise HTTPException(status_code=400, detail="渠道连接功能未启用")
 
     provider_config = _provider_config(config, provider)
     if not provider_config.enabled:
-        raise HTTPException(status_code=400, detail="Channel provider is not enabled")
+        raise HTTPException(status_code=400, detail="渠道提供者未启用")
 
     channels_config = await _get_channels_config(request)
     existing = channels_config.get(provider)
@@ -670,10 +671,17 @@ async def configure_channel_provider_runtime(
     candidate_channels_config = dict(channels_config)
     candidate_channels_config[provider] = runtime_config
 
-    started = await _restart_runtime_channel_if_available(provider, runtime_config)
-    if started is False:
-        display_name = _PROVIDER_META[provider]["display_name"]
-        raise HTTPException(status_code=400, detail=f"Failed to start {display_name} channel. Check the values and try again.")
+    result = await _restart_runtime_channel_if_available(provider, runtime_config)
+    if result is not None:
+        success, reason = result
+        if not success:
+            display_name = _PROVIDER_META[provider]["display_name"]
+            if reason == "network_timeout":
+                raise HTTPException(status_code=504, detail=f"{display_name} API 不可达，请稍后重试")
+            elif reason == "credential_invalid":
+                raise HTTPException(status_code=400, detail=f"{display_name} 凭据验证失败，请检查配置后重试")
+            else:
+                raise HTTPException(status_code=500, detail=f"启动 {display_name} 渠道失败")
 
     store = await _get_runtime_config_store(request)
     await asyncio.to_thread(store.set_provider_config, provider, runtime_config)

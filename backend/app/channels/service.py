@@ -119,6 +119,7 @@ class ChannelService:
         self._config = config
         self._running = False
         self._readiness_locks: dict[str, asyncio.Lock] = {}
+        self._configure_locks: dict[str, asyncio.Lock] = {}
 
     @classmethod
     def from_app_config(cls, app_config: AppConfig | None = None) -> ChannelService:
@@ -213,7 +214,8 @@ class ChannelService:
             for attempt in range(max_attempts):
                 if attempt > 0:
                     logger.info("Retrying channel startup after readiness check")
-                if await self._start_channel(name, channel_config):
+                ok, _ = await self._start_channel(name, channel_config)
+                if ok:
                     return True
             return False
 
@@ -258,8 +260,40 @@ class ChannelService:
             logger.exception("Failed to reload config for channel %s, using cached version", name)
         return self._config.get(name)
 
-    async def restart_channel(self, name: str, *, reload_config: bool = True) -> bool:
-        """Restart a specific channel. Returns True if successful."""
+    async def restart_channel(self, name: str, *, reload_config: bool = True) -> tuple[bool, str | None]:
+        """Restart a specific channel. Returns (success, error_reason)."""
+        if reload_config:
+            config = await asyncio.to_thread(self._load_channel_config, name)
+        else:
+            config = self._config.get(name)
+        if not config or not isinstance(config, dict):
+            logger.warning("No config for requested channel")
+            return False, "unknown_channel"
+
+        if not config.get("enabled", False):
+            logger.info("Channel %s is disabled, skipping restart", name)
+            return True, None
+
+        # 新增: validate-before-stop — 创建临时 channel 验证凭证
+        import_path = _CHANNEL_REGISTRY.get(name)
+        if not import_path:
+            return False, "unknown_channel"
+        try:
+            from deerflow.reflection import resolve_class
+
+            channel_cls = resolve_class(import_path, base_class=None)
+        except Exception:
+            return False, "internal_error"
+
+        try:
+            temp_channel = channel_cls(bus=self.bus, config=dict(config))
+            if not await temp_channel.validate_credentials():
+                return False, "credential_invalid"
+        except Exception:
+            logger.exception("Error validating credentials")
+            return False, "credential_invalid"
+
+        # 验证通过 — 停止旧 channel
         if name in self._channels:
             try:
                 await self._channels[name].stop()
@@ -267,31 +301,21 @@ class ChannelService:
                 logger.exception("Error stopping channel for restart")
             del self._channels[name]
 
-        if reload_config:
-            # Reading config.yaml and the runtime store is disk IO; keep it
-            # off the event loop.
-            config = await asyncio.to_thread(self._load_channel_config, name)
-        else:
-            config = self._config.get(name)
-        if not config or not isinstance(config, dict):
-            logger.warning("No config for requested channel")
-            return False
-
-        if not config.get("enabled", False):
-            logger.info("Channel %s is disabled, skipping restart", name)
-            return True
-
+        # 启动新 channel
         return await self._start_channel(name, config)
 
-    async def configure_channel(self, name: str, config: dict[str, Any]) -> bool:
+    async def configure_channel(self, name: str, config: dict[str, Any]) -> tuple[bool, str | None]:
         """Apply runtime config for a channel and restart it if the service is running."""
         self._config[name] = dict(config)
         if not self._running:
-            return True
-        # The caller just supplied the authoritative config (e.g. credentials
-        # entered in the browser that are never written to config.yaml) — a
-        # file reload here would clobber it with the stale on-disk entry.
-        return await self.restart_channel(name, reload_config=False)
+            return True, None
+
+        lock = self._configure_locks.setdefault(name, asyncio.Lock())
+        async with lock:
+            # The caller just supplied the authoritative config (e.g. credentials
+            # entered in the browser that are never written to config.yaml) — a
+            # file reload here would clobber it with the stale on-disk entry.
+            return await self.restart_channel(name, reload_config=False)
 
     async def remove_channel(self, name: str) -> bool:
         """Remove runtime config for a channel and stop it if currently running."""
@@ -307,12 +331,12 @@ class ChannelService:
             logger.exception("Error stopping channel for removal")
             return False
 
-    async def _start_channel(self, name: str, config: dict[str, Any]) -> bool:
-        """Instantiate and start a single channel."""
+    async def _start_channel(self, name: str, config: dict[str, Any]) -> tuple[bool, str | None]:
+        """Instantiate and start a single channel. Returns (success, error_reason)."""
         import_path = _CHANNEL_REGISTRY.get(name)
         if not import_path:
             logger.warning("Unknown channel type")
-            return False
+            return False, "unknown_channel"
 
         try:
             from deerflow.reflection import resolve_class
@@ -320,7 +344,7 @@ class ChannelService:
             channel_cls = resolve_class(import_path, base_class=None)
         except Exception:
             logger.exception("Failed to import channel class")
-            return False
+            return False, "internal_error"
 
         try:
             config = dict(config)
@@ -333,13 +357,17 @@ class ChannelService:
             if not channel.is_running:
                 self._channels.pop(name, None)
                 logger.error("Channel did not enter a running state after start()")
-                return False
+                return False, "credential_invalid"
             logger.info("Channel started")
-            return True
+            return True, None
+        except TimeoutError:
+            self._channels.pop(name, None)
+            logger.error("Channel start timed out")
+            return False, "network_timeout"
         except Exception:
             self._channels.pop(name, None)
             logger.exception("Failed to start channel")
-            return False
+            return False, "internal_error"
 
     def get_status(self) -> dict[str, Any]:
         """Return status information for all channels."""

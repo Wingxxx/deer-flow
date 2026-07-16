@@ -41,7 +41,7 @@ _MOCK_CHANNELS_SERVICE.get_channel_service = MagicMock(return_value=None)
 sys.modules["app.channels.service"] = _MOCK_CHANNELS_SERVICE
 app.channels.service = _MOCK_CHANNELS_SERVICE  # 使 getattr(app.channels, 'service') 可访问
 
-from deerflow_extensions.env_settings.router import PROVIDERS, router
+from deerflow_extensions.env_settings.router import PROVIDERS, router  # noqa: E402
 
 _API_PREFIX = "/api/env-settings"
 
@@ -331,10 +331,6 @@ class TestRouteSplit:
         """
         # 追踪哪些函数被调用了
         provider_verify_triggered = {"called": False}
-
-        original_verify = (
-            "deerflow_extensions.env_settings.router.verify_provider_key"
-        )
 
         with patch(
             "deerflow_extensions.env_settings.router._get_test_fn",

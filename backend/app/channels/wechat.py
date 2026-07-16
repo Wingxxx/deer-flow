@@ -270,10 +270,55 @@ class WechatChannel(Channel):
             self._state_dir.mkdir(parents=True, exist_ok=True)
 
         await self._ensure_client()
+
+        # 新增 —— 验证凭证（仅 bot_token 模式，qrcode 模式跳过）
+        if self._bot_token:
+            try:
+                client = await self._ensure_client()
+                resp = await client.get(
+                    f"{self._base_url}/ilink/bot/get_bot_info",
+                    headers=self._auth_headers(),
+                    timeout=10.0,
+                )
+                resp.raise_for_status()
+                # iLink 可能返回 HTTP 200 + JSON 错误码（如 {"errcode": 40001}），
+                # raise_for_status() 对此类响应不抛异常，需额外检查 body。
+                data = resp.json()
+                if isinstance(data, dict) and data.get("errcode", 0) != 0:
+                    raise ValueError(f"iLink error: {data.get('errmsg', 'unknown')}")
+            except httpx.TimeoutException:
+                logger.error("WeChat credential verification timed out (network issue)")
+                return
+            except httpx.HTTPStatusError:
+                logger.error("WeChat credential verification failed: invalid bot_token")
+                return
+            except Exception:
+                logger.error("WeChat credential verification failed")
+                return
+
         self._running = True
         self.bus.subscribe_outbound(self._on_outbound)
         self._poll_task = self._main_loop.create_task(self._poll_loop())
         logger.info("WeChat channel started")
+
+    async def validate_credentials(self) -> bool:
+        """验证 WeChat 凭证：调 iLink /ilink/bot/get_bot_info（仅 bot_token 模式）。"""
+        bot_token = str(self.config.get("bot_token") or "").strip()
+        if not bot_token:
+            return True  # 无 bot_token = qrcode 模式，跳过验证
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self._base_url}/ilink/bot/get_bot_info",
+                    headers=self._auth_headers(),
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if isinstance(data, dict) and data.get("errcode", 0) != 0:
+                    return False
+                return True
+        except Exception:
+            return False
 
     async def stop(self) -> None:
         self._running = False

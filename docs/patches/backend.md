@@ -1001,3 +1001,51 @@ grep -n "human_intervention" deerflow_extensions/boot.py || echo "✓ 侵入点�
 grep -c "get_effective_user_id" backend/packages/harness/deerflow/sandbox/tools.py
 # 应输出 0（已移除）
 ```
+
+---
+
+## P1：渠道凭证同步校验
+
+**文件表格**:
+| 操作 | 文件 | 行号 |
+|------|------|------|
+| 新增默认方法 | `base.py` | L55-L67 |
+| start() 验证 + validate_credentials() | `dingtalk.py` | L173-L194 |
+| start() 验证 + validate_credentials() | `feishu.py` | L169-L204 |
+| start() 验证 + validate_credentials() | `wechat.py` | L274-L321 |
+| start() Future 验证 + validate_credentials() | `wecom.py` | L87-L148 |
+| _configure_locks + restart_channel + _start_channel tuple | `service.py` | L122, L263-L370 |
+| 错误类型区分（400/504/500） | `channel_connections.py` | L467-L481, L673-L686 |
+
+**风险**: 🟡 中（WeChat iLink 端点和 WeCom Future 事件名依赖平台 SDK）
+
+**代码摘要**:
+
+```python
+# base.py — 默认方法
+async def validate_credentials(self) -> bool:
+    return True
+
+# restart_channel — validate-before-stop 模式
+try:
+    temp_channel = channel_cls(bus=self.bus, config=dict(config))
+    if not await temp_channel.validate_credentials():
+        return False, "credential_invalid"
+except Exception:
+    return False, "credential_invalid"
+
+# 验证通过 — 停止旧 channel
+if name in self._channels:
+    await self._channels[name].stop()
+    del self._channels[name]
+
+# 启动新 channel
+return await self._start_channel(name, config)
+```
+
+**原因**:
+- 用户从浏览器保存渠道凭据时，旧 channel 立即被 stop 会导致在线用户被中断
+- 新增 validate-before-stop：先创建临时 channel 验证新凭证有效性，通过后再 stop 旧 channel + start 新 channel
+- 凭证无效时不停止旧 channel，保持当前服务不中断
+- _configure_locks 确保同渠道并发配置请求串行化，避免竞态
+- _start_channel 返回 tuple 携带错误原因，router 层据此返回 400/504/500

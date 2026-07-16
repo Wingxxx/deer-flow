@@ -394,6 +394,8 @@ Bridges external messaging platforms (Feishu, Slack, Telegram, Discord, DingTalk
 - `slack.py` / `feishu.py` / `telegram.py` / `discord.py` / `dingtalk.py` - Platform-specific implementations (`feishu.py` tracks the running card `message_id` in memory and patches the same card in place; `telegram.py` registers the "Working on it..." placeholder as the stream target and edits it in place via `editMessageText`; `dingtalk.py` optionally uses AI Card streaming for in-place updates when `card_template_id` is configured)
 - `app/gateway/routers/channel_connections.py` - Browser-facing user connection and disconnect APIs
 - `deerflow.persistence.channel_connections` - SQL-backed user-owned connection, optional credential, connect state, and conversation store
+- `validate_credentials()` — 每个渠道的新增方法，在 stop 旧 channel 之前同步验证新凭证
+- `_configure_locks` — ChannelService 的新增字典，串行化同渠道配置操作
 
 **Message Flow**:
 1. External platform -> Channel impl -> `MessageBus.publish_inbound()`

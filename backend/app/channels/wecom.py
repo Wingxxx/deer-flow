@@ -81,14 +81,98 @@ class WeComChannel(Channel):
             self._ws_client.on("message.mixed", self._on_ws_mixed)
             self._ws_client.on("message.image", self._on_ws_image)
             self._ws_client.on("message.file", self._on_ws_file)
-            self._ws_client.on("error", self._on_ws_error)
+            # 注意: error 和 disconnected 在 Future 验证之后注册
             self._ws_client.on("disconnected", self._on_ws_disconnected)
+
+            # 新增 —— 认证验证 Future
+            auth_future: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
+
+            def _on_auth_verify_authenticated() -> None:
+                if not auth_future.done():
+                    auth_future.set_result(True)
+
+            def _on_auth_verify_error(error: Any) -> None:
+                if not auth_future.done():
+                    auth_future.set_exception(
+                        RuntimeError(f"WeCom WS auth failed: {error}")
+                    )
+
+            self._ws_client.on("authenticated", _on_auth_verify_authenticated)
+            self._ws_client.on("error", _on_auth_verify_error)
+
             self._ws_task = asyncio.create_task(self._ws_client.connect())
             self._ws_task.add_done_callback(self._on_ws_task_done)
+
+            # 等待认证结果（不是等待 connect() 完成）
+            try:
+                await asyncio.wait_for(auth_future, timeout=5.0)
+            except TimeoutError:
+                logger.error("WeCom credential verification timed out")
+                return
+            except Exception:
+                logger.error("WeCom credential verification failed: invalid bot_id or bot_secret")
+                return
+
+            # 验证通过 —— 恢复正式事件处理
+            self._ws_client.on("authenticated", lambda: None)
+            self._ws_client.on("error", self._on_ws_error)
+
+            # 如果 connect() 在验证期间返回（done），重建连接
+            if self._ws_task.done():
+                logger.warning("WeCom WebSocket connect() returned during verification; recreating")
+                self._ws_task = asyncio.create_task(self._ws_client.connect())
+                self._ws_task.add_done_callback(self._on_ws_task_done)
 
             self._running = True
             self.bus.subscribe_outbound(self._on_outbound)
         logger.info("WeCom channel started")
+
+    async def validate_credentials(self) -> bool:
+        """验证 WeCom 凭证：通过 WebSocket auth Future 模式检测。"""
+        bot_id = self.config.get("bot_id")
+        bot_secret = self.config.get("bot_secret")
+        if not bot_id or not bot_secret:
+            return False
+        try:
+            from aibot import WSClient, WSClientOptions
+
+            ws_client = WSClient(WSClientOptions(bot_id=str(bot_id), secret=str(bot_secret), logger=logger))
+            loop = asyncio.get_running_loop()
+            auth_future: asyncio.Future[bool] = loop.create_future()
+
+            def _on_auth() -> None:
+                if not auth_future.done():
+                    auth_future.set_result(True)
+
+            def _on_err(error: Any) -> None:
+                if not auth_future.done():
+                    auth_future.set_exception(RuntimeError(f"WeCom WS auth failed: {error}"))
+
+            ws_client.on("authenticated", _on_auth)
+            ws_client.on("error", _on_err)
+
+            connect_task = loop.create_task(ws_client.connect())
+
+            try:
+                await asyncio.wait_for(auth_future, timeout=5.0)
+                return True
+            except (TimeoutError, Exception):
+                return False
+            finally:
+                connect_task.cancel()
+                try:
+                    await connect_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                try:
+                    ws_client.disconnect()
+                except Exception:
+                    pass
+        except ImportError:
+            logger.error("wecom-aibot-python-sdk not installed, cannot validate credentials")
+            return False
+        except Exception:
+            return False
 
     def _on_ws_task_done(self, task: asyncio.Task) -> None:
         if task.cancelled():

@@ -110,7 +110,7 @@ class TestChannelRestart:
         The returned ``service`` object has:
           - _config: dict with "wecom" key
           - _channels: dict — sub-tests add/remove entries as needed
-          - restart_channel: AsyncMock returning True
+          - restart_channel: AsyncMock returning (True, None)
         """
         with patch(
             "app.channels.service.get_channel_service"
@@ -125,7 +125,7 @@ class TestChannelRestart:
             }
             # Sub-tests override _channels to control running / stopped state
             service._channels = {}
-            service.restart_channel = AsyncMock(return_value=True)
+            service.restart_channel = AsyncMock(return_value=(True, None))
             mock.return_value = service
             yield service
 
@@ -238,7 +238,7 @@ class TestChannelRestart:
         """RS3: channel not running, restart returns True → restart + success msg."""
         service = mock_get_service
         service._channels = {}  # empty → not running
-        service.restart_channel = AsyncMock(return_value=True)
+        service.restart_channel = AsyncMock(return_value=(True, None))
 
         resp = await self._do_update()
 
@@ -266,7 +266,7 @@ class TestChannelRestart:
         """RS4: channel not running, restart returns False → restart + fail msg."""
         service = mock_get_service
         service._channels = {}  # empty → not running
-        service.restart_channel = AsyncMock(return_value=False)
+        service.restart_channel = AsyncMock(return_value=(False, "unknown_channel"))
 
         resp = await self._do_update()
 

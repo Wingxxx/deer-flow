@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-from dotenv import set_key
+from dotenv import set_key  # noqa: F401  (used indirectly by _write_env_value)
 from filelock import FileLock, Timeout
 
 # ---------------------------------------------------------------------------
@@ -27,7 +27,7 @@ _src_dir = os.path.dirname(_test_dir)
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
 
-from router import _get_env_lock, _write_env_value, _read_env_value
+from router import _get_env_lock, _write_env_value, _read_env_value  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # fixtures
