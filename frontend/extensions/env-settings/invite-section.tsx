@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import {
   CopyIcon,
   Loader2Icon,
@@ -16,7 +17,6 @@ import {
   startConnectionPoll,
   type ConnectPollHandle,
 } from "@/core/channels/connect-poll";
-import { useQueryClient } from "@tanstack/react-query";
 
 import { generateQrDataUrl } from "./adapters/channel-adapter";
 import {
@@ -64,6 +64,9 @@ export function InviteSection({
   const mountedRef = useRef(true);
   const generationIdRef = useRef(0);
   const qrCacheRef = useRef<Map<string, string>>(new Map());
+  /** Snapshot of existing connection IDs before polling starts — excludes
+   * pre-existing connections so only genuinely new bindings reset the UI. */
+  const initialConnectionIdsRef = useRef<Set<string>>(new Set());
 
   const generateMutation = useGenerateInvite();
   const queryClient = useQueryClient();
@@ -115,12 +118,24 @@ export function InviteSection({
       if (genId !== generationIdRef.current || !mountedRef.current) return;
       setQrDataUrl(qr);
 
-      // Start polling for connection
+      // Snapshot existing connections so the poll only reacts to NEW bindings.
+      // Without this, an admin's own pre-existing connection would immediately
+      // trigger onConnected and reset the invite UI (bug: invite code vanishes
+      // when user tries to copy/drag it).
+      const before = await listChannelConnections();
+      initialConnectionIdsRef.current = new Set(
+        before
+          .filter((c) => c.provider === provider && c.status === "connected")
+          .map((c) => c.id),
+      );
+
+      // Start polling for NEW connections only
       pollRef.current?.cancel();
       pollRef.current = startConnectionPoll({
         provider,
         expiresInSeconds: result.expiresIn,
         fetchConnections: () => listChannelConnections(),
+        initialConnectionIds: initialConnectionIdsRef.current,
         onConnected: () => {
           if (!mountedRef.current) return;
           pollRef.current?.cancel();

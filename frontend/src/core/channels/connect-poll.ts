@@ -18,6 +18,9 @@ export interface ConnectPollOptions {
   onConnected: () => void;
   intervalMs?: number;
   now?: () => number;
+  /** Connection IDs that already existed before polling started.
+   * These are excluded — only genuinely new connections trigger onConnected. */
+  initialConnectionIds?: Set<string>;
 }
 
 /**
@@ -39,6 +42,7 @@ export function startConnectionPoll(
     onConnected,
     intervalMs = CONNECT_POLL_INTERVAL_MS,
     now = Date.now,
+    initialConnectionIds,
   } = options;
 
   const expires =
@@ -70,7 +74,12 @@ export function startConnectionPoll(
             return;
           }
           const connected = connections.some(
-            (item) => item.provider === provider && item.status === "connected",
+            (item) =>
+              item.provider === provider &&
+              item.status === "connected" &&
+              // Exclude connections that already existed before polling started.
+              // Only genuinely new bindings (e.g. via the current invite code) count.
+              !initialConnectionIds?.has(item.id),
           );
           if (connected) {
             onConnected();

@@ -416,6 +416,46 @@ ls frontend/extensions/mobile-sidebar/mobile-sidebar-trigger.tsx
 
 ---
 
+## A13：`connect-poll.ts` — 邀请码轮询排除预存连接（2026-07-17）
+
+**文件**: `frontend/src/core/channels/connect-poll.ts`
+**行号**: L22-L25（接口新增字段）, L75-L80（轮询判断逻辑）
+**风险**: ✅ 低（新增可选参数 `initialConnectionIds`，不传时行为不变——向后兼容）
+
+**改动**:
+
+```diff
+ export interface ConnectPollOptions {
+   ...
++  /** Connection IDs that already existed before polling started.
++   * These are excluded — only genuinely new connections trigger onConnected. */
++  initialConnectionIds?: Set<string>;
+ }
+```
+
+```diff
+   const connected = connections.some(
+-    (item) => item.provider === provider && item.status === "connected",
++    (item) =>
++      item.provider === provider &&
++      item.status === "connected" &&
++      // Exclude connections that already existed before polling started.
++      // Only genuinely new bindings (e.g. via the current invite code) count.
++      !initialConnectionIds?.has(item.id),
+   );
+```
+
+**原因**: 
+- 邀请码功能在渠道配置页中用于让管理员生成绑定码分享给团队成员
+- 原轮询逻辑在任何连接状态为 `connected` 时即触发 `onConnected`，包括管理员自己已绑定的渠道连接
+- 导致生成邀请码后 2 秒内（首次轮询）邀请码界面就被重置为「暂无邀请码」
+- 用户在复制/拖拽邀请码时恰逢轮询触发，误以为操作导致消失
+- 修复方案：轮询启动前调用方传入已有连接 ID 集合，轮询时排除这些预存连接，仅对新绑定触发
+
+**调用方适配**: `frontend/extensions/env-settings/invite-section.tsx` — 启动轮询前调用 `listChannelConnections()` 快照已有连接 ID，通过 `initialConnectionIds` 传入
+
+---
+
 ## 验证命令
 
 ```bash
@@ -436,6 +476,9 @@ grep -n "MobileSidebarTrigger" frontend/src/app/workspace/workspace-content.tsx
 
 # === A12: query-client-provider.tsx ===
 grep -n "gcTime\|staleTime" frontend/src/components/query-client-provider.tsx
+
+# === A13: connect-poll.ts initialConnectionIds ===
+grep -n "initialConnectionIds" frontend/src/core/channels/connect-poll.ts
 
 # === S1a: settings-dialog.tsx EXTENSION SLOT ===
 grep -c "EXTENSION SLOT" frontend/src/components/workspace/settings/settings-dialog.tsx
