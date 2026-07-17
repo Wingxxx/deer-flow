@@ -78,3 +78,4 @@ mcp-agent-mcp/.mcp-server/config.json
 training_logs/*
 backend/data_collection_logs/
 data_collection_logs/
+backend/data-gym-cache/
