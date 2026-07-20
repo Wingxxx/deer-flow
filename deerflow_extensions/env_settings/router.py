@@ -335,6 +335,71 @@ def _unset_env_value(key: str) -> None:
     logger.info("Cleared %s from .env file", key)
 
 
+# ── DeepRAG .env 同步 ─────────────────────────────────────────────────────
+
+
+def _get_deeprag_env_path() -> Path:
+    """解析 DeepRAG .env 文件路径。
+
+    优先级:
+    1. 环境变量 DEEPRAG_ENV_PATH
+    2. 默认 <项目根>/deepRag/.env
+    """
+    env_path = os.environ.get("DEEPRAG_ENV_PATH")
+    if env_path:
+        return Path(env_path)
+    project_root = Path(__file__).resolve().parents[2]
+    return project_root / "deepRag" / ".env"
+
+
+def _get_deeprag_env_lock() -> FileLock:
+    """DeepRAG .env 独立文件锁（与 deer-flow 锁隔离）。"""
+    lock_path = str(_get_deeprag_env_path().with_suffix(".env.lock"))
+    return FileLock(lock_path, timeout=5)
+
+
+def _sync_to_deeprag_env(provider_id: str, action: str) -> None:
+    """将 DeerFlow 厂商环境变量同步写入 DeepRAG 的 .env 文件。
+
+    Args:
+        provider_id: 厂商标识（deepseek / moonshot / ...）
+        action: "save" — 写入；"delete" — 清除
+    """
+    if provider_id not in PROVIDERS:
+        return
+    meta = PROVIDERS[provider_id]
+    prefix = meta["env_prefix"]
+    suffixes = ("API_KEY", "BASE_URL", "MODEL")
+
+    try:
+        deeprag_env_path = _get_deeprag_env_path()
+        if action == "save":
+            with _get_deeprag_env_lock():
+                for suffix in suffixes:
+                    key = f"{prefix}_{suffix}"
+                    value = _read_env_value(key)
+                    # 回退：BASE_URL/MODEL 为空时使用 PROVIDERS 默认值
+                    if not value:
+                        if suffix == "BASE_URL":
+                            value = meta.get("default_base_url", "")
+                        elif suffix == "MODEL":
+                            value = meta.get("default_models", [""])[0]
+                    if value:
+                        set_key(str(deeprag_env_path), key, value, quote_mode="always")
+                        logger.info("[DeepRAG] Wrote %s to %s", key, deeprag_env_path)
+        elif action == "delete":
+            with _get_deeprag_env_lock():
+                for suffix in suffixes:
+                    key = f"{prefix}_{suffix}"
+                    set_key(str(deeprag_env_path), key, "", quote_mode="always")
+                    logger.info("[DeepRAG] Cleared %s from %s", key, deeprag_env_path)
+        logger.info("[DeepRAG] Synced %s (%s) → %s", provider_id, action, deeprag_env_path)
+    except FileNotFoundError:
+        logger.warning("[DeepRAG] .env file not found at %s, skip sync for %s", _get_deeprag_env_path(), provider_id)
+    except Exception as e:
+        logger.warning("[DeepRAG] Sync failed for %s (%s): %s", provider_id, action, e)
+
+
 def _validate_provider(provider_id: str) -> None:
     if provider_id not in PROVIDERS:
         raise HTTPException(status_code=404, detail=f"厂商 '{provider_id}' 不存在")
@@ -639,6 +704,7 @@ async def update_provider_settings(request: ProviderSettingsUpdateRequest) -> En
             model = request.model.strip()
             _write_env_value(f"{prefix}_MODEL", model)
         registered = _register_model_to_config(request.provider, model, base_url)
+        _sync_to_deeprag_env(request.provider, "save")
         msg = f"{meta['name']} 配置已保存"
         if registered:
             msg += "，模型已注册到 config.yaml，刷新后可在聊天中使用"
@@ -669,6 +735,7 @@ async def delete_provider_settings(provider: str) -> DeleteResponse:
         pass
     except Exception as e:
         logger.error("Failed to clear env for %s: %s", provider, e, exc_info=True)
+    _sync_to_deeprag_env(provider, "delete")
     msg = f"已清除 {PROVIDERS[provider]['name']} 的配置"
     if removed:
         msg += f"，已从聊天模型列表中移除 {removed} 个模型"

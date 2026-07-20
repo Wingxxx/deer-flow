@@ -78,6 +78,16 @@ FastAPI 路由模块，挂载于 `/api/env-settings` 前缀：
 
 所有 `.env` 写操作使用 `filelock` 保护，防止并发写入导致数据覆盖。锁超时 5 秒。
 
+### DeepRAG .env 同步
+
+保存或删除厂商 API Key 时，自动同步写入 DeepRAG 的 `.env` 文件：
+
+- **触发时机**：`PUT /api/env-settings/providers`（保存）和 `DELETE /api/env-settings/providers/{provider}`（删除）
+- **同步内容**：对于已配置厂商，将其 `{PREFIX}_API_KEY`、`{PREFIX}_BASE_URL`、`{PREFIX}_MODEL` 三个变量同步写入 DeepRAG `.env`
+- **路径配置**：通过环境变量 `DEEPRAG_ENV_PATH` 指定 DeepRAG `.env` 路径；未设置时默认使用 `<项目根>/deepRag/.env`
+- **失败处理**：DeepRAG `.env` 不存在或写入失败仅记录 warning 日志，不影响 DeerFlow 主流程
+- **文件锁**：DeepRAG `.env` 使用独立的 `.env.lock` 文件，与 DeerFlow 的锁相互隔离
+
 ### startup.py
 
 注入函数 `install_env_settings()`，通过 `app.include_router(router)` 注册路由。使用 `_installed` 全局变量确保幂等，`try/except` 捕获导入错误保证零侵入。
