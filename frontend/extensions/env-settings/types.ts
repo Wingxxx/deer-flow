@@ -74,3 +74,14 @@ export interface InviteCodeResult {
   instruction: string;
   expiresIn: number;
 }
+
+/** DeepRAG current provider response */
+export interface DeepragCurrentProviderResponse {
+  provider: string | null;
+}
+
+/** DeepRAG switch-provider result */
+export interface DeepragSwitchResponse {
+  success: boolean;
+  message: string;
+}

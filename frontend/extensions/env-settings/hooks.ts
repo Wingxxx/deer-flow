@@ -5,6 +5,8 @@ import {
   updateProviderSetting,
   deleteProviderSetting,
   verifyProviderKey,
+  getDeepragCurrentProvider,
+  switchDeepragProvider,
 } from "./api";
 import {
   listChannels,
@@ -42,6 +44,7 @@ export function useDeleteProviderSetting() {
     mutationFn: (provider: string) => deleteProviderSetting(provider),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["providerSettings"] });
+      void queryClient.invalidateQueries({ queryKey: ["deepragCurrentProvider"] });
     },
   });
 }
@@ -50,6 +53,23 @@ export function useVerifyProviderKey() {
   return useMutation({
     mutationFn: ({ provider, apiKey, baseUrl }: { provider: string; apiKey?: string; baseUrl?: string }) =>
       verifyProviderKey(provider, apiKey, baseUrl),
+  });
+}
+
+export function useDeepragCurrentProvider() {
+  return useQuery({
+    queryKey: ["deepragCurrentProvider"],
+    queryFn: () => getDeepragCurrentProvider(),
+  });
+}
+
+export function useSwitchDeepragProvider() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (provider: string) => switchDeepragProvider(provider),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["deepragCurrentProvider"] });
+    },
   });
 }
 

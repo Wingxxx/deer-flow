@@ -84,9 +84,26 @@ FastAPI 路由模块，挂载于 `/api/env-settings` 前缀：
 
 - **触发时机**：`PUT /api/env-settings/providers`（保存）和 `DELETE /api/env-settings/providers/{provider}`（删除）
 - **同步内容**：对于已配置厂商，将其 `{PREFIX}_API_KEY`、`{PREFIX}_BASE_URL`、`{PREFIX}_MODEL` 三个变量同步写入 DeepRAG `.env`
+- **厂商 ID 映射**：DeerFlow 的内部 `provider_id` / `env_prefix` 可能不同于 DeepRAG 期望的值（如 DeerFlow 用 `MOONSHOT_API_KEY` → DeepRAG 期望 `KIMI_API_KEY`），通过 PROVIDERS 中的 `deeprag_provider_id` / `deeprag_prefix` 字段处理映射
 - **路径配置**：通过环境变量 `DEEPRAG_ENV_PATH` 指定 DeepRAG `.env` 路径；未设置时默认使用 `<项目根>/deepRag/.env`
 - **失败处理**：DeepRAG `.env` 不存在或写入失败仅记录 warning 日志，不影响 DeerFlow 主流程
 - **文件锁**：DeepRAG `.env` 使用独立的 `.env.lock` 文件，与 DeerFlow 的锁相互隔离
+
+### DeepRAG 厂商切换
+
+手动控制 DeepRAG 当前使用的 AI 厂商：
+
+- **为何需要**：DeerFlow 支持多厂商并行配置，但 DeepRAG 的 `API_PROVIDER` 是单选的
+- **触发方式**：在 API Keys 设置页面，每家已配 Key 的厂商旁点击"切换 DeepRAG 至此厂商"
+- **校验规则**：仅当 DeerFlow 中已配置该厂商有效 API Key 时才允许切换；未配 Key 的厂商按钮禁用
+- **写入内容**：切换时同步写入 `API_PROVIDER={deeprag_provider_id}` + `{deeprag_prefix}_API_KEY/BASE_URL/MODEL` 到 deepRag/.env
+- **厂商映射**：见上方"厂商 ID 映射"说明
+- **删除联动**：删除某厂商 Key 时，若该厂商是 DeepRAG 当前活跃厂商，自动清空 `API_PROVIDER`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/env-settings/deeprag/current-provider` | 获取 DeepRAG 当前使用的厂商（返回 `API_PROVIDER` 值） |
+| PUT | `/api/env-settings/deeprag/switch-provider` | 切换 DeepRAG 当前厂商（body: `{"provider": "moonshot"}`） |
 
 ### startup.py
 

@@ -9,6 +9,7 @@ import {
   Loader2Icon,
   Trash2Icon,
   XIcon,
+  ZapIcon,
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
@@ -28,6 +29,8 @@ import {
   useUpdateProviderSetting,
   useDeleteProviderSetting,
   useVerifyProviderKey,
+  useDeepragCurrentProvider,
+  useSwitchDeepragProvider,
 } from "./hooks";
 import { PROVIDERS, getProviderMeta } from "./providers";
 import type { ProviderInfo } from "./types";
@@ -37,6 +40,8 @@ export function ProviderSettingsPage() {
   const updateMutation = useUpdateProviderSetting();
   const deleteMutation = useDeleteProviderSetting();
   const verifyMutation = useVerifyProviderKey();
+  const { data: deepragProvider } = useDeepragCurrentProvider();
+  const switchMutation = useSwitchDeepragProvider();
 
   const [selectedProviderId, setSelectedProviderId] = useState(PROVIDERS[0]?.id ?? "");
   const [apiKey, setApiKey] = useState("");
@@ -128,6 +133,20 @@ export function ProviderSettingsPage() {
     }
   }, [selectedProviderId, deleteMutation]);
 
+  const handleDeepragSwitch = useCallback(async (providerId: string) => {
+    setStatusMessage(null);
+    const meta = getProviderMeta(providerId);
+    try {
+      const result = await switchMutation.mutateAsync(providerId);
+      setStatusMessage({ type: "success", text: result.message });
+    } catch (err) {
+      setStatusMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : `切换 ${meta?.name ?? providerId} 失败`,
+      });
+    }
+  }, [switchMutation]);
+
   const providerModels = useMemo(
     () => providerMeta?.defaultModels ?? [],
     [providerMeta],
@@ -172,6 +191,19 @@ export function ProviderSettingsPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* DeepRAG 当前厂商显示 */}
+            <div className="flex items-center gap-2 text-sm">
+              <ZapIcon className="size-4 text-amber-500" />
+              <span className="text-muted-foreground">DeepRAG 当前厂商:</span>
+              {deepragProvider?.provider ? (
+                <span className="font-medium">
+                  {PROVIDERS.find((p) => p.deepragProviderId === deepragProvider.provider)?.name ?? deepragProvider.provider}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">未设置</span>
+              )}
             </div>
 
             {providerMeta && (
@@ -316,6 +348,19 @@ export function ProviderSettingsPage() {
                 </div>
 
                 <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleDeepragSwitch(selectedProviderId)}
+                    disabled={!providerInfo?.key_exists || switchMutation.isPending}
+                  >
+                    {switchMutation.isPending ? (
+                      <Loader2Icon className="size-4 animate-spin" />
+                    ) : (
+                      <ZapIcon className="mr-1 size-4" />
+                    )}
+                    切换 DeepRAG 至此厂商
+                  </Button>
                   <Button
                     variant="destructive"
                     size="sm"

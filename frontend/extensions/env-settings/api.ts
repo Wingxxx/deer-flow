@@ -7,6 +7,8 @@ import type {
   EnvSettingsUpdateResponse,
   VerifyResponse,
   DeleteResponse,
+  DeepragCurrentProviderResponse,
+  DeepragSwitchResponse,
 } from "./types";
 
 export async function loadProviderSettings(): Promise<ProviderSettingsResponse> {
@@ -57,4 +59,24 @@ export async function verifyProviderKey(
     },
   );
   return response.json() as Promise<VerifyResponse>;
+}
+
+export async function getDeepragCurrentProvider(): Promise<DeepragCurrentProviderResponse> {
+  const response = await fetch(`${getBackendBaseURL()}/api/env-settings/deeprag/current-provider`);
+  return response.json() as Promise<DeepragCurrentProviderResponse>;
+}
+
+export async function switchDeepragProvider(
+  provider: string,
+): Promise<DeepragSwitchResponse> {
+  const response = await fetch(`${getBackendBaseURL()}/api/env-settings/deeprag/switch-provider`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail ?? "Failed to switch DeepRAG provider");
+  }
+  return response.json() as Promise<DeepragSwitchResponse>;
 }

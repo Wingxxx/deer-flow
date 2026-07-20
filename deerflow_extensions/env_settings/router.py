@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 from dotenv import dotenv_values, find_dotenv, set_key
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from filelock import FileLock
 from httpx import AsyncClient, HTTPStatusError, TimeoutException
 from pydantic import BaseModel, Field
@@ -88,42 +88,56 @@ PROVIDERS = {
     "deepseek": {
         "name": "DeepSeek",
         "env_prefix": "DEEPSEEK",
+        "deeprag_provider_id": "deepseek",
+        "deeprag_prefix": "DEEPSEEK",
         "default_base_url": "https://api.deepseek.com",
         "default_models": ["deepseek-chat", "deepseek-reasoner"],
     },
     "moonshot": {
         "name": "Kimi",
         "env_prefix": "MOONSHOT",
+        "deeprag_provider_id": "kimi",
+        "deeprag_prefix": "KIMI",
         "default_base_url": "https://api.moonshot.cn/v1",
         "default_models": ["kimi-k2.5", "kimi-k2.5-thinking"],
     },
     "volcengine": {
         "name": "Doubao",
         "env_prefix": "VOLCENGINE",
+        "deeprag_provider_id": "doubao",
+        "deeprag_prefix": "DOUBAO",
         "default_base_url": "https://ark.cn-beijing.volces.com/api/v3",
         "default_models": ["doubao-seed-1-8-251228", "doubao-pro-32k-250315"],
     },
     "dashscope": {
         "name": "Qwen",
         "env_prefix": "DASHSCOPE",
+        "deeprag_provider_id": "qwen",
+        "deeprag_prefix": "QWEN",
         "default_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
         "default_models": ["qwen-max", "qwen-plus", "qwen-turbo", "qwen-long"],
     },
     "minimax": {
         "name": "MiniMax",
         "env_prefix": "MINIMAX",
+        "deeprag_provider_id": "minimax",
+        "deeprag_prefix": "MINIMAX",
         "default_base_url": "https://api.minimax.io/v1",
         "default_models": ["MiniMax-M2.5", "MiniMax-M2.5-highspeed", "MiniMax-M2.7"],
     },
     "zhipuai": {
         "name": "GLM",
         "env_prefix": "ZHIPUAI",
+        "deeprag_provider_id": "glm",
+        "deeprag_prefix": "GLM",
         "default_base_url": "https://open.bigmodel.cn/api/paas/v4",
         "default_models": ["glm-4-plus", "glm-4-air", "glm-4-flash"],
     },
     "siliconflow": {
         "name": "硅基流动",
         "env_prefix": "SILICONFLOW",
+        "deeprag_provider_id": "siliconflow",
+        "deeprag_prefix": "SILICONFLOW",
         "default_base_url": "https://api.siliconflow.cn/v1",
         "default_models": ["Qwen/Qwen2.5-72B-Instruct-128K", "deepseek-ai/DeepSeek-V3", "deepseek-ai/DeepSeek-R1"],
     },
@@ -368,7 +382,9 @@ def _sync_to_deeprag_env(provider_id: str, action: str) -> None:
     if provider_id not in PROVIDERS:
         return
     meta = PROVIDERS[provider_id]
-    prefix = meta["env_prefix"]
+    # deer-flow .env 读取用 env_prefix，deepRag .env 写入用 deeprag_prefix
+    env_prefix = meta["env_prefix"]
+    deeprag_prefix = meta.get("deeprag_prefix", env_prefix)
     suffixes = ("API_KEY", "BASE_URL", "MODEL")
 
     try:
@@ -376,8 +392,9 @@ def _sync_to_deeprag_env(provider_id: str, action: str) -> None:
         if action == "save":
             with _get_deeprag_env_lock():
                 for suffix in suffixes:
-                    key = f"{prefix}_{suffix}"
-                    value = _read_env_value(key)
+                    deer_key = f"{env_prefix}_{suffix}"
+                    deeprag_key = f"{deeprag_prefix}_{suffix}"
+                    value = _read_env_value(deer_key)
                     # 回退：BASE_URL/MODEL 为空时使用 PROVIDERS 默认值
                     if not value:
                         if suffix == "BASE_URL":
@@ -385,19 +402,82 @@ def _sync_to_deeprag_env(provider_id: str, action: str) -> None:
                         elif suffix == "MODEL":
                             value = meta.get("default_models", [""])[0]
                     if value:
-                        set_key(str(deeprag_env_path), key, value, quote_mode="always")
-                        logger.info("[DeepRAG] Wrote %s to %s", key, deeprag_env_path)
+                        set_key(str(deeprag_env_path), deeprag_key, value, quote_mode="always")
+                        logger.info("[DeepRAG] Wrote %s to %s", deeprag_key, deeprag_env_path)
         elif action == "delete":
             with _get_deeprag_env_lock():
                 for suffix in suffixes:
-                    key = f"{prefix}_{suffix}"
-                    set_key(str(deeprag_env_path), key, "", quote_mode="always")
-                    logger.info("[DeepRAG] Cleared %s from %s", key, deeprag_env_path)
+                    deeprag_key = f"{deeprag_prefix}_{suffix}"
+                    set_key(str(deeprag_env_path), deeprag_key, "", quote_mode="always")
+                    logger.info("[DeepRAG] Cleared %s from %s", deeprag_key, deeprag_env_path)
+                # 若被删除的厂商是当前 DeepRAG 活跃厂商，清空 API_PROVIDER
+                deeprag_values = dotenv_values(str(deeprag_env_path))
+                deeprag_provider_id = meta.get("deeprag_provider_id", provider_id)
+                if deeprag_values.get("API_PROVIDER") == deeprag_provider_id:
+                    set_key(str(deeprag_env_path), "API_PROVIDER", "", quote_mode="always")
+                    logger.info("[DeepRAG] Cleared API_PROVIDER from %s", deeprag_env_path)
         logger.info("[DeepRAG] Synced %s (%s) → %s", provider_id, action, deeprag_env_path)
     except FileNotFoundError:
         logger.warning("[DeepRAG] .env file not found at %s, skip sync for %s", _get_deeprag_env_path(), provider_id)
     except Exception as e:
         logger.warning("[DeepRAG] Sync failed for %s (%s): %s", provider_id, action, e)
+
+
+def _get_deeprag_current_provider() -> str | None:
+    """读取 DeepRAG 当前使用的厂商（API_PROVIDER 值）。"""
+    try:
+        values = dotenv_values(str(_get_deeprag_env_path()))
+        provider = values.get("API_PROVIDER", "").strip()
+        return provider if provider else None
+    except Exception:
+        return None
+
+
+def _switch_deeprag_provider(provider_id: str) -> tuple[bool, str]:
+    """手动切换 DeepRAG 当前使用的厂商。
+
+    仅当 DeerFlow 中已配置该厂商 API Key 时才允许切换。
+    同步写入 API_PROVIDER + 三项配置到 deepRag/.env。
+
+    Returns:
+        (success, message)
+    """
+    if provider_id not in PROVIDERS:
+        return False, f"未知厂商: {provider_id}"
+
+    meta = PROVIDERS[provider_id]
+    env_prefix = meta["env_prefix"]
+    deeprag_provider_id = meta.get("deeprag_provider_id", provider_id)
+    deeprag_prefix = meta.get("deeprag_prefix", env_prefix)
+
+    # 校验 DeerFlow 中已配置该厂商的 API Key
+    api_key = _read_env_value(f"{env_prefix}_API_KEY")
+    if not api_key:
+        return False, f"请先在 DeerFlow 中配置 {meta['name']} 的 API Key"
+
+    try:
+        deeprag_env_path = _get_deeprag_env_path()
+        with _get_deeprag_env_lock():
+            set_key(str(deeprag_env_path), "API_PROVIDER", deeprag_provider_id, quote_mode="always")
+            suffixes = ("API_KEY", "BASE_URL", "MODEL")
+            for suffix in suffixes:
+                deer_key = f"{env_prefix}_{suffix}"
+                deeprag_key = f"{deeprag_prefix}_{suffix}"
+                value = _read_env_value(deer_key)
+                if not value:
+                    if suffix == "BASE_URL":
+                        value = meta.get("default_base_url", "")
+                    elif suffix == "MODEL":
+                        value = meta.get("default_models", [""])[0]
+                if value:
+                    set_key(str(deeprag_env_path), deeprag_key, value, quote_mode="always")
+        logger.info("[DeepRAG] Switched provider to %s", deeprag_provider_id)
+        return True, f"DeepRAG 已切换至 {meta['name']}"
+    except FileNotFoundError:
+        return False, f"DeepRAG .env 文件不存在: {deeprag_env_path}"
+    except Exception as e:
+        logger.warning("[DeepRAG] Switch failed: %s", e)
+        return False, f"切换失败: {e}"
 
 
 def _validate_provider(provider_id: str) -> None:
@@ -778,6 +858,41 @@ async def verify_provider_key(provider: str, request: VerifyRequest = None) -> V
     except Exception as e:
         logger.error("Verify %s failed: %s", provider, e, exc_info=True)
         return VerifyResponse(valid=False, message=f"网络错误: {str(e)}")
+
+
+# ── DeepRAG 厂商切换 ───────────────────────────────────────────────────────
+
+
+@router.get(
+    "/deeprag/current-provider",
+    summary="获取 DeepRAG 当前厂商",
+    description="返回 DeepRAG .env 中 API_PROVIDER 的值",
+)
+async def get_deeprag_current_provider() -> dict:
+    provider = _get_deeprag_current_provider()
+    return {"provider": provider}
+
+
+@router.put(
+    "/deeprag/switch-provider",
+    summary="切换 DeepRAG 当前厂商",
+    description="将 DeepRAG 的 API_PROVIDER 切换为指定厂商。要求 DeerFlow 中已配置该厂商的 API Key。",
+)
+async def switch_deeprag_provider(request: Request) -> dict:
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="请求体格式错误")
+
+    provider_id = (body.get("provider") or "").strip()
+    if not provider_id:
+        raise HTTPException(status_code=400, detail="provider 字段不能为空")
+
+    success, message = _switch_deeprag_provider(provider_id)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+
+    return {"success": True, "message": message}
 
 
 @router.get(
