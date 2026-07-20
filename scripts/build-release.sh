@@ -19,8 +19,9 @@
 #   - backend-bin/              (PyInstaller 编译产物：二进制 + _internal/，无 .py 源码)
 #   - skills/                   (Agent skills)
 #   - mcp-agent-mcp/            (可选 ADS MCP)
-#   - scripts/                  (服务管理：deerflow.sh + wait-for-port.sh)
-#   - nginx/                    (Nginx 配置：server.conf 放入 /etc/nginx/conf.d/)
+#   - deepRag/                  (DeepRAG 知识库检索服务：二进制 + 前端 + 配置)
+#   - scripts/                  (服务管理：deerflow.sh + wait-for-port.sh + wait-for-deeprag.sh)
+#   - nginx/                    (Nginx 配置：server.conf + deeprag.conf)
 #   - config.yaml               (主配置，直接拷贝项目根目录 config.yaml)
 #   - config.example.yaml       (配置模板)
 #   - extensions_config.json    (MCP 配置，直接拷贝项目根目录 extensions_config.json)
@@ -66,8 +67,9 @@ fi
 
 # ── 创建目录结构 ────────────────────────────────────────────────────────────
 
-echo "[2/10] 创建目录结构..."
+echo "[2/11] 创建目录结构..."
 mkdir -p "$RELEASE_DIR"/{frontend,backend-bin,skills,scripts,nginx,mcp-agent-mcp}
+mkdir -p "$RELEASE_DIR/deepRag"/{bin,frontend,Knowledge-Base,Knowledge-Base-Chunks,Knowledge-Base-File-Summary}
 
 # ── 编译前端 ────────────────────────────────────────────────────────────────
 
@@ -332,19 +334,59 @@ rsync -av --no-g --no-o \
 
 # ── 复制脚本 ───────────────────────────────────────────────────────────────
 
-echo "[6/10] 复制启动脚本..."
+echo "[6/11] 复制启动脚本..."
 cp scripts/server-release.sh "$RELEASE_DIR/scripts/deerflow.sh"
 cp scripts/wait-for-port.sh "$RELEASE_DIR/scripts/"
+cp scripts/wait-for-deeprag.sh "$RELEASE_DIR/scripts/"
 chmod +x "$RELEASE_DIR/scripts/"*.sh
 
 # ── 适配并复制 Nginx 配置 ───────────────────────────────────────────────────
 
-echo "[7/10] 生成 Nginx 配置..."
+echo "[7/11] 生成 Nginx 配置..."
 cp "$REPO_ROOT/docker/nginx/server.conf" "$RELEASE_DIR/nginx/server.conf"
+cp "$REPO_ROOT/docker/nginx/deeprag.conf" "$RELEASE_DIR/nginx/deeprag.conf"
+
+# ── 复制 DeepRAG 服务 ───────────────────────────────────────────────────────
+
+echo "[8/11] 复制 DeepRAG 服务..."
+if [ -d "$REPO_ROOT/deepRag/bin/deep-rag-backend" ]; then
+    cp -r "$REPO_ROOT/deepRag/bin/deep-rag-backend" "$RELEASE_DIR/deepRag/bin/"
+    echo "  ✓ deep-rag-backend 二进制已复制"
+else
+    echo "  ⚠️  DeepRAG 二进制不存在（deepRag/bin/deep-rag-backend/），请先编译"
+fi
+if [ -d "$REPO_ROOT/deepRag/frontend" ]; then
+    cp -r "$REPO_ROOT/deepRag/frontend/"* "$RELEASE_DIR/deepRag/frontend/"
+    echo "  ✓ DeepRAG 前端已复制"
+else
+    echo "  ⚠️  DeepRAG 前端不存在（deepRag/frontend/），跳过"
+fi
+cp "$REPO_ROOT/deepRag/.env.example" "$RELEASE_DIR/deepRag/.env.example"
+echo "  ✓ DeepRAG .env.example 已复制"
+# 复制知识库文件（含目录结构）
+if [ -d "$REPO_ROOT/deepRag/Knowledge-Base" ] && [ "$(ls -A "$REPO_ROOT/deepRag/Knowledge-Base" 2>/dev/null)" ]; then
+    cp -r "$REPO_ROOT/deepRag/Knowledge-Base/"* "$RELEASE_DIR/deepRag/Knowledge-Base/"
+    echo "  ✓ DeepRAG 知识库文件已复制"
+else
+    touch "$RELEASE_DIR/deepRag/Knowledge-Base/.gitkeep"
+    echo "  ✓ DeepRAG 知识库空目录已创建（无源文件）"
+fi
+if [ -d "$REPO_ROOT/deepRag/Knowledge-Base-Chunks" ] && [ "$(ls -A "$REPO_ROOT/deepRag/Knowledge-Base-Chunks" 2>/dev/null)" ]; then
+    cp -r "$REPO_ROOT/deepRag/Knowledge-Base-Chunks/"* "$RELEASE_DIR/deepRag/Knowledge-Base-Chunks/"
+    echo "  ✓ DeepRAG 知识库 Chunks 已复制"
+else
+    touch "$RELEASE_DIR/deepRag/Knowledge-Base-Chunks/.gitkeep"
+fi
+if [ -d "$REPO_ROOT/deepRag/Knowledge-Base-File-Summary" ] && [ "$(ls -A "$REPO_ROOT/deepRag/Knowledge-Base-File-Summary" 2>/dev/null)" ]; then
+    cp -r "$REPO_ROOT/deepRag/Knowledge-Base-File-Summary/"* "$RELEASE_DIR/deepRag/Knowledge-Base-File-Summary/"
+    echo "  ✓ DeepRAG 知识库 File Summary 已复制"
+else
+    touch "$RELEASE_DIR/deepRag/Knowledge-Base-File-Summary/.gitkeep"
+fi
 
 # ── 复制配置文件 ────────────────────────────────────────────────────────────
 
-echo "[8/10] 复制配置文件..."
+echo "[9/11] 复制配置文件..."
 
 # 复制主配置
 cp "$REPO_ROOT/config.yaml" "$RELEASE_DIR/config.yaml"
@@ -362,6 +404,10 @@ cp "$REPO_ROOT/extensions_config.json" "$RELEASE_DIR/extensions_config.json"
 # 修正 ADS 路径和 URL（保留端口）
 sed -i 's|/app/ads-mcp/|mcp-agent-mcp/|g' "$RELEASE_DIR/extensions_config.json"
 sed -E -i 's|https?://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(:[0-9]+)|http://127.0.0.1\1|g' "$RELEASE_DIR/extensions_config.json"
+# 精确修正 deeprag URL（替代脆弱 sed 全局替换，确保 /mcp/ 路径正确）
+if command -v jq > /dev/null 2>&1; then
+    jq '.mcpServers.deeprag.url = "http://127.0.0.1:86/mcp/"' "$RELEASE_DIR/extensions_config.json" > /tmp/deeprag_extensions_config.json && mv /tmp/deeprag_extensions_config.json "$RELEASE_DIR/extensions_config.json"
+fi
 # ADS_API_BASE_URL 在 release 下无用（config.json 优先级更高），删除避免混淆
 sed -i '/ADS_API_BASE_URL/d' "$RELEASE_DIR/extensions_config.json"
 cp "$REPO_ROOT/extensions_config.example.json" "$RELEASE_DIR/extensions_config.example.json"
@@ -373,7 +419,7 @@ echo "  ✓ .env.example 已复制（部署后请根据模板创建 .env）"
 
 # ── ADS MCP（可选组件）───────────────────────────────────────────────────────
 
-echo "[9/10] ADS MCP..."
+echo "[10/11] ADS MCP..."
 ADS_MCP_DIR="${REPO_ROOT}/mcp-agent-mcp"
 if [ -d "$ADS_MCP_DIR" ]; then
     echo "  检测到 ADS MCP..."
@@ -403,7 +449,7 @@ fi
 
 # ── 复制使用文档 ────────────────────────────────────────────────────────────
 
-echo "[10/10] 生成 README.md（部署使用说明）..."
+echo "[11/11] 生成 README.md（部署使用说明）..."
 if [ -f "$REPO_ROOT/docs/operations/USE_GUIDE.md" ]; then
     cp "$REPO_ROOT/docs/operations/USE_GUIDE.md" "$RELEASE_DIR/README.md"
     echo "  ✓ README.md 已生成"

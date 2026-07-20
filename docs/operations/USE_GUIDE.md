@@ -36,12 +36,21 @@ release/
 │
 ├── scripts/                       # 工具脚本
 │   ├── deerflow.sh                 # 服务管理（启动/停止）
-│   └── wait-for-port.sh           # 端口等待（供 deerflow.sh 调用）
+│   ├── wait-for-port.sh           # 端口等待（供 deerflow.sh 调用）
+│   └── wait-for-deeprag.sh        # DeepRAG 就绪检测（供 deerflow.sh 调用）
 │
 ├── nginx/                         # Nginx 配置（放入 /etc/nginx/conf.d/ 即可用）
-│   └── server.conf
+│   ├── server.conf
+│   └── deeprag.conf
 ├── skills/                        # Agent Skills
 ├── mcp-agent-mcp/                 # ADS MCP（可选）
+├── deepRag/                       # [新增] DeepRAG 知识库检索服务
+│   ├── bin/deep-rag-backend/      # PyInstaller 二进制（入口）
+│   ├── frontend/                  # 静态前端
+│   ├── Knowledge-Base/            # 放置知识库文档
+│   ├── Knowledge-Base-Chunks/     # 知识库向量索引（运行时生成）
+│   ├── Knowledge-Base-File-Summary/ # 文件摘要（运行时生成）
+│   └── .env.example               # 环境变量模板
 │
 └── data_collection_logs/          # 数据采集输出（运行时自动生成）
 ```
@@ -56,8 +65,10 @@ release/
 |------|------|--------------------------|
 | **Node.js 18+** | 前端 standalone 运行 + ADS MCP | `curl -fsSL https://deb.nodesource.com/setup_20.x \| bash - && apt install -y nodejs` |
 | **lsof** | deerflow.sh 端口检测 | `apt install -y lsof` |
+| **curl** | deerflow.sh + wait-for-deeprag.sh 健康检查 | `apt install -y curl` |
 
 > 后端为 PyInstaller 编译的 ELF 二进制，自带 Python 运行时，**服务器无需安装 Python/pnpm/uv**。
+> DeepRAG 同样为 PyInstaller 编译的 ELF 二进制，**无需额外运行时依赖**。
 
 ---
 
@@ -118,7 +129,7 @@ data_collection:
     "deeprag": {
       "enabled": true,
       "type": "http",
-      "url": "http://192.168.1.56:86/mcp",
+      "url": "http://127.0.0.1:86/mcp/",
       "description": "DeepRAG 知识库检索"
     }
   }
@@ -126,7 +137,7 @@ data_collection:
 ```
 
 - **ADS MCP**：相对路径 `../mcp-agent-mcp/dist/index.js`，如路径不符则需修改
-- **DeepRAG**：HTTP 连接远程 MCP 服务器
+- **DeepRAG**：HTTP 连接本地 MCP 服务器（端口 86），由 deerflow.sh 自动管理
 
 ### 3.4 启动前清单
 
@@ -137,6 +148,7 @@ data_collection:
 | `release/extensions_config.json` | ✅ | 已自动配置 |
 | `release/backend-bin/deerflow-gateway/deerflow-gateway` | ✅ | 后端可执行文件 |
 | `release/frontend/.next/` | ✅ | 前端构建 |
+| `release/deepRag/bin/deep-rag-backend/deep-rag-backend` | ⚠️ | 如不存在则 --skip-deeprag 启动 |
 
 ---
 
@@ -155,14 +167,17 @@ cd /path/to/release/
 ./scripts/deerflow.sh
 ```
 
-启动后会自动等待前后端就绪，输出以下信息即表示成功：
+启动后会自动等待 DeepRAG、Gateway、Frontend 全部就绪，输出以下信息即表示成功：
 
 ```
+✓ DeepRAG 已就绪 (API: localhost:5172, MCP: localhost:8172)
 ✓ Gateway 已就绪 (localhost:8001)
 ✓ Frontend 已就绪 (localhost:3000)
 ```
 
-日志文件：`logs/gateway.log`、`logs/frontend.log`
+日志文件：`logs/gateway.log`、`logs/frontend.log`、`logs/deeprag.log`
+
+> DeepRAG 启动耗时约 30-60 秒（加载模型依赖）。如果不需要 DeepRAG，可用 `--skip-deeprag` 参数跳过。
 
 ### 4.2 分别启动（手动控制）
 
@@ -211,6 +226,8 @@ cd /path/to/release/
 ./scripts/deerflow.sh --stop
 ```
 
+该命令会依次停止 DeepRAG、Gateway 和 Frontend。
+
 ### 5.2 手动停止
 
 ```bash
@@ -231,13 +248,16 @@ kill -9 $(lsof -ti :3000) 2>/dev/null   # 前端
 ps aux | grep -E "deerflow-gateway|next"
 
 # 端口检查
-lsof -i :8001 -i :3000
+lsof -i :8001 -i :3000 -i :5172 -i :8172
 
 # 后端连通性测试
-curl -s -o /dev/null -w "Backend: HTTP %{http_code}" http://localhost:8001/
+curl -s -o /dev/null -w "Backend: HTTP %{http_code}\n" http://localhost:8001/
+
+# DeepRAG 连通性测试
+curl -s -o /dev/null -w "DeepRAG API: HTTP %{http_code}\n" http://localhost:5172/api/health 2>/dev/null || echo "DeepRAG: 未运行"
 
 # 前端连通性测试
-curl -s -o /dev/null -w "Frontend: HTTP %{http_code}" http://localhost:3000/
+curl -s -o /dev/null -w "Frontend: HTTP %{http_code}\n" http://localhost:3000/
 ```
 
 后端返回 `HTTP 401`（需登录），前端返回 `HTTP 200`，表示服务正常。
@@ -250,7 +270,10 @@ curl -s -o /dev/null -w "Frontend: HTTP %{http_code}" http://localhost:3000/
 |------|------|------|
 | **8001** | Gateway API | 后端 REST API + Agent 运行时 |
 | **3000** | Frontend | 前端 Web 页面 |
-| **2026** | Nginx | 反向代理（可选，见下方说明） |
+| **5172** | DeepRAG API | DeepRAG 知识库后端 API |
+| **8172** | DeepRAG MCP | DeepRAG MCP Server（Streamable HTTP） |
+| **2026** | Nginx | DeerFlow 反向代理 |
+| **86** | Nginx | DeepRAG 反向代理（前端 + API + MCP 统一入口） |
 
 ### 访问入口
 
@@ -385,3 +408,43 @@ standalone 模式出此错误说明 `.next/` 构建不完整。重新执行编�
 3. 复制旧版 `release/.env` 到新版
 4. 复制旧版 `release/config.yaml` 中的模型配置到新版（如需保留自定义模型）
 5. 停旧服务，启新服务
+
+### 10.8 DeepRAG 启动失败
+
+检查以下路径是否存在：
+
+```bash
+ls -la release/deepRag/bin/deep-rag-backend/deep-rag-backend
+```
+
+日志排查：
+
+```bash
+tail -30 logs/deeprag.log
+```
+
+常见原因：
+- DeepRAG 未打包进 release（缺少 `deepRag/bin/`），需重新执行 `build-release.sh`
+- 端口 5172/8172 被占用，检查 `ss -tlnp "( sport = :5172 )"`
+- 可用 `--skip-deeprag` 跳过 DeepRAG 启动，仅运行 DeerFlow
+
+### 10.9 DeepRAG MCP 不可用
+
+检查 `extensions_config.json` 中 deeprag URL：
+
+```json
+"url": "http://127.0.0.1:86/mcp/"
+```
+
+确认 nginx 86 端口配置已加载：
+
+```bash
+cp /usr/xccloud/deerflow/nginx/deeprag.conf /etc/nginx/conf.d/
+nginx -s reload
+```
+
+确认 nginx 中 deeprag.conf 的 `/mcp/` proxy_pass 带 trailing slash：
+
+```nginx
+proxy_pass http://deeprag-mcp/;   # 必须有结尾斜杠
+```
