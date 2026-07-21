@@ -8,6 +8,7 @@ sync/async code paths.
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 from types import SimpleNamespace
@@ -30,6 +31,11 @@ from deerflow.agents.middlewares.tool_output_budget_middleware import (
     _snap_to_line_boundary,
     _tool_message_over_budget,
 )
+from deerflow_extensions.tool_output_enrichment.auto_json_analyzer import (
+    _summarise_json_array,
+)
+from deerflow_extensions.tool_output_enrichment import enrich_result as _enrich_result
+from deerflow_extensions.tool_output_enrichment import _enrich_tool_message
 from deerflow.config.app_config import AppConfig
 from deerflow.config.sandbox_config import SandboxConfig
 from deerflow.config.tool_output_config import ToolOutputConfig
@@ -1222,3 +1228,137 @@ class TestBudgetContentNoSandboxNoProviderCall:
         assert "Full remote_executor output saved to /mnt/user-data/outputs/" in result
         assert called["n"] == 0
         assert (tmp_path / ".tool-results").is_dir()
+
+
+# ===========================================================================
+# Enrichment tests — JSON array summarisation
+# ===========================================================================
+
+
+class TestSummariseJsonArray:
+    """Unit tests for _summarise_json_array (JSON array summarisation).
+
+    Covers enrichment of large JSON arrays so the LLM receives an exact
+    item count instead of having to infer it from raw data — the core
+    fix for context-explosion hallucinations.
+    """
+
+    # ------------------------------------------------------------------
+    # Non-JSON / edge cases
+    # ------------------------------------------------------------------
+
+    def test_plain_text_passthrough(self):
+        """Non-JSON text should pass through unchanged."""
+        text = "Hello, world!"
+        assert _summarise_json_array(text) == text
+
+    def test_empty_text(self):
+        assert _summarise_json_array("") == ""
+
+    def test_non_list_json(self):
+        """JSON objects (not arrays) should pass through."""
+        text = '{"key": "value"}'
+        assert _summarise_json_array(text) == text
+
+    def test_single_object_list(self):
+        """Single-item list should still get a summary."""
+        text = '[{"name": "foo", "type": "bar"}]'
+        result = _summarise_json_array(text)
+        assert result.startswith("[Summary: 1 items")
+        assert "foo" in result or "1 items" in result
+
+    def test_empty_array(self):
+        result = _summarise_json_array("[]")
+        assert result == "[Summary: empty array (0 items)]\n[]"
+
+    def test_max_size_skip(self):
+        """Content exceeding max_size should pass through unchanged."""
+        text = "[" + ",".join('{"x":%d}' % i for i in range(5)) + "]"
+        result = _summarise_json_array(text, max_size=10)
+        assert result == text  # unchanged because len > max_size
+
+
+class TestEnrichToolMessage:
+    """Tests for _enrich_tool_message — wrapping enrichment into a ToolMessage."""
+
+    def test_enriches_tool_message_with_json_array(self):
+        """ToolMessage containing a JSON array should get enriched."""
+        # Use a small representative array
+        content = '[{"name": "img1", "type": "0"}, {"name": "img2", "type": "0"}]'
+        msg = ToolMessage(content=content, name="mcp-server_mcp_image_list", tool_call_id="tc-1")
+        config = ToolOutputConfig(preprocess_json=True)
+        enriched = _enrich_tool_message(msg, config)
+        assert enriched.content.startswith("[Summary:"), str(enriched.content)[:100]
+        assert "2 items" in str(enriched.content), "Should say 2 items"
+        assert content in str(enriched.content), "Original content preserved"
+
+    def test_skips_non_json_content(self):
+        """Plain text content should not be enriched."""
+        msg = ToolMessage(content="just a status message", name="some_tool", tool_call_id="tc-1")
+        config = ToolOutputConfig(preprocess_json=True)
+        enriched = _enrich_tool_message(msg, config)
+        assert enriched is msg  # Same object, unchanged
+
+    def test_skips_when_preprocess_json_disabled(self):
+        content = '[{"x": 1}, {"x": 2}]'
+        msg = ToolMessage(content=content, name="some_tool", tool_call_id="tc-1")
+        config = ToolOutputConfig(preprocess_json=False)
+        enriched = _enrich_tool_message(msg, config)
+        assert enriched is msg
+
+    def test_skips_exempt_tools(self):
+        content = '[{"x": 1}, {"x": 2}]'
+        msg = ToolMessage(content=content, name="web_search", tool_call_id="tc-1")
+        config = ToolOutputConfig(preprocess_json=True, exempt_tools={"web_search"})
+        enriched = _enrich_tool_message(msg, config)
+        assert enriched is msg
+
+
+class TestEnrichResult:
+    """Tests for _enrich_result — the entry point called before the budget gate."""
+
+    def test_enriches_tool_message_in_result(self):
+        """_enrich_result should enrich a ToolMessage result."""
+        content = '[{"id": 1}, {"id": 2}, {"id": 3}]'
+        result = ToolMessage(content=content, name="some_tool", tool_call_id="tc-1")
+        config = ToolOutputConfig(preprocess_json=True)
+        enriched = _enrich_result(result, config)
+        assert enriched.content.startswith("[Summary:")
+        assert "3 items" in str(enriched.content)
+
+    def test_enriches_command_with_tool_messages(self):
+        """Command containing ToolMessages should get enrichment on each."""
+        content = '[{"x": 1}, {"x": 2}]'
+        msg = ToolMessage(content=content, name="some_tool", tool_call_id="tc-1")
+        result = Command(update={"messages": [msg]})
+        config = ToolOutputConfig(preprocess_json=True)
+        enriched = _enrich_result(result, config)
+        assert enriched is not result
+        enriched_msgs = enriched.update["messages"]
+        assert enriched_msgs[0].content.startswith("[Summary:")
+
+    def test_runs_before_budget_gate(self):
+        """CRITICAL: Enrichment must fire for content UNDER the budget threshold.
+
+        This is the core fix: _needs_budget returns False for ~50KB MCP
+        output (threshold is 100KB), but enrichment MUST still run.
+        """
+        # Create content under the default 100KB threshold but still a JSON array
+        items = [{"name": f"img{i}", "type": "0"} for i in range(50)]
+        content = json.dumps(items)
+        assert len(content) < 100_000  # Under budget threshold
+
+        msg = ToolMessage(content=content, name="mcp-server_mcp_image_list", tool_call_id="tc-1")
+        config = ToolOutputConfig(preprocess_json=True)  # Default threshold: 100KB
+
+        # _needs_budget should say False
+        assert not _needs_budget(msg, config), (
+            "50-item JSON array should be UNDER the budget threshold"
+        )
+
+        # But _enrich_result should still add the summary
+        enriched = _enrich_result(msg, config)
+        assert enriched.content.startswith("[Summary:"), (
+            "Enrichment MUST fire even when content is under budget threshold"
+        )
+        assert "50 items" in str(enriched.content)

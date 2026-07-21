@@ -25,6 +25,7 @@ _EXTENSIONS = [
     ("ads_auth",         True),    # app.include_router()
     ("env_settings",     True),    # app.include_router()
     ("topic_guardrail",  False),   # apply_all() — own _APPLIED guard
+    ("tool_output_enrichment", False),  # monkey-patch _enrich_result
 ]
 
 
@@ -112,3 +113,8 @@ def _boot_one(name: str, app=None, ext_internal=None):
     elif name == "topic_guardrail":
         from deerflow_extensions.patch_manager import apply_all
         apply_all(ext_internal=ext_internal)
+    elif name == "tool_output_enrichment":
+        from deerflow_extensions.tool_output_enrichment.startup import (
+            install_tool_output_enrichment,
+        )
+        install_tool_output_enrichment()

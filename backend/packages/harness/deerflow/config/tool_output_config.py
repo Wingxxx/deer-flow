@@ -56,6 +56,15 @@ class ToolOutputConfig(BaseModel):
         default_factory=lambda: ["read_file", "read_file_tool"],
         description="Tool names exempt from budget enforcement (prevents persist→read→persist loops).",
     )
+    preprocess_json: bool = Field(
+        default=True,
+        description="[DEPRECATED] Moved to deerflow_extensions.tool_output_enrichment. Kept for config backward compatibility, has no effect in core.",
+    )
+    preprocess_json_max_size: int = Field(
+        default=200_000,
+        ge=0,
+        description="[DEPRECATED] Moved to deerflow_extensions.tool_output_enrichment.",
+    )
     tool_overrides: dict[str, int] = Field(
         default_factory=dict,
         description="Per-tool externalize_min_chars overrides. Keys are tool names, values are char thresholds. Use 0 to disable externalization for a specific tool.",
