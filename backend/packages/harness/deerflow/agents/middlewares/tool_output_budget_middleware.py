@@ -71,6 +71,29 @@ def _message_text(content: Any) -> str | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Extension Hook: tool_output_enrichment
+# ---------------------------------------------------------------------------
+# JSON array enrichment has been moved to
+# deerflow_extensions.tool_output_enrichment (see S1 in plan).
+# The extension monkey-patches _enrich_result at startup via boot.py.
+# If the extension is unavailable, the no-op fallback below keeps the
+# middleware running with enrichment disabled.
+
+# ── Extension Hook: tool_output_enrichment ──
+try:
+    from deerflow_extensions.tool_output_enrichment import enrich_result as _enrich_result
+except ImportError:
+    def _enrich_result(result, config):  # noqa: ARG001
+        return result
+# ──────────────────────────────────────────
+
+
+# ---------------------------------------------------------------------------
+# Patch helpers
+# ---------------------------------------------------------------------------
+
+
 def _snap_to_line_boundary(text: str, pos: int) -> int:
     """Return *pos* or the nearest preceding newline+1, whichever is closer.
 
@@ -426,7 +449,12 @@ def _patch_tool_message(
     outputs_path: str | None,
     sandbox: Sandbox | None = None,
 ) -> ToolMessage:
-    """Apply budget to a single ToolMessage. Returns the original if unchanged."""
+    """Apply budget to a single ToolMessage. Returns the original if unchanged.
+
+    Note: JSON array enrichment is now handled separately via :func:`_enrich_result`
+    before the budget gate, so this function focuses solely on externalization
+    and fallback truncation.
+    """
     tool_name = msg.name or "unknown"
     if tool_name in config.exempt_tools:
         return msg
@@ -499,7 +527,12 @@ def _patch_result(
     outputs_path: str | None,
     sandbox: Sandbox | None = None,
 ) -> ToolMessage | Command:
-    """Apply budget to a tool call result (ToolMessage or Command)."""
+    """Apply budget to a tool call result (ToolMessage or Command).
+
+    This function handles only externalization and fallback truncation.
+    JSON array enrichment is already done by :func:`_enrich_result` before
+    the budget gate in :meth:`wrap_tool_call` / :meth:`awrap_tool_call`.
+    """
     if isinstance(result, ToolMessage):
         return _patch_tool_message(result, config, outputs_path, sandbox)
 
@@ -587,6 +620,13 @@ class ToolOutputBudgetMiddleware(AgentMiddleware[AgentState]):
         result = handler(request)
         if not self._config.enabled:
             return result
+        # Enrich JSON array outputs *before* the budget gate so that
+        # exactly-counted summaries reach the model even for content under
+        # the externalize/fallback thresholds (see GitHub issue #NNNN).
+        try:
+            result = _enrich_result(result, self._config)
+        except Exception:
+            logger.exception("Enrichment failed, falling through with raw result")
         if not _needs_budget(result, self._config):
             return result
         outputs_path = _resolve_outputs_path(request)
@@ -602,6 +642,19 @@ class ToolOutputBudgetMiddleware(AgentMiddleware[AgentState]):
         result = await handler(request)
         if not self._config.enabled:
             return result
+        # Enrich JSON array outputs *before* the budget gate so that
+        # exactly-counted summaries reach the model even for content under
+        # the externalize/fallback thresholds (see GitHub issue #NNNN).
+        # Offload CPU-bound JSON parsing to thread pool with timeout guard.
+        try:
+            import time
+            start = time.perf_counter()
+            result = await asyncio.to_thread(_enrich_result, result, self._config)
+            elapsed = time.perf_counter() - start
+            if elapsed > 0.05:  # 50ms
+                logger.debug("Enrichment took %.0fms", elapsed * 1000)
+        except Exception:
+            logger.exception("Enrichment failed (async), falling through with raw result")
         if not _needs_budget(result, self._config):
             return result
         outputs_path = _resolve_outputs_path(request)

@@ -14,6 +14,7 @@
 | [env_settings](./env_settings/README.md) | 多厂商 API Key 管理，Key 写入 .env 并自动注册模型 | router.py, startup.py | [frontend/extensions/env-settings/](../frontend/extensions/env-settings/README.md) |
 | [topic_guardrail](./topic_guardrail/README.md) | 回答范围限制，L1-L4 四层纵深防御 | topic_guardrail_provider.py, topics.yaml | 无 |
 | [human_intervention](./human_intervention/README.md) | 交互式人工介入增强，ClarificationMiddleware 子类化注入 widget_hints | clarification_middleware_ext.py, patch.py, startup.py | [frontend/extensions/human-intervention/](../frontend/extensions/human-intervention/README.md) |
+| [tool_output_enrichment](./tool_output_enrichment/README.md) | JSON 数组自动字段分析，采样推断替代硬编码字段枚举 | auto_json_analyzer.py, startup.py | 无 |
 
 ## 安装方式
 

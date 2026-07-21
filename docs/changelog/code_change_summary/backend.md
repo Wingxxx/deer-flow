@@ -763,3 +763,31 @@ PyInstaller `--onedir` 模式下，模块在 `_internal/topic_guardrail/`，数�
 - **HMAC-SHA256 伪匿名化**：`_pseudonymize()` 使用 `hmac.new(salt, raw_id, sha256).hexdigest()`，空 salt 产生 WARNING
 - **条件包含写入**：None 值时 record key 不存在（非 `null`）
 
+## 6. Tool Output Enrichment 零侵入重构（2026-07-21）
+
+**目标**: 将 JSON 数组 enrichment 从核心 middleware 迁移至 `deerflow_extensions/tool_output_enrichment/`。
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `deerflow_extensions/tool_output_enrichment/` | 新扩展目录 (__init__.py, auto_json_analyzer.py, enrichment_pipeline.py, startup.py, README.md, tests/) |
+
+### 修改文件 (核心源码)
+
+| 文件 | 变更 |
+|------|------|
+| `tool_output_budget_middleware.py` | 删除 151 行硬编码 enrichment → 替换为 14 行 ExtensionHook + try/except 兜底 |
+| `tool_output_config.py` | `preprocess_json` / `preprocess_json_max_size` 标记 `[DEPRECATED]` |
+| `boot.py` | +1 行注册 `tool_output_enrichment` 扩展 |
+| `conftest.py` | +1 行 repo root 到 sys.path |
+| `Dockerfile` | +1 行 COPY deerflow_extensions |
+| `test_tool_output_budget_middleware.py` | import 路径从 core → extension |
+
+### 核心改进
+
+- **消除硬编码**: 6 个字段名 (`"type", "os", "status", "state", "category", "platform"`) → 自动字段分析
+- **bool-before-int**: Python `bool` 是 `int` 子类, 检测顺序修正
+- **性能提升**: 全量遍历 O(N) → `random.sample(data, 1000)`, 100K 条从 300ms → 11ms
+- **零侵入**: Level 3 monkey-patch (对标 data_collection / topic_guardrail), 核心源码仅保留 6 行 hook
+

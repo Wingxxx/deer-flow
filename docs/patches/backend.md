@@ -547,7 +547,7 @@ print('channels.wecom.enabled:', cfg['channels']['wecom']['enabled'])
 |------|------|
 | `sensitive_word_middleware.py` | Fail-closed 加固、引入 TextPreprocessor、审计日志、拼音变体词源加载 |
 | `topics.yaml` | 追加 `pinyin_variants`、`semantic_guard`、`audit` 配置块 |
-| `role_definition.txt` | 追加 `STRICTLY FORBIDDEN` 禁止事项清单 |
+| `role_definition.txt` | 全量替换为联想开天智能云教室业务定义 + 数据完整性规范（对标 Anthropic/OpenAI/Google）+ STRICTLY FORBIDDEN 禁止事项清单 |
 | `wordlist/custom_sensitive_words.txt` | 追加政治人物缺失词条（特朗普、川普等） |
 
 ### 核心改动
@@ -557,7 +557,7 @@ print('channels.wecom.enabled:', cfg['channels']['wecom']['enabled'])
 3. **拼音变体词源**：AC 自动机第三词源 `pinyin_variants.txt`
 4. **审计日志**：`AUDIT|BLOCKED|reason=...|ts=...`
 5. **语义审核**：可选集成（默认关闭，通过 `semantic_guard.enabled` 控制）
-6. **L1 硬约束**：`role_definition.txt` 追加 `STRICTLY FORBIDDEN`
+6. **L1 硬约束**：`role_definition.txt` 全量替换为联想开天智能云教室业务定义，含 STRICTLY FORBIDDEN 硬约束 + 工具使用约束（bash/write_file/str_replace 禁用公告）+ 数据完整性规范（5 条防幻觉规则）
 
 ### 暴力测试结果
 65/65 测试通过，覆盖：
@@ -1049,3 +1049,87 @@ return await self._start_channel(name, config)
 - 凭证无效时不停止旧 channel，保持当前服务不中断
 - _configure_locks 确保同渠道并发配置请求串行化，避免竞态
 - _start_channel 返回 tuple 携带错误原因，router 层据此返回 400/504/500
+
+---
+
+## 2026-06-19: C1 — config.yaml tool_output 截断阈值大幅提高
+
+**文件**: `config.yaml`
+**行号**: L139-L144
+**风险**: ✅ 极低（纯配置值修改，无代码变更）
+
+| 参数 | 旧值 | 新值 | 变更理由 |
+|------|------|------|----------|
+| `externalize_min_chars` | 12000 | **100000** | MCP 最大 20K，5x 安全余量 |
+| `preview_head_chars` | 2000 | **5000** | 非 MCP 工具触发截断时 Agent 至少看到 25% |
+| `preview_tail_chars` | 1000 | **3000** | 同上 |
+| `fallback_max_chars` | 30000 | **100000** | 必须 ≤ externalize_min_chars，避免漏洞带 |
+| `fallback_head_chars` | 8000 | **20000** | 按比例放大 |
+| `fallback_tail_chars` | 3000 | **10000** | 按比例放大 |
+
+**关键约束**: `fallback_max_chars == externalize_min_chars == 100000`，消除旧值 `30000 < 12000` 导致 30K-120K 范围的 fallback 防护漏洞（`_budget_content` 使用 AND 逻辑：两个条件均不满足才截断）。
+
+**原因**: MCP 端承诺将输出控制在 20K 以内，100K 门槛有 5x 安全余量，确保 Agent 始终看到完整 MCP 返回数据，消除因截断导致的幻觉。
+
+---
+
+## 2026-06-19: C2 — topics.yaml denied_tools 全面禁用写/执行工具
+
+**文件**: `deerflow_extensions/topic_guardrail/topics.yaml`
+**行号**: L2-L5
+**风险**: ✅ 极低（纯配置列表扩展）
+
+```yaml
+# 改前
+denied_tools:
+  - bash
+
+# 改后
+denied_tools:
+  - bash
+  - write_file
+  - str_replace
+```
+
+| 工具 | 作用 | 禁用理由 |
+|------|------|----------|
+| `bash` | 执行脚本/命令 | 已有，保持 |
+| `write_file` | 创建 .py/.sh 文件 | 脚本链路第一步，bash 禁用后 write 只能写不能跑 |
+| `str_replace` | 修改文件内容 | 同属 file:write 组，应一并禁用 |
+
+**配套变更**: `role_definition.txt` 已同步更新工具使用约束章节，明确告知 Agent 全部禁用工具列表（bash/write_file/str_replace），避免 Agent 逐个尝试被拒工具浪费用户时间。
+
+**原因**: 消除「能写不能跑」的最差用户体验状态，硬件禁用完整写→执行链路。
+
+---
+
+## E1: `tool_output_budget_middleware.py` — ExtensionHook 替换 enrichment 代码
+
+**文件**: `backend/packages/harness/deerflow/agents/middlewares/tool_output_budget_middleware.py`
+**行号**: L75-L88 (原 JSON array summariser 区域)
+**风险**: ✅ 低 (try/except ImportError 兜底, 调用点 try/except 双保险)
+
+该 patch 将原先 151 行硬编码字段枚举的 enrichment 代码替换为 ExtensionHook:
+
+```python
+# ── Extension Hook: tool_output_enrichment ──
+try:
+    from deerflow_extensions.tool_output_enrichment import enrich_result as _enrich_result
+except ImportError:
+    def _enrich_result(result, config):  # noqa: ARG001
+        return result
+# ──────────────────────────────────────────
+```
+
+**删除的原始代码**:
+- `_summarise_json_array` (54 行) — 硬编码 `("type", "os", "status", "state", "category", "platform")` 枚举
+- `_enrich_tool_message` (23 行) — JSON 预处理包装器
+- `_enrich_result` (34 行) — enrichment 入口函数 (已迁移至扩展)
+
+**调用点加固**:
+- `wrap_tool_call` (sync): `_enrich_result` 调用包 try/except
+- `awrap_tool_call` (async): `asyncio.to_thread` offload + 50ms 超时守卫 + try/except
+
+**新实现位置**: `deerflow_extensions/tool_output_enrichment/` (Level 3 monkey-patch)
+
+**原因**: 消除硬编码字段名, 采用零侵入 Level 3 模式 (对标 data_collection/topic_guardrail), 性能提升 10-15x (全量遍历→采样)。

@@ -44,6 +44,8 @@ WORKDIR /app
 
 # Copy backend source code
 COPY backend ./backend
+# Copy deerflow_extensions for extension support (tool_output_enrichment, data_collection, etc.)
+COPY deerflow_extensions ./deerflow_extensions
 
 # Install dependencies with cache mount
 # When UV_EXTRAS is set (e.g. "postgres"), installs optional dependencies.
@@ -93,6 +95,8 @@ WORKDIR /app
 
 # Copy backend with pre-built virtualenv from builder
 COPY --from=builder /app/backend ./backend
+# Copy extensions (tool_output_enrichment, data_collection, ads_auth, etc.)
+COPY --from=builder /app/deerflow_extensions ./deerflow_extensions
 
 # Expose Gateway API port.
 EXPOSE 8001
