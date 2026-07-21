@@ -1,6 +1,8 @@
 tool_control:
   denied_tools:
     - bash
+    - write_file
+    - str_replace
   wordlist:
     base: wordlist/base_sensitive_words.txt
     custom: wordlist/custom_sensitive_words.txt
