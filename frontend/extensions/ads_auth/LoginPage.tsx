@@ -33,35 +33,56 @@ export default function ADSLoginPage() {
     // When the CSRF handler in fetcher.ts force-redirects here with
     // ?csrf_forced=1, skip the auto-redirect check entirely.  Even if
     // the backend logout's Set-Cookie doesn't survive the proxy
-    // rewrite, we must NOT bounce the user back to workspace — the
+    // rewrite, we MUST NOT bounce the user back to workspace — the
     // whole point is to show the login form.
     if (searchParams.get("csrf_forced") === "1") {
       setIsLoading(false);
       return;
     }
 
-    // Layer-2 guard: if the csrf_token cookie is missing while the
-    // user is still authenticated, this is a CSRF-forced redirect
-    // (the user deleted the csrf_token cookie, or it expired).  In
-    // that case we MUST NOT bounce back to workspace — every POST
-    // would fail again with 403.  The user needs to re-login to get
-    // a fresh csrf_token.
-    fetch("/api/v1/auth/me", { credentials: "include" })
+    // ── Safety timeout: never let the loading spinner hang forever ──
+    // The fetch below can hang if the gateway is slow / restarting /
+    // unreachable.  Without a timeout the user sees a permanent spinner.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    fetch("/api/v1/auth/me", {
+      credentials: "include",
+      signal: controller.signal,
+    })
       .then((r) => {
-        if (r.ok) {
-          // Still have the csrf_token cookie -> safe to auto-redirect.
-          if (document.cookie.includes("csrf_token=")) {
-            router.push(nextPath);
-          } else {
-            // csrf_token is missing — user was kicked here by a CSRF
-            // 403; show the login form so they can get a fresh token.
-            setIsLoading(false);
-          }
+        clearTimeout(timeout);
+
+        // ── Guard against auth-mechanism mismatch ──
+        // The middleware (middleware.ts) checks the `access_token`
+        // cookie, but /api/v1/auth/me uses the HttpOnly session
+        // cookie.  When the access_token expires before the backend
+        // session, the middleware redirects to /login while
+        // /api/v1/auth/me still returns 200.  This creates an
+        // infinite redirect loop:
+        //   login→auth/me(200)→push(workspace)→middleware(no token)→login
+        // Check access_token cookie explicitly to break the loop.
+        const hasAccessToken =
+          typeof document !== "undefined" &&
+          document.cookie.includes("access_token=");
+
+        if (r.ok && hasAccessToken) {
+          // Both session and access_token are valid — safe to
+          // auto-redirect to workspace.
+          setIsLoading(false);
+          router.push(nextPath);
         } else {
+          // Session expired, access_token missing, or CSRF-forced:
+          // show the login form so the user can re-authenticate.
           setIsLoading(false);
         }
       })
-      .catch(() => setIsLoading(false));
+      .catch(() => {
+        clearTimeout(timeout);
+        // Fetch failed (timeout, network error, etc.) — always show
+        // the login form rather than letting the user stare at a spinner.
+        setIsLoading(false);
+      });
   }, [router, nextPath, searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
