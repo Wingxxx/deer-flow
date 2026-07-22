@@ -53,6 +53,33 @@
 
 > **注意**：mcp-server 改版后不再从 config.json 读取 token，自行管理 token 生命周期。DeerFlow 仅负责写入凭据供 mcp-server 自动登录使用。
 
+## sync_to_mcp_config 行为说明
+
+`token_manager.sync_to_mcp_config(username, password) -> bool` 在登录成功后自动调用：
+
+| 返回值 | 含义 | 触发条件 |
+|--------|------|----------|
+| `True` | 写入成功 | config.json 有效，原子写入完成 |
+| `False` | 写入失败 | config.json 不存在、无效 JSON、结构异常、权限错误 |
+
+**日志分级**：
+
+| 级别 | 场景 | 示例消息 |
+|------|------|----------|
+| `INFO` | 写入成功 | `[ADS sync] config.json updated — url=...` |
+| `WARNING` | config.json 不存在 | `[ADS sync] config.json not found at ...` |
+| `WARNING` | JSON 无效 | `[ADS sync] config.json at ... is invalid JSON` |
+| `WARNING` | 非 dict 结构 | `[ADS sync] config.json is not a dict (type=...)` |
+| `WARNING` | ads 键非 dict | `[ADS sync] config.json 'ads' key is not a dict` |
+| `ERROR` | 写入异常 | `[ADS sync] Failed to write config.json: ...` |
+
+**异常场景**：
+- config.json 不存在 → 返回 `False`（首次登录前自动创建目录，但文件不存在不会自动创建初始文件）
+- config.json 为数组/字符串等非 dict 类型 → 返回 `False`
+- `ads` 键值为字符串而非 dict → 返回 `False`
+- 写入权限错误 / 磁盘空间不足 → 返回 `False`，`ERROR` 日志
+- 原子写入（`tempfile.mkstemp` + `os.replace`）在半写入崩溃时不会损坏原文件
+
 ## 核心改动
 
 `deer-flow/backend/app/gateway/auth_middleware.py` 中增加 1 行 Extension Hook：

@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from deerflow_extensions.ads_auth.ads_auth import ads_login
 from deerflow_extensions.ads_auth.token_manager import save_token, sync_to_mcp_config
-import base64, json, time
+import base64, json, logging, time
 
 router = APIRouter(tags=["ads-auth"])
 
@@ -40,7 +40,11 @@ async def login_ads(
     )
 
     await save_token(form_data.username, ads_token)
-    await sync_to_mcp_config(form_data.username, form_data.password)
+    ok = await sync_to_mcp_config(form_data.username, form_data.password)
+    if not ok:
+        _logger = logging.getLogger(__name__)
+        _logger.warning("[ADS] login succeeded but config sync failed for user=%s",
+                        form_data.username)
 
     return {
         "msg": "登录成功",

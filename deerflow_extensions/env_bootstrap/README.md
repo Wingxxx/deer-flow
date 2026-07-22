@@ -6,7 +6,7 @@ DeerFlow 启动时自动探测并注入以下环境变量到 `.env` 文件和当
 
 | 变量 | 默认值 | 探测方式 |
 |------|--------|---------|
-| `DEER_FLOW_PROJECT_ROOT` | 项目根目录绝对路径（不再写入 .env，仅内部缓存供 ADS_MCP_CONFIG_PATH resolver 使用） | `boot._resolve_project_root()` + frozen 向上遍历修正（sentinel: config.yaml） |
+| `DEER_FLOW_PROJECT_ROOT` | 项目根目录绝对路径（不再写入 .env，仅内部缓存供 ADS_MCP_CONFIG_PATH resolver 使用） | `boot._resolve_project_root()` 统一使用 config.yaml 向上遍历；env_bootstrap 保留 `_internal/` 二次校正防御层 |
 | `ADS_MCP_CONFIG_PATH` | `$DEER_FLOW_PROJECT_ROOT/mcp-agent-mcp/.mcp-server/config.json` | 基于 `DEER_FLOW_PROJECT_ROOT` 拼接（_BOOTSTRAP_VARS 中排序优先）。config 目录始终保持于项目根下 |
 | `build_server_params` cwd 转发 | 自动注入 | monkey-patch `deerflow.mcp.client.build_server_params` |
 | **extensions_config.json 路径绝对化** | 自动改写 | ADS MCP 的 `args[0]`、`env.ADS_CONFIG_PATH` 从相对路径改写为绝对路径，**删除不再需要的 `cwd` 字段**。写入前创建 `.bak` 备份，使用原子写入（temp file + rename）保证安全 |
@@ -58,7 +58,7 @@ _RESOLVER_NAMES["NEW_VAR"] = "_resolve_new_var"
 | 变量未写入 .env | .env 文件不存在或不可写 | 仅记录 INFO，不阻塞启动 |
 | ADS_MCP_CONFIG_PATH 未设置 | DEER_FLOW_PROJECT_ROOT 未设置 | 跳过该变量，不阻塞启动 |
 | DEER_FLOW_PROJECT_ROOT 未设置 | CWD 不在项目树中 / 找不到 config.yaml | 跳过该变量，不阻塞启动 |
-| Frozen 模式 PROJECT_ROOT 解析为 `backend-bin/` 而非项目根 | PyInstaller --onedir 产物结构导致 `boot._resolve_project_root()` 返回二进制目录 | `_resolve_project_root()` 检测到 `_internal/` 后向上遍历寻找 `config.yaml`，最多3级。找到则修正，未找到则回退 |
+| Frozen 模式 PROJECT_ROOT 解析为 `backend-bin/` 而非项目根 | PyInstaller --onedir 产物结构导致 `boot._resolve_project_root()` 可能返回二进制目录 | `boot._resolve_project_root()` 已直接通过 config.yaml 定位项目根；env_bootstrap 的 `_internal/` 检测仅在 boot 误判时作为防御层触发。修复后无此故障 |
 | MCP 调用报 MODULE_NOT_FOUND（路径含 workspace） | extensions_config.json 中 ADS MCP 路径未被改写为绝对路径 | 检查启动日志是否有 `[EnvBootstrap] Rewrote extensions_config.json ADS paths:` |
 
 ## MCP cwd 转发

@@ -33,15 +33,22 @@ def _resolve_project_root() -> str | None:
     """Locate the project root directory.
 
     Tries (in order):
-      1. PyInstaller frozen → sys.executable parent
+      1. PyInstaller frozen → upward traverse finding config.yaml
       2. CWD  = <project>/backend        → ../
       3. CWD  = <project>                → ./
     """
     if getattr(sys, "frozen", False):
         me = os.path.dirname(os.path.abspath(sys.executable))
-        cand = os.path.join(me, "_internal", "deerflow_extensions")
-        if os.path.isdir(cand):
-            return me
+        # 从二进制目录无限向上遍历，寻找 config.yaml 作为项目根标记
+        current = me
+        while True:
+            if os.path.isfile(os.path.join(current, "config.yaml")):
+                return current
+            parent = os.path.dirname(current)
+            if parent == current:  # 到达文件系统根
+                break
+            current = parent
+        return None  # config.yaml 未找到
 
     cwd = os.getcwd()
     candidates = [

@@ -35,9 +35,9 @@ _BOOTSTRAP_VARS: list[tuple[str, Callable[[], str | None], str]] = []
 def _resolve_project_root() -> str | None:
     """探测项目根路径。
 
-    先委托 boot._resolve_project_root()，再对 PyInstaller frozen 模式
-    做一层修正：boot.py 返回的是 sys.executable 所在目录（如 backend-bin/），
-    真正的项目根在上一级（含 config.yaml）。
+    委托 boot._resolve_project_root()，再追加防御层：
+    frozen 模式下若 boot 返回的路径仍含 _internal/（说明 boot 误判为二进制目录），
+    则向上遍历寻找 config.yaml 修正为真正的项目根。
     """
     try:
         from deerflow_extensions.boot import _resolve_project_root as _boot_resolve
@@ -50,11 +50,11 @@ def _resolve_project_root() -> str | None:
     if result is None:
         return None
 
-    # Frozen 模式路径修正：PyInstaller --onedir 会在 result 下产生 _internal/
-    # 真正的项目根在上一级（含 config.yaml）。向上遍历查找，最多3级。
+    # 防御层：frozen 模式下，若 boot 返回的是二进制目录（含 _internal/），
+    # 向上查找 config.yaml 修正为真正的项目根。
     if getattr(sys, "frozen", False) and os.path.isdir(os.path.join(result, "_internal")):
         current = os.path.dirname(result)  # 从父级开始
-        for _ in range(3):
+        while True:
             if os.path.isfile(os.path.join(current, "config.yaml")):
                 if current != result:
                     _logger.info(
