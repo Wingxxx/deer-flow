@@ -15,20 +15,49 @@ cd "$REPO_ROOT"
 stop_all() {
     echo "停止 DeerFlow 服务..."
     local found=false
+
+    # 第一步：优雅关闭 (SIGTERM)，让 Gateway 有机会清理 MCP 子进程
     for port in 8001 3000; do
         local pids
         pids=$(lsof -t -i ":$port" 2>/dev/null || true)
         if [ -n "$pids" ]; then
-            echo "  释放端口 $port (PID: $(echo $pids | tr '\n' ' '))"
-            kill -9 $pids 2>/dev/null || true
+            echo "  优雅关闭端口 $port (PID: $(echo $pids | tr '\n' ' '))..."
+            kill $pids 2>/dev/null || true
             found=true
         fi
     done
-    # 额外清理孤儿进程
+
+    if $found; then
+        # 等待优雅关闭完成（最长 5 秒）
+        local waited=0
+        while [ $waited -lt 5 ]; do
+            if ! ss -tlnp 2>/dev/null | grep -qE ':8001|:3000'; then
+                break
+            fi
+            sleep 1
+            waited=$((waited + 1))
+        done
+    fi
+
+    # 第二步：强制清理仍未释放的端口 (SIGKILL)
+    for port in 8001 3000; do
+        if ss -tlnp 2>/dev/null | grep -q ":$port"; then
+            local remaining
+            remaining=$(lsof -t -i ":$port" 2>/dev/null || true)
+            if [ -n "$remaining" ]; then
+                echo "  强制释放端口 $port (PID: $(echo $remaining | tr '\n' ' '))"
+                kill -9 $remaining 2>/dev/null || true
+            fi
+        fi
+    done
+
+    # 额外清理孤儿进程（Gateway/Frontend 及 MCP 子进程）
     pkill -f "uvicorn app.gateway.app" 2>/dev/null || true
     pkill -f "next.*start" 2>/dev/null || true
     pkill -f "next.*dev" 2>/dev/null || true
+    pkill -f "node.*mcp-agent-mcp/dist/index.js" 2>/dev/null || true
     sleep 1
+
     if ss -tlnp 2>/dev/null | grep -qE ':8001|:3000'; then
         echo "⚠️  部分端口仍未释放，尝试强制清理..."
         fuser -k 8001/tcp 2>/dev/null || true

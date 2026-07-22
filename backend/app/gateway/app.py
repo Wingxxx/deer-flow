@@ -249,6 +249,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception:
             logger.exception("Failed to stop channel service")
 
+        # Close all persistent MCP sessions to terminate stdio subprocesses.
+        # Without this, MCP child processes (e.g. node mcp-agent-mcp) become
+        # orphans when the Gateway exits, leaking memory indefinitely.
+        try:
+            from deerflow.mcp.session_pool import get_session_pool
+
+            await asyncio.wait_for(
+                asyncio.to_thread(get_session_pool().close_all_sync),
+                timeout=_SHUTDOWN_HOOK_TIMEOUT_SECONDS,
+            )
+            logger.info("MCP session pool closed")
+        except TimeoutError:
+            logger.warning(
+                "MCP session pool shutdown exceeded %.1fs; proceeding with worker exit.",
+                _SHUTDOWN_HOOK_TIMEOUT_SECONDS,
+            )
+        except Exception:
+            logger.exception("Failed to close MCP session pool")
+
     logger.info("Shutting down API Gateway")
 
 
