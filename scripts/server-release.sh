@@ -112,7 +112,7 @@ cleanup_port() {
 start_deeprag() {
     if [ "$SKIP_DEEPRAG" = true ]; then
         echo "⏩ --skip-deeprag 指定，跳过 DeepRAG 启动"
-        if ss -tlnp "( sport = :5172 )" 2>/dev/null | grep -q .; then
+        if curl -sf --max-time 2 http://127.0.0.1:5172/ > /dev/null 2>&1; then
             echo "  DeepRAG 端口 5172 在监听，Gateway 可正常连接 MCP"
         else
             echo "  ⚠️  DeepRAG 未运行（端口 5172 未监听），MCP 功能不可用"
