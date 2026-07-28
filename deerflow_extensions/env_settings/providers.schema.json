@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI Providers Configuration",
+  "description": "AI 厂商元数据配置文件 schema。每个厂商包含 ID、名称、环境变量前缀、DeepRAG 映射、默认 API 地址和模型列表。",
+  "type": "object",
+  "required": ["providers"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "配置文件版本号"
+    },
+    "updated": {
+      "type": "string",
+      "description": "最后更新时间"
+    },
+    "description": {
+      "type": "string",
+      "description": "文件描述"
+    },
+    "providers": {
+      "type": "array",
+      "description": "AI 厂商列表",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "env_prefix", "default_base_url", "default_models"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "厂商 ID（唯一标识）"
+          },
+          "name": {
+            "type": "string",
+            "description": "厂商显示名称"
+          },
+          "env_prefix": {
+            "type": "string",
+            "description": "环境变量前缀（如 DEEPSEEK）"
+          },
+          "deeprag_provider_id": {
+            "type": "string",
+            "description": "DeepRAG 厂商 ID（可选，默认同 id）"
+          },
+          "deeprag_prefix": {
+            "type": "string",
+            "description": "DeepRAG 环境变量前缀（可选，默认同 env_prefix）"
+          },
+          "default_base_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "默认 API 地址"
+          },
+          "default_models": {
+            "type": "array",
+            "description": "预置模型列表",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

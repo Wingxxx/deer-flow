@@ -4,17 +4,19 @@
 
 本模块提供多厂商 AI 模型 API Key 的管理功能，以及多 IM 渠道 Bot 凭据的配置管理。用户通过前端配置界面提交凭据后，后端将其写入 `.env` 文件，并自动联动 `config.yaml`。
 
-- **厂商配置**：管理 7 家 AI 厂商的 API Key（DeepSeek、Kimi、Doubao、Qwen、MiniMax、GLM、硅基流动）
+- **厂商配置**：管理 7 家 AI 厂商的 API Key（DeepSeek、Kimi、Doubao、Qwen、MiniMax、GLM、硅基流动），厂商元数据（ID、名称、环境变量前缀、默认 API 地址、预置模型列表）由 `providers.json` 提供
 - **渠道配置**：管理 4 个国内 IM 渠道的 Bot 凭据（企业微信、飞书、钉钉、微信）
 
 ## 目录结构
 
 ```
 env_settings/
-├── __init__.py   # 空文件，标识 Python 包
-├── router.py     # FastAPI 路由（CRUD + 验证 + 连通性测试）
-├── startup.py    # 注入逻辑
-└── tests/        # 测试文件
+├── __init__.py          # 空文件，标识 Python 包
+├── providers.json       # 厂商元数据唯一数据源（7 家 AI 厂商的 ID、名称、环境变量前缀、默认 API 地址、预置模型列表）
+├── providers.schema.json# JSON Schema 校验文件
+├── router.py            # FastAPI 路由（CRUD + 验证 + 连通性测试）
+├── startup.py           # 注入逻辑
+└── tests/               # 测试文件
 ```
 
 ## 核心文件说明
@@ -43,7 +45,7 @@ FastAPI 路由模块，挂载于 `/api/env-settings` 前缀：
 
 核心逻辑：
 
-- **厂商元数据** — `PROVIDERS` 字典定义 7 家厂商的 ID、名称、环境变量前缀、默认 API 地址、预置模型列表
+- **厂商元数据** — `providers.json` 文件配置 7 家厂商的 ID、名称、环境变量前缀、默认 API 地址、预置模型列表，通过 `_get_providers()` 延迟加载（JSON 缺失时返回空 dict 降级）
 - **模型注册** — `_register_model_to_config()` 将用户选择的模型追加到 `config.yaml` 的 `models` 列表，使用各厂商对应的 LangChain/LangGraph 类路径
 - **模型清理** — `_remove_models_from_config()` 删除该厂商在 `config.yaml` 中注册的所有模型
 - **环境变量读写** — 通过 `dotenv_values()` / `set_key()` 操作 `.env` 文件，Key 名格式为 `{PREFIX}_API_KEY`、`{PREFIX}_BASE_URL`、`{PREFIX}_MODEL`

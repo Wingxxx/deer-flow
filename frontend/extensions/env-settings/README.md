@@ -4,7 +4,7 @@
 
 本扩展提供两方面的环境变量配置管理：
 
-**AI 模型 API Key 管理** — 支持 7 家主流 AI 厂商（DeepSeek、Kimi、Doubao、Qwen、MiniMax、GLM、硅基流动）的 API Key 图形化管理。通过 SettingsDialog 扩展注册为"API Keys"配置页，用户可在设置面板中完成 Key 的配置、验证和管理。
+**AI 模型 API Key 管理** — 支持 7 家主流 AI 厂商（DeepSeek、Kimi、Doubao、Qwen、MiniMax、GLM、硅基流动）的 API Key 图形化管理。厂商元数据通过后端 API（`GET /api/env-settings/providers`）获取，由 `providers.json` 提供数据源，前端不再硬编码厂商列表。通过 SettingsDialog 扩展注册为"API Keys"配置页，用户可在设置面板中完成 Key 的配置、验证和管理。
 
 **IM 渠道凭据管理** — 支持 4 个国内 IM 渠道（企业微信 WeCom / 飞书 Feishu / 钉钉 DingTalk / 个人微信 WeChat）的可视化凭据配置，通过 SettingsDialog 扩展注册为"渠道配置"标签页。渠道凭据通过上游 `/api/channels/*` 接口管理（`adapters/channel-adapter.ts` 适配层），凭据持久化到 `runtime-config.json`，配置后自动热重启渠道，支持凭据验证、清除等操作。
 
@@ -22,7 +22,7 @@ env-settings/
 ├── extension.ts             # 注册到 SettingsDialog 扩展系统
 ├── hooks.ts                 # TanStack Query hooks
 ├── channels.ts              # @deprecated 渠道元数据（已由适配器替代）
-├── providers.ts             # 7 家 AI 厂商元数据定义
+├── providers.ts             # 厂商元数据接口定义 + toProviderMeta() 工具函数
 ├── invite-section.tsx       # InviteSection 三态机组件
 └── types.ts                 # TypeScript 类型定义
 ```
@@ -44,19 +44,12 @@ env-settings/
 
 ### providers.ts
 
-7 家 AI 厂商的元数据定义：
+厂商元数据接口定义，数据源已从硬编码迁移至后端 API：
 
-| ID | 名称 | 默认 API 地址 |
-|----|------|---------------|
-| deepseek | DeepSeek | https://api.deepseek.com |
-| moonshot | Kimi | https://api.moonshot.cn/v1 |
-| volcengine | Doubao | https://ark.cn-beijing.volces.com/api/v3 |
-| dashscope | Qwen | https://dashscope.aliyuncs.com/compatible-mode/v1 |
-| minimax | MiniMax | https://api.minimax.io/v1 |
-| zhipuai | GLM | https://open.bigmodel.cn/api/paas/v4 |
-| siliconflow | 硅基流动 | https://api.siliconflow.cn/v1 |
+- `ProviderMeta` — 厂商元数据类型（ID、名称、环境变量前缀、默认 API 地址、预置模型列表等）
+- `toProviderMeta(providerInfo)` — 将 API 返回的 `ProviderInfo` 转换为 `ProviderMeta` 的工具函数
 
-通过 `getProviderMeta(id)` 查找指定厂商元数据。
+> 厂商元数据唯一数据源为后端 `providers.json`，通过 `GET /api/env-settings/providers` 获取。`provider-settings-page.tsx` 直接从 `useProviderSettings()` hook 的 `settings.providers` 读取厂商信息，不再依赖硬编码数组。`toProviderMeta()` 在需要将 API 数据转换为 `ProviderMeta` 类型的场景中使用。
 
 ### channels.ts
 

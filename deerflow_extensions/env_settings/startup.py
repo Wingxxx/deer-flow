@@ -16,6 +16,11 @@ def install_env_settings(app=None):
 
         app.include_router(router)
 
+        # 启动时校验 providers.json 与 CONFIG_TEMPLATE 一致性
+        from deerflow_extensions.env_settings.router import _validate_provider_templates
+
+        _validate_provider_templates()
+
         # Register config.yaml auto-sync middleware (zero-invasion)
         from deerflow_extensions.env_settings.config_sync import ChannelConfigSyncMiddleware
 

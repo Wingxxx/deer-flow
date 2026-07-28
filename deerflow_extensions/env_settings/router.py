@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import re
@@ -37,12 +38,17 @@ class ChannelUpdateRequest(BaseModel):
 class ProviderInfo(BaseModel):
     id: str = Field(description="Provider identifier")
     name: str = Field(description="Provider display name")
+    env_prefix: str = Field(default="", description="Environment variable prefix")
+    deeprag_provider_id: str = Field(default="", description="DeepRAG provider identifier")
+    deeprag_prefix: str = Field(default="", description="DeepRAG env prefix")
     default_base_url: str = Field(description="Default API base URL")
     default_models: list[str] = Field(description="Preset model list")
     key_exists: bool = Field(description="Whether API key is set")
     key_masked: str = Field(default="", description="Masked API key")
     base_url: str = Field(default="", description="Current base URL")
     model: str = Field(default="", description="Current model")
+    deprecated_model: str | None = Field(default=None, description="Current model is deprecated")
+    migration_hint: str | None = Field(default=None, description="Suggestion for migration")
 
 
 class ProviderSettingsResponse(BaseModel):
@@ -84,63 +90,72 @@ class ChannelSettingsResponse(BaseModel):
     channels: dict[str, ChannelInfo]
 
 
-PROVIDERS = {
-    "deepseek": {
-        "name": "DeepSeek",
-        "env_prefix": "DEEPSEEK",
-        "deeprag_provider_id": "deepseek",
-        "deeprag_prefix": "DEEPSEEK",
-        "default_base_url": "https://api.deepseek.com",
-        "default_models": ["deepseek-chat", "deepseek-reasoner"],
-    },
-    "moonshot": {
-        "name": "Kimi",
-        "env_prefix": "MOONSHOT",
-        "deeprag_provider_id": "kimi",
-        "deeprag_prefix": "KIMI",
-        "default_base_url": "https://api.moonshot.cn/v1",
-        "default_models": ["kimi-k2.5", "kimi-k2.5-thinking"],
-    },
-    "volcengine": {
-        "name": "Doubao",
-        "env_prefix": "VOLCENGINE",
-        "deeprag_provider_id": "doubao",
-        "deeprag_prefix": "DOUBAO",
-        "default_base_url": "https://ark.cn-beijing.volces.com/api/v3",
-        "default_models": ["doubao-seed-1-8-251228", "doubao-pro-32k-250315"],
-    },
-    "dashscope": {
-        "name": "Qwen",
-        "env_prefix": "DASHSCOPE",
-        "deeprag_provider_id": "qwen",
-        "deeprag_prefix": "QWEN",
-        "default_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "default_models": ["qwen-max", "qwen-plus", "qwen-turbo", "qwen-long"],
-    },
-    "minimax": {
-        "name": "MiniMax",
-        "env_prefix": "MINIMAX",
-        "deeprag_provider_id": "minimax",
-        "deeprag_prefix": "MINIMAX",
-        "default_base_url": "https://api.minimax.io/v1",
-        "default_models": ["MiniMax-M2.5", "MiniMax-M2.5-highspeed", "MiniMax-M2.7"],
-    },
-    "zhipuai": {
-        "name": "GLM",
-        "env_prefix": "ZHIPUAI",
-        "deeprag_provider_id": "glm",
-        "deeprag_prefix": "GLM",
-        "default_base_url": "https://open.bigmodel.cn/api/paas/v4",
-        "default_models": ["glm-4-plus", "glm-4-air", "glm-4-flash"],
-    },
-    "siliconflow": {
-        "name": "硅基流动",
-        "env_prefix": "SILICONFLOW",
-        "deeprag_provider_id": "siliconflow",
-        "deeprag_prefix": "SILICONFLOW",
-        "default_base_url": "https://api.siliconflow.cn/v1",
-        "default_models": ["Qwen/Qwen2.5-72B-Instruct-128K", "deepseek-ai/DeepSeek-V3", "deepseek-ai/DeepSeek-R1"],
-    },
+# ── 延迟加载 providers.json ──────────────────────────────────────────────────
+
+_providers_cache: dict | None = None
+_providers_load_error: str | None = None
+
+
+def _get_providers() -> dict:
+    """延迟加载 providers.json，失败时返回空 dict 而非崩溃。
+
+    所有使用 PROVIDERS 常量的函数改为调用此函数。
+    """
+    global _providers_cache, _providers_load_error
+    if _providers_cache is not None:
+        return _providers_cache
+    if _providers_load_error is not None:
+        return {}
+
+    json_path = Path(__file__).parent / "providers.json"
+    try:
+        with open(json_path, encoding="utf-8") as f:
+            data = json.load(f)
+            raw = data.get("providers", data)  # 兼容 {providers: [...]} 和 [...] 两种格式
+            if isinstance(raw, list):
+                _providers_cache = {p["id"]: p for p in raw}
+            elif isinstance(raw, dict):
+                _providers_cache = raw
+            else:
+                _providers_load_error = f"providers.json: 未知格式 (type={type(raw).__name__})"
+                logger.error(_providers_load_error)
+                return {}
+        return _providers_cache
+    except FileNotFoundError:
+        _providers_load_error = f"providers.json 文件未找到: {json_path}"
+        logger.error(_providers_load_error)
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        _providers_load_error = f"providers.json 格式错误: {e}"
+        logger.error(_providers_load_error)
+    return {}
+
+
+def _validate_provider_templates() -> None:
+    """启动时校验所有 provider 都有对应的 config template。"""
+    providers = _get_providers()
+    missing = set(providers.keys()) - set(PROVIDER_CONFIG_TEMPLATE.keys())
+    if missing:
+        logger.warning(
+            "providers.json 中厂商 %s 缺少 PROVIDER_CONFIG_TEMPLATE 条目，"
+            "这些厂商将无法自动注册模型到 config.yaml", missing
+        )
+
+
+# ── 已停用模型名 → 迁移映射 ──────────────────────────────────────────────────
+# 旧模型名已由厂商下线，用户 .env 中若仍使用这些旧名，API 调用将失败。
+# GET API 返回 deprecated_model + migration_hint 供前端展示迁移提示。
+DEPRECATED_MODEL_MAP: dict[str, str] = {
+    "deepseek-chat": "deepseek-v4-pro",
+    "deepseek-reasoner": "deepseek-v4-flash",
+    "kimi-k2.5": "kimi-k3",
+    "kimi-k2.5-thinking": "kimi-k3",
+    "doubao-pro-32k-250315": "doubao-seed-2-1-pro-260628",
+    "MiniMax-M2.5-highspeed": "MiniMax-M2.5",
+    "glm-4-plus": "glm-4.7",
+    "glm-4-air": "glm-4.5-air",
+    "glm-4-flash": "glm-4.5",
+    "Qwen/Qwen2.5-72B-Instruct-128K": "Pro/Qwen/Qwen3.5-397B-A17B",
+    "deepseek-ai/DeepSeek-V3": "Pro/deepseek-ai/DeepSeek-V3.2",
 }
 
 # Each provider's config.yaml model entry template.
@@ -219,7 +234,11 @@ def _register_model_to_config(provider_id: str, model_name: str, base_url: str) 
         logger.warning("config.yaml not found, skipping model registration")
         return None
 
-    meta = PROVIDERS[provider_id]
+    providers = _get_providers()
+    meta = providers.get(provider_id)
+    if not meta:
+        logger.warning("Provider %s not found in providers.json, skipping model registration", provider_id)
+        return None
     template = PROVIDER_CONFIG_TEMPLATE.get(provider_id)
     if not template:
         logger.warning("No config template for provider %s", provider_id)
@@ -379,9 +398,10 @@ def _sync_to_deeprag_env(provider_id: str, action: str) -> None:
         provider_id: 厂商标识（deepseek / moonshot / ...）
         action: "save" — 写入；"delete" — 清除
     """
-    if provider_id not in PROVIDERS:
+    providers = _get_providers()
+    if provider_id not in providers:
         return
-    meta = PROVIDERS[provider_id]
+    meta = providers[provider_id]
     # deer-flow .env 读取用 env_prefix，deepRag .env 写入用 deeprag_prefix
     env_prefix = meta["env_prefix"]
     deeprag_prefix = meta.get("deeprag_prefix", env_prefix)
@@ -442,10 +462,11 @@ def _switch_deeprag_provider(provider_id: str) -> tuple[bool, str]:
     Returns:
         (success, message)
     """
-    if provider_id not in PROVIDERS:
+    providers = _get_providers()
+    if provider_id not in providers:
         return False, f"未知厂商: {provider_id}"
 
-    meta = PROVIDERS[provider_id]
+    meta = providers[provider_id]
     env_prefix = meta["env_prefix"]
     deeprag_provider_id = meta.get("deeprag_provider_id", provider_id)
     deeprag_prefix = meta.get("deeprag_prefix", env_prefix)
@@ -481,7 +502,7 @@ def _switch_deeprag_provider(provider_id: str) -> tuple[bool, str]:
 
 
 def _validate_provider(provider_id: str) -> None:
-    if provider_id not in PROVIDERS:
+    if provider_id not in _get_providers():
         raise HTTPException(status_code=404, detail=f"厂商 '{provider_id}' 不存在")
 
 
@@ -491,15 +512,30 @@ def _build_provider_info(provider_id: str, meta: dict) -> ProviderInfo:
     base_url = _read_env_value(f"{prefix}_BASE_URL")
     model = _read_env_value(f"{prefix}_MODEL")
     exists = api_key != ""
+
+    # 检测当前 model 是否已停用
+    deprecated_model: str | None = None
+    migration_hint: str | None = None
+    if model and model in DEPRECATED_MODEL_MAP:
+        deprecated_model = model
+        migration_hint = (
+            f"模型 '{model}' 已停用，建议更换为 '{DEPRECATED_MODEL_MAP[model]}'"
+        )
+
     return ProviderInfo(
         id=provider_id,
         name=meta["name"],
+        env_prefix=meta["env_prefix"],
+        deeprag_provider_id=meta.get("deeprag_provider_id", provider_id),
+        deeprag_prefix=meta.get("deeprag_prefix", meta["env_prefix"]),
         default_base_url=meta["default_base_url"],
         default_models=meta["default_models"],
         key_exists=exists,
         key_masked=_mask_value(api_key) if exists else "",
         base_url=base_url,
         model=model,
+        deprecated_model=deprecated_model,
+        migration_hint=migration_hint,
     )
 
 
@@ -757,7 +793,7 @@ def _get_test_fn(channel_id: str):
 )
 async def get_provider_settings() -> ProviderSettingsResponse:
     providers = {}
-    for provider_id, meta in PROVIDERS.items():
+    for provider_id, meta in _get_providers().items():
         providers[provider_id] = _build_provider_info(provider_id, meta)
     return ProviderSettingsResponse(providers=providers)
 
@@ -770,7 +806,8 @@ async def get_provider_settings() -> ProviderSettingsResponse:
 )
 async def update_provider_settings(request: ProviderSettingsUpdateRequest) -> EnvSettingsUpdateResponse:
     _validate_provider(request.provider)
-    meta = PROVIDERS[request.provider]
+    providers = _get_providers()
+    meta = providers[request.provider]
     prefix = meta["env_prefix"]
     key = request.api_key.strip()
     if not key:
@@ -804,7 +841,9 @@ async def update_provider_settings(request: ProviderSettingsUpdateRequest) -> En
 )
 async def delete_provider_settings(provider: str) -> DeleteResponse:
     _validate_provider(provider)
-    prefix = PROVIDERS[provider]["env_prefix"]
+    providers = _get_providers()
+    meta = providers[provider]
+    prefix = meta["env_prefix"]
     removed = _remove_models_from_config(provider)
     try:
         with _get_env_lock():
@@ -816,7 +855,7 @@ async def delete_provider_settings(provider: str) -> DeleteResponse:
     except Exception as e:
         logger.error("Failed to clear env for %s: %s", provider, e, exc_info=True)
     _sync_to_deeprag_env(provider, "delete")
-    msg = f"已清除 {PROVIDERS[provider]['name']} 的配置"
+    msg = f"已清除 {meta['name']} 的配置"
     if removed:
         msg += f"，已从聊天模型列表中移除 {removed} 个模型"
     return DeleteResponse(success=True, message=msg)
@@ -830,7 +869,8 @@ async def delete_provider_settings(provider: str) -> DeleteResponse:
 )
 async def verify_provider_key(provider: str, request: VerifyRequest = None) -> VerifyResponse:
     _validate_provider(provider)
-    meta = PROVIDERS[provider]
+    providers = _get_providers()
+    meta = providers[provider]
     prefix = meta["env_prefix"]
     api_key = request.api_key.strip() if request and request.api_key else _read_env_value(f"{prefix}_API_KEY")
     if not api_key:

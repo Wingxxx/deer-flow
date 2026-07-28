@@ -11,7 +11,7 @@ import {
   XIcon,
   ZapIcon,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,7 @@ import {
   useDeepragCurrentProvider,
   useSwitchDeepragProvider,
 } from "./hooks";
-import { PROVIDERS, getProviderMeta } from "./providers";
+import { toProviderMeta } from "./providers";
 import type { ProviderInfo } from "./types";
 
 export function ProviderSettingsPage() {
@@ -43,7 +43,7 @@ export function ProviderSettingsPage() {
   const { data: deepragProvider } = useDeepragCurrentProvider();
   const switchMutation = useSwitchDeepragProvider();
 
-  const [selectedProviderId, setSelectedProviderId] = useState(PROVIDERS[0]?.id ?? "");
+  const [selectedProviderId, setSelectedProviderId] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [model, setModel] = useState("");
@@ -56,15 +56,19 @@ export function ProviderSettingsPage() {
   } | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  const providerMeta = useMemo(
-    () => getProviderMeta(selectedProviderId),
-    [selectedProviderId],
-  );
-
   const providerInfo: ProviderInfo | undefined = useMemo(
     () => settings?.providers?.[selectedProviderId],
     [settings, selectedProviderId],
   );
+
+  // API 加载后自动选择第一家厂商
+  const providerIds = useMemo(() => Object.keys(settings?.providers ?? {}), [settings]);
+  useEffect(() => {
+    if (!selectedProviderId && providerIds.length > 0) {
+      const firstProviderId = providerIds[0];
+      if (firstProviderId) setSelectedProviderId(firstProviderId);
+    }
+  }, [providerIds, selectedProviderId]);
 
   const handleProviderChange = useCallback((value: string) => {
     setSelectedProviderId(value);
@@ -135,21 +139,21 @@ export function ProviderSettingsPage() {
 
   const handleDeepragSwitch = useCallback(async (providerId: string) => {
     setStatusMessage(null);
-    const meta = getProviderMeta(providerId);
+    const providerName = settings?.providers?.[providerId]?.name ?? providerId;
     try {
       const result = await switchMutation.mutateAsync(providerId);
       setStatusMessage({ type: "success", text: result.message });
     } catch (err) {
       setStatusMessage({
         type: "error",
-        text: err instanceof Error ? err.message : `切换 ${meta?.name ?? providerId} 失败`,
+        text: err instanceof Error ? err.message : `切换 ${providerName} 失败`,
       });
     }
-  }, [switchMutation]);
+  }, [switchMutation, settings]);
 
   const providerModels = useMemo(
-    () => providerMeta?.defaultModels ?? [],
-    [providerMeta],
+    () => providerInfo?.default_models ?? [],
+    [providerInfo],
   );
 
   return (
@@ -184,7 +188,7 @@ export function ProviderSettingsPage() {
                   <SelectValue placeholder="选择服务商" />
                 </SelectTrigger>
                 <SelectContent>
-                  {PROVIDERS.map((p) => (
+                  {Object.values(settings?.providers ?? {}).map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
                     </SelectItem>
@@ -199,23 +203,34 @@ export function ProviderSettingsPage() {
               <span className="text-muted-foreground">DeepRAG 当前厂商:</span>
               {deepragProvider?.provider ? (
                 <span className="font-medium">
-                  {PROVIDERS.find((p) => p.deepragProviderId === deepragProvider.provider)?.name ?? deepragProvider.provider}
+                  {Object.values(settings?.providers ?? {}).find((p) => p.deeprag_provider_id === deepragProvider.provider)?.name ?? deepragProvider.provider}
                 </span>
               ) : (
                 <span className="text-muted-foreground">未设置</span>
               )}
             </div>
 
-            {providerMeta && (
+            {providerInfo && (
               <div className="rounded-lg border p-4 space-y-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <span>当前厂商: {providerMeta.name}</span>
+                  <span>当前厂商: {providerInfo.name}</span>
                   {providerInfo?.key_exists && (
                     <span className="text-muted-foreground text-xs font-normal">
                       (已配置)
                     </span>
                   )}
                 </div>
+
+                {/* 迁移提示: 当前模型已停用 */}
+                {providerInfo?.deprecated_model && providerInfo.migration_hint && (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                    <AlertCircleIcon className="mt-0.5 size-4 shrink-0" />
+                    <div>
+                      <p className="font-medium">模型已停用</p>
+                      <p>{providerInfo.migration_hint}</p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <label className="text-sm">API 密钥 *</label>
@@ -234,7 +249,7 @@ export function ProviderSettingsPage() {
                         placeholder={
                           providerInfo?.key_exists
                             ? "输入新 Key 替换现有密钥"
-                            : `输入 ${providerMeta.name} API Key`
+                            : `输入 ${providerInfo.name} API Key`
                         }
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}
@@ -337,10 +352,10 @@ export function ProviderSettingsPage() {
                 <div className="space-y-2">
                   <label className="text-sm">请求地址 (可选)</label>
                   <div className="text-muted-foreground text-xs">
-                    默认: {providerMeta.defaultBaseUrl}
+                    默认: {providerInfo?.default_base_url}
                   </div>
                   <Input
-                    placeholder={providerMeta.defaultBaseUrl}
+                    placeholder={providerInfo?.default_base_url}
                     value={baseUrl}
                     onChange={(e) => setBaseUrl(e.target.value)}
                     className="max-w-md"
@@ -395,7 +410,7 @@ export function ProviderSettingsPage() {
               </div>
             )}
 
-            {!providerMeta && (
+            {!providerInfo && (
               <div className="text-muted-foreground py-4 text-sm">
                 暂无可用厂商
               </div>
@@ -418,7 +433,7 @@ export function ProviderSettingsPage() {
               </button>
             </div>
             <p className="text-muted-foreground text-sm mb-6">
-              确定清除 {providerMeta?.name ?? "该厂商"} 的全部配置？操作不可撤销。
+              确定清除 {providerInfo?.name ?? "该厂商"} 的全部配置？操作不可撤销。
             </p>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>

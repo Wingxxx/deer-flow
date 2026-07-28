@@ -34,7 +34,7 @@
 提供 AI 模型 API Key 和 IM 渠道凭据的图形化管理界面，通过 SettingsDialog 扩展注册为两个标签页。
 
 **API Keys 配置**：
-- 支持 7 家厂商：DeepSeek、Kimi、Doubao、Qwen、MiniMax、GLM、硅基流动
+- 支持 7 家厂商：DeepSeek、Kimi、Doubao、Qwen、MiniMax、GLM、硅基流动（厂商元数据由后端 `providers.json` 驱动，前端通过 API 获取）
 - 功能：Key 保存、Key 清除、连通性验证、模型选择（预置/自定义）、自定义请求地址
 - 路径：`/api/env-settings/providers/*`
 

@@ -1,12 +1,17 @@
 export interface ProviderInfo {
   id: string;
   name: string;
+  env_prefix: string;
+  deeprag_provider_id: string;
+  deeprag_prefix: string;
   default_base_url: string;
   default_models: string[];
   key_exists: boolean;
   key_masked: string;
   base_url: string;
   model: string;
+  deprecated_model: string | null;
+  migration_hint: string | null;
 }
 
 export interface ProviderSettingsResponse {

@@ -41,7 +41,7 @@ _MOCK_CHANNELS_SERVICE.get_channel_service = MagicMock(return_value=None)
 sys.modules["app.channels.service"] = _MOCK_CHANNELS_SERVICE
 app.channels.service = _MOCK_CHANNELS_SERVICE  # 使 getattr(app.channels, 'service') 可访问
 
-from deerflow_extensions.env_settings.router import PROVIDERS, router  # noqa: E402
+from deerflow_extensions.env_settings.router import _get_providers, router  # noqa: E402
 
 _API_PREFIX = "/api/env-settings"
 
@@ -165,8 +165,9 @@ class TestRouteSplit:
 
         # 验证所有 7 家厂商 ID 都存在
         provider_ids = {p["id"] for p in data["providers"].values()}
-        assert provider_ids == set(PROVIDERS.keys()), (
-            f"Provider IDs mismatch. Expected {set(PROVIDERS.keys())}, got {provider_ids}"
+        expected = set(_get_providers().keys())
+        assert provider_ids == expected, (
+            f"Provider IDs mismatch. Expected {expected}, got {provider_ids}"
         )
 
     def test_rt3_get_providers_no_channels_field(self, client):
