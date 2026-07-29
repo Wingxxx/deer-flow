@@ -172,6 +172,14 @@ except Exception:
     pass
 
 # =============================================================================
+# 11b. Voice Transcription extensions (faster-whisper, zhconv)
+# =============================================================================
+try:
+    import deerflow_extensions.voice_transcription  # noqa: F401
+except Exception:
+    pass
+
+# =============================================================================
 # 12. Bootstrap Gateway
 # =============================================================================
 import uvicorn

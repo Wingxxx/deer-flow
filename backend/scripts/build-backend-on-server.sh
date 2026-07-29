@@ -27,18 +27,24 @@
 #   2. 将 release/ 传到服务器:
 #      rsync -avz --progress -e 'ssh -p 2222' release/ root@server:/usr/xccloud/deerflow/
 #
-#   3. 将 backend + deerflow_extensions 传到服务器:
+#   3. 将 backend + deerflow_extensions + models 传到服务器:
 #      sudo rsync -avz --progress --no-g --no-o -e 'ssh -p 2222' \
 #        /home/wing/wing/emto/2026/2026.3/DeerFlow/deer-flow/backend/ \
 #        /home/wing/wing/emto/2026/2026.3/DeerFlow/deer-flow/deerflow_extensions \
+#        /home/wing/wing/emto/2026/2026.3/DeerFlow/deer-flow/models \
 #        root@192.168.1.56:/usr/xccloud/deerflow/source/
 #
 #   4. SSH 到服务器，编译后端:
-#      cd /usr/xccloud/deerflow/source && bash backend/scripts/build-backend-on-server.sh
+#      cd /usr/xccloud/deerflow/source && bash scripts/build-backend-on-server.sh
 #
 #   5. 手动复制产物到 release 目录:
 #      rm -rf /usr/xccloud/deerflow/backend-bin
 #      cp -r dist/deerflow-gateway /usr/xccloud/deerflow/backend-bin/
+#
+#   6. （可选）复制 Whisper 模型（语音转录）:
+#      若项目根有 models/whisper/tiny/，复制到 release 同级:
+#      mkdir -p /usr/xccloud/deerflow/models/whisper/tiny
+#      cp -r source/models/whisper/tiny/* /usr/xccloud/deerflow/models/whisper/tiny/
 #
 
 set -e
@@ -170,6 +176,14 @@ fi
 # 确保后续所有命令能找到 libpython3.12.so
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
+# glibc 版本检查 (ctranslate2 需要 glibc >= 2.27)
+GLIBC_VER=$(ldd --version | head -1 | grep -oP '\d+\.\d+$')
+if [ "$(printf '%s\n' 2.27 "$GLIBC_VER" | sort -V | head -1)" != "2.27" ]; then
+    echo "✗ glibc $GLIBC_VER < 2.27; ctranslate2 需要 glibc >= 2.27"
+    exit 1
+fi
+echo "  ✓ glibc $GLIBC_VER >= 2.27 (ctranslate2 兼容)"
+
 # ── 2. 创建虚拟环境 ───────────────────────────────────────────────────────
 
 echo "[2/6] 创建 Python 虚拟环境（自动清理旧环境）..."
@@ -186,14 +200,27 @@ echo "  ✓ uv 已安装"
 
 # ── 4. 安装项目依赖 ──────────────────────────────────────────────────────
 
-echo "[4/6] 安装项目依赖 (uv sync)..."
-# 告诉 uv 使用 .venv-server 而非默认的 .venv
-export UV_PROJECT_ENVIRONMENT=.venv-server
-uv sync
-# numpy 2.x 预编译 wheel 需要 x86-64-v2，服务器旧 CPU 不支持
-# 降级到 numpy 1.x（无此要求）
-echo "  降级 numpy 到 1.x（兼容旧 CPU）..."
-uv pip install "numpy<2" --force-reinstall --quiet
+echo "[4/6] 安装项目依赖..."
+
+# 检测本地 Wheel（离线模式）
+if [ -d "./wheels" ] && [ -f "./requirements.txt" ]; then
+    echo "  ✓ 检测到本地 Wheel，使用离线模式安装..."
+    uv pip install --no-index --find-links ./wheels/ -r ./requirements.txt
+    # numpy 2.x 预编译 wheel 需要 x86-64-v2，服务器旧 CPU 不支持
+    # 降级到 numpy 1.x（无此要求）
+    echo "  降级 numpy 到 1.x（兼容旧 CPU）..."
+    uv pip install "numpy<2" --force-reinstall --quiet
+else
+    # 在线模式：从 PyPI 拉取
+    echo "  ⚠ 未检测到本地 Wheel，回退在线模式 (uv sync)..."
+    # 告诉 uv 使用 .venv-server 而非默认的 .venv
+    export UV_PROJECT_ENVIRONMENT=.venv-server
+    uv sync
+    # numpy 2.x 预编译 wheel 需要 x86-64-v2，服务器旧 CPU 不支持
+    # 降级到 numpy 1.x（无此要求）
+    echo "  降级 numpy 到 1.x（兼容旧 CPU）..."
+    uv pip install "numpy<2" --force-reinstall --quiet
+fi
 echo "  ✓ 依赖已安装"
 
 # ── 5. 安装 PyInstaller ─────────────────────────────────────────────────────
@@ -375,6 +402,19 @@ fi
     --collect-all=langgraph \
     --collect-all=firecrawl \
     --collect-submodules=deerflow \
+    --collect-submodules=faster_whisper \
+    --collect-all=faster_whisper \
+    --collect-all=ctranslate2 \
+    --collect-all=onnxruntime \
+    --collect-all=av \
+    --collect-all=tokenizers \
+    --collect-all=zhconv \
+    --collect-all=huggingface_hub \
+    \
+    --hidden-import=deerflow_extensions.voice_transcription \
+    --hidden-import=deerflow_extensions.voice_transcription.startup \
+    --hidden-import=deerflow_extensions.voice_transcription.router \
+    --hidden-import=deerflow_extensions.voice_transcription.transcriber \
     \
     --exclude-module=tests \
     --exclude-module=docs \

@@ -24,6 +24,7 @@ _EXTENSIONS = [
     ("data_collection",  False),   # monkey-patch, no app needed
     ("ads_auth",         True),    # app.include_router()
     ("env_settings",     True),    # app.include_router()
+    ("voice_transcription", True), # app.include_router() — faster-whisper speech-to-text
     ("topic_guardrail",  False),   # apply_all() — own _APPLIED guard
     ("tool_output_enrichment", False),  # monkey-patch _enrich_result
 ]
@@ -117,6 +118,11 @@ def _boot_one(name: str, app=None, ext_internal=None):
     elif name == "env_settings":
         from deerflow_extensions.env_settings.startup import install_env_settings
         install_env_settings(app=app)
+    elif name == "voice_transcription":
+        from deerflow_extensions.voice_transcription.startup import (
+            install_voice_transcription,
+        )
+        install_voice_transcription(app=app)
     elif name == "topic_guardrail":
         from deerflow_extensions.patch_manager import apply_all
         apply_all(ext_internal=ext_internal)

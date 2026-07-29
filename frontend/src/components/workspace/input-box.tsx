@@ -69,6 +69,10 @@ import { getInputSuggestions } from "../../../extensions/input-suggestions/regis
 import { useInputSuggestionsReady } from "../../../extensions/input-suggestions/context";
 // --- EXTENSION IMPORT: end ---
 
+// --- EXTENSION IMPORT: voice transcription ---
+import { VoiceButton } from "../../../extensions/voice-transcription/VoiceButton";
+// --- EXTENSION IMPORT: end ---
+
 import {
   ModelSelector,
   ModelSelectorContent,
@@ -528,6 +532,13 @@ export function InputBox({
             </PromptInputActionMenuContent>
           </PromptInputActionMenu> */}
             <AddAttachmentsButton className="px-2!" />
+            <VoiceButton
+              disabled={status === "streaming"}
+              onTranscriptionComplete={(text: string) => {
+                const current = textInput.value ?? "";
+                textInput.setInput(current + (current ? " " : "") + text);
+              }}
+            />
             <PromptInputActionMenu>
               <ModeHoverGuide
                 mode={

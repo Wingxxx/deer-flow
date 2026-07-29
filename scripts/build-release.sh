@@ -41,9 +41,11 @@ RELEASE_DIR="${RELEASE_DIR:-$(pwd)/release}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 SKIP_BACKEND=false
+PREPARE_SERVER_BUILD=false
 for arg in "$@"; do
     case "$arg" in
         --skip-backend) SKIP_BACKEND=true ;;
+        --prepare-server-build) SKIP_BACKEND=true; PREPARE_SERVER_BUILD=true ;;
         *) echo "未知参数: $arg"; exit 1 ;;
     esac
 done
@@ -143,13 +145,8 @@ cd "$REPO_ROOT"
 
 # ── 编译后端（PyInstaller → 二进制）────────────────────────────────────────
 
-if [ "$SKIP_BACKEND" = true ]; then
-    echo "[4/10] ⏩ 跳过后端编译 (--skip-backend)"
-    echo "  提醒: 在服务器上执行 backend/scripts/build-backend-on-server.sh 编译后端"
-    echo "        然后将 backend-bin/ 传回 release/ 目录"
-    # 创建空目录占位
-    mkdir -p "$RELEASE_DIR/backend-bin"
-else
+if [ "$SKIP_BACKEND" = false ]; then
+    # ── 全量编译（本地 PyInstaller）───────────────────────────────────
     echo "[4/10] 编译后端 (PyInstaller → 二进制、无源码)..."
     cd "$REPO_ROOT/backend"
 
@@ -165,6 +162,7 @@ else
         --name deerflow-gateway \
         --paths . \
         --paths packages/harness \
+        --paths ../deerflow_extensions \
         --add-data "../deerflow_extensions:deerflow_extensions" \
         \
         --hidden-import=app \
@@ -307,6 +305,19 @@ else
         --collect-all=langchain_core \
         --collect-all=langgraph \
         --collect-submodules=deerflow \
+        --collect-submodules=faster_whisper \
+        --collect-all=faster_whisper \
+        --collect-all=ctranslate2 \
+        --collect-all=onnxruntime \
+        --collect-all=av \
+        --collect-all=tokenizers \
+        --collect-all=zhconv \
+        --collect-all=huggingface_hub \
+        \
+        --hidden-import=deerflow_extensions.voice_transcription \
+        --hidden-import=deerflow_extensions.voice_transcription.startup \
+        --hidden-import=deerflow_extensions.voice_transcription.router \
+        --hidden-import=deerflow_extensions.voice_transcription.transcriber \
         \
         --exclude-module=tests \
         --exclude-module=docs \
@@ -320,9 +331,81 @@ else
     cp -r "$REPO_ROOT/backend/dist/deerflow-gateway" "$RELEASE_DIR/backend-bin/"
     # 清理编译中间文件
     rm -rf "$REPO_ROOT/backend/dist" "$REPO_ROOT/backend/build" "$REPO_ROOT/backend/deerflow-gateway.spec"
+
+elif [ "$PREPARE_SERVER_BUILD" = true ]; then
+    # ── 准备服务器编译：从本地缓存拷贝 Wheel ──────────────────────────
+    echo "[4/10] 准备服务器编译依赖 (Wheel + 源码)..."
+    cd "$REPO_ROOT/backend"
+
+    echo "  安装后端依赖 (uv sync)..."
+    rm -rf .venv
+    uv sync
+
+    echo "  导出依赖清单..."
+    uv pip freeze | grep -v "^-e" > /tmp/requirements-server-$$.txt
+
+    # 本地 Wheel 缓存：backend/wheels/（已 gitignore）
+    LOCAL_WHEEL_DIR="$REPO_ROOT/backend/wheels"
+    WHEEL_CACHE_COUNT=$(find "$LOCAL_WHEEL_DIR" -name '*.whl' 2>/dev/null | wc -l)
+
+    if [ "$WHEEL_CACHE_COUNT" -eq 0 ]; then
+        echo "  本地 Wheel 缓存为空，下载到 backend/wheels/..."
+        mkdir -p "$LOCAL_WHEEL_DIR"
+        uv pip install pip --quiet
+        .venv/bin/pip download -r /tmp/requirements-server-$$.txt \
+            --dest "$LOCAL_WHEEL_DIR" \
+            --quiet
+        echo "  清理 pip..."
+        uv pip uninstall pip --quiet 2>/dev/null || true
+    else
+        echo "  ✓ 使用本地缓存 backend/wheels/（$WHEEL_CACHE_COUNT 个 Wheel）"
+    fi
+
+    # 拷贝到 release/source/
+    echo "  拷贝 Wheel 到 release/source/wheels/..."
+    mkdir -p "$RELEASE_DIR/source/wheels"
+    cp "$LOCAL_WHEEL_DIR"/*.whl "$RELEASE_DIR/source/wheels/"
+    cp /tmp/requirements-server-$$.txt "$RELEASE_DIR/source/requirements.txt"
+    # 同时写一份到 backend/，rsync 到服务器 source/ 时会一起携带
+    cp /tmp/requirements-server-$$.txt "$REPO_ROOT/backend/requirements.txt"
+    rm -f /tmp/requirements-server-$$.txt
+
+    WHEEL_COUNT=$(find "$RELEASE_DIR/source/wheels" -name '*.whl' 2>/dev/null | wc -l)
+    echo "  ✓ 已就绪 $WHEEL_COUNT 个 Wheel 文件"
+
+    echo "  拷贝服务器编译脚本到 source/scripts/..."
+    mkdir -p "$RELEASE_DIR/source/scripts"
+    cp "$REPO_ROOT/backend/scripts/build-backend-on-server.sh" "$RELEASE_DIR/source/scripts/"
+    chmod +x "$RELEASE_DIR/source/scripts/build-backend-on-server.sh"
+
+    echo "  创建空占位目录 (backend-bin)..."
+    mkdir -p "$RELEASE_DIR/backend-bin"
+    echo "  ✓ 服务器编译依赖准备完成"
+    echo ""
+    echo "  提醒: 部署后服务器上执行以下命令编译:"
+    echo "    cd <服务器部署路径>/source && bash scripts/build-backend-on-server.sh"
+    echo "    rm -rf <服务器部署路径>/backend-bin && cp -r dist/deerflow-gateway <服务器部署路径>/backend-bin/"
+
+else
+    # ── 跳过后端（纯前端）─────────────────────────────────────────────
+    echo "[4/10] ⏩ 跳过后端编译 (--skip-backend)"
+    echo "  提醒: 在服务器上执行 backend/scripts/build-backend-on-server.sh 编译后端"
+    echo "        然后将 backend-bin/ 传回 release/ 目录"
+    mkdir -p "$RELEASE_DIR/backend-bin"
 fi
 
 cd "$REPO_ROOT"
+
+# ── 复制 Whisper 模型（离线推理用，第一次下载后永不重复下载）───────────────
+
+echo "[4.5/10] 复制 Whisper 模型..."
+if [ -d "$REPO_ROOT/models/whisper/tiny" ]; then
+    mkdir -p "$RELEASE_DIR/models/whisper/tiny"
+    cp -r "$REPO_ROOT/models/whisper/tiny/"* "$RELEASE_DIR/models/whisper/tiny/"
+    echo "  ✓ Whisper 模型已复制 ($(du -sh "$REPO_ROOT/models/whisper/tiny" | cut -f1))"
+else
+    echo "  ⚠️  models/whisper/tiny 不存在，跳过（首次运行将自动下载）"
+fi
 
 # ── 复制 Skills ─────────────────────────────────────────────────────────────
 

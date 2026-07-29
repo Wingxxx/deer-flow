@@ -23,6 +23,8 @@ dependencies = [
     "email-validator>=2.0.0",
     "pyahocorasick>=2.3.1",
     "filelock>=3.0.0",
+    "faster-whisper>=1.0.0",
+    "zhconv>=1.4.3",
 ]
 
 [project.optional-dependencies]

@@ -1,5 +1,5 @@
 {
-  "mcpServers": {
+ "mcpServers": {
     "mcp-server": {
       "enabled": true,
       "type": "stdio",
@@ -8,7 +8,6 @@
         "./mcp-agent-mcp/dist/index.js"
       ],
       "env": {
-        "ADS_API_BASE_URL": "http://192.168.1.139:80",
         "ADS_CONFIG_PATH": "mcp-agent-mcp/.mcp-server/config.json"
       },
       "description": "云桌面管理系统 - 支持终端列表查询、批量开关机、重启锁定、用户管理、镜像管理、策略管理、部门管理"
