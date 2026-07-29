@@ -347,6 +347,8 @@ def _do_transcribe(model: "WhisperModel", audio_bytes: bytes):
             tmp.name,
             temperature=0,
             beam_size=5,
+            language="zh",
+            initial_prompt="以下是简体中文的转录结果：",
         )
         # 必须消费 segments 生成器——转为 list 确保在 tmp 关闭前完成
         return list(segments), info
