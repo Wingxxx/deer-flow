@@ -24,7 +24,7 @@ _EXTENSIONS = [
     ("data_collection",  False),   # monkey-patch, no app needed
     ("ads_auth",         True),    # app.include_router()
     ("env_settings",     True),    # app.include_router()
-    ("voice_transcription", True), # app.include_router() — faster-whisper speech-to-text
+    ("voice_transcription", True), # app.include_router() — funasr SenseVoice-Small speech-to-text
     ("topic_guardrail",  False),   # apply_all() — own _APPLIED guard
     ("tool_output_enrichment", False),  # monkey-patch _enrich_result
 ]

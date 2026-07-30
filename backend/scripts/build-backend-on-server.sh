@@ -41,10 +41,12 @@
 #      rm -rf /usr/xccloud/deerflow/backend-bin
 #      cp -r dist/deerflow-gateway /usr/xccloud/deerflow/backend-bin/
 #
-#   6. （可选）复制 Whisper 模型（语音转录）:
-#      若项目根有 models/whisper/tiny/，复制到 release 同级:
-#      mkdir -p /usr/xccloud/deerflow/models/whisper/tiny
-#      cp -r source/models/whisper/tiny/* /usr/xccloud/deerflow/models/whisper/tiny/
+#   6. （可选）复制 SenseVoice 模型（语音转录）:
+#      若项目根有 models/sensevoice/，复制到 release 同级:
+#      build-release.sh 已自动执行此步骤（见 [4.5/10] 复制 SenseVoice 模型）
+#      手动方式:
+#      mkdir -p /usr/xccloud/deerflow/models/sensevoice
+#      cp -r source/models/sensevoice/* /usr/xccloud/deerflow/models/sensevoice/
 #
 
 set -e

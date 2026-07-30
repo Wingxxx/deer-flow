@@ -466,7 +466,7 @@ export function useVoice(options: UseVoiceOptions = {}): UseVoiceReturn {
 
     cleanup();
 
-    // 仅使用 MediaRecorder + 后端 Whisper 转录，不走浏览器 SpeechRecognition（谷歌云端）
+    // 仅使用 MediaRecorder + 后端 SenseVoice 转录，不走浏览器 SpeechRecognition（谷歌云端）
     startMediaRecorder();
   }, [cleanup, startMediaRecorder]);
 
