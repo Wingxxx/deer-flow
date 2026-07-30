@@ -176,13 +176,13 @@ fi
 # 确保后续所有命令能找到 libpython3.12.so
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
-# glibc 版本检查 (ctranslate2 需要 glibc >= 2.27)
+# glibc 版本检查 (torch 需要 glibc >= 2.28)
 GLIBC_VER=$(ldd --version | head -1 | grep -oP '\d+\.\d+$')
-if [ "$(printf '%s\n' 2.27 "$GLIBC_VER" | sort -V | head -1)" != "2.27" ]; then
-    echo "✗ glibc $GLIBC_VER < 2.27; ctranslate2 需要 glibc >= 2.27"
+if [ "$(printf '%s\n' 2.28 "$GLIBC_VER" | sort -V | head -1)" != "2.28" ]; then
+    echo "✗ glibc $GLIBC_VER < 2.28; PyTorch 需要 glibc >= 2.28"
     exit 1
 fi
-echo "  ✓ glibc $GLIBC_VER >= 2.27 (ctranslate2 兼容)"
+echo "  ✓ glibc $GLIBC_VER >= 2.28 (PyTorch 兼容)"
 
 # ── 2. 创建虚拟环境 ───────────────────────────────────────────────────────
 
@@ -402,13 +402,11 @@ fi
     --collect-all=langgraph \
     --collect-all=firecrawl \
     --collect-submodules=deerflow \
-    --collect-submodules=faster_whisper \
-    --collect-all=faster_whisper \
-    --collect-all=ctranslate2 \
-    --collect-all=onnxruntime \
-    --collect-all=av \
-    --collect-all=tokenizers \
-    --collect-all=zhconv \
+    --collect-all=funasr \
+    --collect-all=modelscope \
+    --collect-all=torch \
+    --collect-all=transformers \
+    --collect-all=soundfile \
     --collect-all=huggingface_hub \
     \
     --hidden-import=deerflow_extensions.voice_transcription \

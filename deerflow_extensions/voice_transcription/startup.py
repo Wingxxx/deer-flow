@@ -4,9 +4,12 @@ startup.py — voice_transcription extension installer.
 Idempotent via _installed guard.  Model loading happens lazily on first request
 (via transcriber.get_transcriber()), so startup does NOT block Gateway boot.
 
-If WHISPER_DISABLED=1 is set, the extension installs the router but the model
-will never be loaded — endpoints return 503 until the flag is cleared.
+If WHISPER_DISABLED=1 (legacy) or VOICE_DISABLED=1 is set, the extension
+skips router registration entirely — endpoints return 404, not 503.
+VOICE_DISABLED takes precedence over WHISPER_DISABLED.
 """
+
+import os
 
 _installed = False
 
@@ -14,6 +17,16 @@ _installed = False
 def install_voice_transcription(app=None):
     global _installed
     if _installed:
+        return
+
+    # VOICE_DISABLED 优先于 WHISPER_DISABLED（兼容旧配置）
+    if os.environ.get("VOICE_DISABLED") or os.environ.get("WHISPER_DISABLED"):
+        _installed = True  # 标记为已安装但跳过路由注册
+        import logging
+        logging.getLogger(__name__).info(
+            "[VoiceTranscription] Disabled via %s",
+            "VOICE_DISABLED" if os.environ.get("VOICE_DISABLED") else "WHISPER_DISABLED",
+        )
         return
 
     try:

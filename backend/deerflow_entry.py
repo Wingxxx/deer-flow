@@ -172,7 +172,7 @@ except Exception:
     pass
 
 # =============================================================================
-# 11b. Voice Transcription extensions (faster-whisper, zhconv)
+# 11b. Voice Transcription extensions (funasr SenseVoice-Small)
 # =============================================================================
 try:
     import deerflow_extensions.voice_transcription  # noqa: F401

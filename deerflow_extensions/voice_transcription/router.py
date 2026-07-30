@@ -25,7 +25,6 @@ _ALLOWED_MIME_TYPES = frozenset({
 })
 
 _MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-_MAX_AUDIO_DURATION_SEC = 60  # 60s max
 
 
 @router.get("/status")

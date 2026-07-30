@@ -305,13 +305,11 @@ if [ "$SKIP_BACKEND" = false ]; then
         --collect-all=langchain_core \
         --collect-all=langgraph \
         --collect-submodules=deerflow \
-        --collect-submodules=faster_whisper \
-        --collect-all=faster_whisper \
-        --collect-all=ctranslate2 \
-        --collect-all=onnxruntime \
-        --collect-all=av \
-        --collect-all=tokenizers \
-        --collect-all=zhconv \
+        --collect-all=funasr \
+        --collect-all=modelscope \
+        --collect-all=torch \
+        --collect-all=transformers \
+        --collect-all=soundfile \
         --collect-all=huggingface_hub \
         \
         --hidden-import=deerflow_extensions.voice_transcription \
@@ -396,15 +394,15 @@ fi
 
 cd "$REPO_ROOT"
 
-# ── 复制 Whisper 模型（离线推理用，第一次下载后永不重复下载）───────────────
+# ── 复制 SenseVoice 模型（离线推理用，第一次下载后永不重复下载）───────────
 
-echo "[4.5/10] 复制 Whisper 模型..."
-if [ -d "$REPO_ROOT/models/whisper/tiny" ]; then
-    mkdir -p "$RELEASE_DIR/models/whisper/tiny"
-    cp -r "$REPO_ROOT/models/whisper/tiny/"* "$RELEASE_DIR/models/whisper/tiny/"
-    echo "  ✓ Whisper 模型已复制 ($(du -sh "$REPO_ROOT/models/whisper/tiny" | cut -f1))"
+echo "[4.5/10] 复制 SenseVoice 模型..."
+if [ -d "$REPO_ROOT/models/sensevoice" ]; then
+    mkdir -p "$RELEASE_DIR/models/sensevoice"
+    cp -r "$REPO_ROOT/models/sensevoice/"* "$RELEASE_DIR/models/sensevoice/"
+    echo "  ✓ SenseVoice 模型已复制 ($(du -sh "$REPO_ROOT/models/sensevoice" | cut -f1))"
 else
-    echo "  ⚠️  models/whisper/tiny 不存在，跳过（首次运行将自动下载）"
+    echo "  ⚠️  models/sensevoice 不存在，跳过（首次运行将自动下载）"
 fi
 
 # ── 复制 Skills ─────────────────────────────────────────────────────────────

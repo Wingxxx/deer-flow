@@ -1,8 +1,8 @@
 """
-transcriber.py — faster-whisper 模型懒加载单例 + 并发控制 + 转录调度。
+transcriber.py — SenseVoice-Small (funasr) 模型懒加载单例 + 并发控制 + 转录调度。
 
-WhisperModel (CTranslate2) 非线程安全，所有转录请求通过 asyncio.Queue 串行化。
-模型加载防重入，compute_type 自适应探测，支持 HF_ENDPOINT 镜像 + 离线部署。
+AutoModel (funasr) 非线程安全，所有转录请求通过 asyncio.Lock 串行化。
+模型加载防重入，支持 ModelScope 在线下载 + 离线部署 + frozen 路径探测。
 """
 
 import asyncio
@@ -16,21 +16,21 @@ from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
-# ── 延迟导入 faster-whisper（ImportError 时不阻塞 Gateway 启动）───────────────
+# ── 延迟导入 funasr（ImportError 时不阻塞 Gateway 启动）───────────────
 try:
-    from faster_whisper import WhisperModel  # noqa: F401
+    from funasr import AutoModel
 
-    _WHISPER_AVAILABLE = True
+    _SENSEVOICE_AVAILABLE = True
 except ImportError:
-    _WHISPER_AVAILABLE = False
+    _SENSEVOICE_AVAILABLE = False
 
 # ── 线程安全单例 ────────────────────────────────────────────────────────────
 
 _model_lock = threading.Lock()
-_model: "WhisperModel | None" = None
+_model: "AutoModel | None" = None
 _model_ready = threading.Event()
 _model_error: str | None = None
-_model_compute_type: str = "unknown"
+_model_id: str = "iic/SenseVoiceSmall"
 
 # 熔断冷却期
 _cooldown_until: float = 0.0
@@ -38,178 +38,176 @@ _cooldown_lock = threading.Lock()
 
 # 转录请求串行化
 _transcribe_lock = asyncio.Lock()
-_dedicated_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="whisper-")
+_dedicated_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sensevoice-")
 
 
-def _detect_compute_type() -> str:
-    """探测 CPU 支持的最优 compute_type。降级链: int8→int8_float16→float32→auto。"""
-    try:
-        from ctranslate2 import get_supported_compute_types
-
-        supported = get_supported_compute_types("cpu")
-        for candidate in ("int8", "int8_float16", "float32", "auto"):
-            if candidate in supported:
-                logger.info(
-                    "[VoiceTranscription] CPU supports compute_type=%s (all: %s)",
-                    candidate,
-                    supported,
-                )
-                return candidate
-    except ImportError:
-        pass
-    logger.warning("[VoiceTranscription] Cannot detect compute_type, using auto")
-    return "auto"
-
-
-def _get_model_path_and_mode():
-    """模型路径多级优先级，兼容开发 + frozen 生产模式。
+def _resolve_sensevoice_model_spec():
+    """解析 SenseVoice 模型路径，返回 (model_dir|None, model_id, local_only)。
 
     优先级:
-    1. WHISPER_MODEL_PATH 环境变量（最高）
-    2. 开发模式：从 __file__ 上两级到项目根 + models/whisper/tiny/
-    3. 生产 frozen 模式：从 sys.executable 推算 release 根目录
-    4. HuggingFace 在线下载（兜底）
-
-    使用绝对路径解析，不依赖进程工作目录。
-    frozen 模式下 __file__ 指向 _internal/ 内，上两级到 _internal/ 找不对模型，
-    需改用 sys.executable 推算 release 根目录。
+    1. SENSEVOICE_MODEL_PATH 环境变量（最高）
+    2. frozen 模式：从 sys.executable 向上遍历找 config.yaml 作为哨兵
+    3. 开发模式：从 __file__ 推算项目根 + models/sensevoice/
+    4. ModelScope 在线下载 model='iic/SenseVoiceSmall'（兜底）
     """
-    model_path = os.environ.get("WHISPER_MODEL_PATH")
-    local_only = False
-
+    # ── 优先级 1：环境变量 ────────────────────────────────────
+    model_path = os.environ.get("SENSEVOICE_MODEL_PATH")
     if model_path:
-        local_only = True
-        return model_path, local_only
+        return model_path, _model_id, True
 
-    # ── 优先级 2：开发模式（__file__ 绝对路径） ────────────────
-    _this_dir = os.path.dirname(os.path.abspath(__file__))
-    _project_root = os.path.dirname(os.path.dirname(_this_dir))  # 上两级
-    _candidates = [
-        os.path.join(_project_root, "models", "whisper", "tiny"),
-    ]
-
-    # ── 优先级 3：生产 frozen 模式（sys.executable 推算） ──────
+    # ── 优先级 2：frozen 模式（sys.executable 向上遍历） ────────
     if getattr(sys, "frozen", False):
         _bin_dir = os.path.dirname(os.path.abspath(sys.executable))
-        # 尝试多级相对位置，适应不同的部署结构
-        _candidates.extend([
-            os.path.join(_bin_dir, "..", "..", "models", "whisper", "tiny"),  # release 根
-            os.path.join(_bin_dir, "..", "models", "whisper", "tiny"),         # backend-bin 同级
-            os.path.join(_bin_dir, "models", "whisper", "tiny"),               # backend-bin 内
-            os.path.join(_project_root, "models", "whisper", "tiny"),          # _internal/ 内（若已--add-data打包）
-        ])
+        _current = _bin_dir
+        for _ in range(10):  # 最多上溯 10 级
+            # 直接检查 models/sensevoice/
+            _candidate = os.path.join(_current, "models", "sensevoice")
+            if os.path.isdir(_candidate):
+                return _candidate, _model_id, True
+            # 检查 config.yaml 哨兵文件确认项目根
+            if os.path.isfile(os.path.join(_current, "config.yaml")):
+                _root_candidate = os.path.join(_current, "models", "sensevoice")
+                if os.path.isdir(_root_candidate):
+                    return _root_candidate, _model_id, True
+            _parent = os.path.dirname(_current)
+            if _parent == _current:
+                break
+            _current = _parent
 
-    for _candidate in _candidates:
-        _resolved = os.path.normpath(_candidate)
-        if os.path.isdir(_resolved):
-            model_path = _resolved
-            local_only = True
-            break
+    # ── 优先级 3：开发模式（__file__ 上两级找项目根） ──────────
+    _this_dir = os.path.dirname(os.path.abspath(__file__))
+    _project_root = os.path.dirname(os.path.dirname(_this_dir))  # 上两级
+    _candidate = os.path.join(_project_root, "models", "sensevoice")
+    if os.path.isdir(_candidate):
+        return _candidate, _model_id, True
 
-    if not model_path:
-        model_path = "tiny"  # 兜底：走 HuggingFace 在线下载
-
-    return model_path, local_only
+    # ── 兜底：ModelScope 在线下载 ──────────────────────────────
+    return None, _model_id, False
 
 
-def get_transcriber() -> "tuple[WhisperModel | None, str, str]":
-    """获取 WhisperModel 单例。返回 (model|None, compute_type, error_msg)。"""
-    global _model, _model_error, _model_compute_type, _cooldown_until
+def get_transcriber() -> "tuple[AutoModel | None, str, str]":
+    """获取 AutoModel 单例。返回 (model|None, model_id, error_msg)。"""
+    global _model, _model_error, _cooldown_until
 
-    # 熔断检查
+    # ── 熔断检查 ──────────────────────────────────────────────
     with _cooldown_lock:
         if _cooldown_until > time.monotonic():
             remaining = int(_cooldown_until - time.monotonic())
-            return None, _model_compute_type, f"cooling down ({remaining}s remaining)"
+            return None, _model_id, f"cooling down ({remaining}s remaining)"
 
     if _model_ready.is_set():
-        return _model, _model_compute_type, ""
+        return _model, _model_id, ""
 
+    # ═══════════════════════════════════════════════════════════
+    # 熔断修复：冷却期过后清除 _model_error，允许自动重试
+    # 原 bug：line 128-129 在冷却期过后仍返回旧 error
+    # ═══════════════════════════════════════════════════════════
     if _model_error:
-        return None, _model_compute_type, _model_error
+        with _cooldown_lock:
+            if _cooldown_until <= time.monotonic():
+                _model_error = None  # 清除旧 error，允许重试
+            else:
+                return None, _model_id, _model_error
 
     # 防重入加载
     if not _model_lock.acquire(blocking=False):
-        return None, _model_compute_type, "model loading in progress"
+        return None, _model_id, "model loading in progress"
 
     try:
         if _model_ready.is_set():
-            return _model, _model_compute_type, ""
+            return _model, _model_id, ""
         if _model_error:
-            return None, _model_compute_type, _model_error
+            return None, _model_id, _model_error
 
-        if not _WHISPER_AVAILABLE:
-            _model_error = "faster-whisper not installed"
-            return None, _model_compute_type, _model_error
+        if not _SENSEVOICE_AVAILABLE:
+            _model_error = "funasr not installed"
+            return None, _model_id, _model_error
 
-        model_path, local_only = _get_model_path_and_mode()
-        compute_type = _detect_compute_type()
-        _model_compute_type = compute_type
+        model_dir, model_id, local_only = _resolve_sensevoice_model_spec()
 
-        # 磁盘空间预检查（HuggingFace 下载模式）
+        # 磁盘空间预检查（ModelScope 下载需要 ≥1GB）
         if not local_only:
-            cache_dir = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
+            cache_dir = os.environ.get(
+                "MODELSCOPE_CACHE",
+                os.path.expanduser("~/.cache/modelscope"),
+            )
+            # 磁盘空间检查：检查父目录或实际hub目录
+            _check_dir = os.path.join(cache_dir, "models") if os.path.isdir(os.path.join(cache_dir, "models")) else cache_dir
             try:
-                usage = shutil.disk_usage(cache_dir)
-                if usage.free < 200 * 1024 * 1024:  # 200MB
-                    _model_error = f"insufficient disk space ({usage.free // 1024 // 1024}MB < 200MB)"
-                    return None, _model_compute_type, _model_error
+                usage = shutil.disk_usage(_check_dir)
+                if usage.free < 1024 * 1024 * 1024:  # 1GB
+                    _model_error = (
+                        f"insufficient disk space "
+                        f"({usage.free // 1024 // 1024}MB < 1GB)"
+                    )
+                    return None, _model_id, _model_error
             except OSError:
                 pass
 
         logger.info(
-            "[VoiceTranscription] Loading model: path=%s local_only=%s compute_type=%s",
-            model_path,
+            "[VoiceTranscription] Loading model: model_dir=%s model_id=%s local_only=%s",
+            model_dir,
+            model_id,
             local_only,
-            compute_type,
         )
 
-        _model = WhisperModel(
-            model_path,
-            device="cpu",
-            compute_type=compute_type,
-            local_files_only=local_only,
-        )
+        kwargs: dict = {
+            "model": model_id,
+            "device": "cpu",
+            "disable_update": True,
+        }
+        if model_dir:
+            kwargs["model_dir"] = model_dir
+
+        _model = AutoModel(**kwargs)
 
         _model_ready.set()
         logger.info("[VoiceTranscription] Model loaded successfully")
-        return _model, _model_compute_type, ""
+        return _model, _model_id, ""
 
     except Exception as e:
         _model_error = str(e)
         _model = None
-        # 清理残留文件
-        if not _get_model_path_and_mode()[1]:
-            _cleanup_download_residue()
-        # 进入冷却期
+        _cleanup_modelscope_residue()
+        # 进入冷却期 60s
         with _cooldown_lock:
             _cooldown_until = time.monotonic() + 60
         logger.error("[VoiceTranscription] Model load failed: %s (cooldown 60s)", e)
-        return None, _model_compute_type, _model_error
+        return None, _model_id, _model_error
 
     finally:
         _model_lock.release()
 
 
-def _cleanup_download_residue():
-    """清理 HuggingFace 下载失败的残留文件。"""
+def _cleanup_modelscope_residue():
+    """清理 ModelScope 下载失败的残留文件。"""
     import glob
 
-    cache_dir = os.environ.get("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
-    pattern = os.path.join(cache_dir, "hub", "models--Systran--faster-whisper-tiny", "blobs", "*")
-    for f in glob.glob(pattern):
-        try:
-            os.unlink(f)
-        except OSError:
-            pass
+    cache_dir = os.environ.get(
+        "MODELSCOPE_CACHE",
+        os.path.expanduser("~/.cache/modelscope"),
+    )
+    # 兼容新旧 ModelScope 缓存路径
+    patterns = [
+        os.path.join(cache_dir, "models", "iic--SenseVoiceSmall", "*", "*"),
+        os.path.join(cache_dir, "models", "iic--SenseVoiceSmall", "snapshots", "*", "*"),
+        os.path.join(cache_dir, "hub", "iic", "SenseVoiceSmall", "*"),
+    ]
+    for pattern in patterns:
+        for f in glob.glob(pattern):
+            try:
+                os.unlink(f)
+            except OSError:
+                pass
 
 
 def get_model_status() -> dict:
     """返回模型状态，用于 /api/voice/status 健康检查。"""
-    model, compute_type, error = get_transcriber()
+    model, model_id, error = get_transcriber()
     return {
         "ready": model is not None,
-        "compute_type": compute_type,
+        "backend": "funasr",
+        "model_id": model_id,
         "error": error if not model else None,
     }
 
@@ -217,33 +215,37 @@ def get_model_status() -> dict:
 async def transcribe(audio_bytes: bytes) -> str:
     """转录音频字节，返回文本。
 
-    使用 asyncio.Lock 串行化所有转录请求（CTranslate2 非线程安全）。
+    使用 asyncio.Lock 串行化所有转录请求（AutoModel 非线程安全）。
     独立 ThreadPoolExecutor 避免与系统线程池竞争。
-    超时根据音频时长动态计算（tiny 模型 CPU: ~0.3-0.6x 实时率，加缓冲）。
-    音频时长预检查：超过 60s 直接拒绝。
+    超时根据音频时长动态计算（SenseVoice CPU: ~17.2x 实时率，加 10s 缓冲）。
+    音频时长预检查：超过 30s 直接拒绝。
 
     Raises:
-        ValueError: 0 字节、纯静音音频、或超过 60s
+        ValueError: 0 字节、纯静音音频、或超过 30s
         RuntimeError: 模型未就绪或超时
     """
     if len(audio_bytes) == 0:
         raise ValueError("empty audio")
 
-    # ── 音频时长预检查 ───────────────────────────────────────────────
+    # ── 音频时长预检查（30s 上限） ────────────────────────────────
     duration_sec = _estimate_audio_duration_sec(audio_bytes)
-    if duration_sec is not None and duration_sec > 60:
-        raise ValueError(f"audio too long ({duration_sec:.0f}s > 60s)")
+    if duration_sec is not None and duration_sec > 30:
+        raise ValueError(f"audio too long ({duration_sec:.0f}s > 30s)")
+
+    # ── 静音预检（16-bit WAV 振幅检测） ────────────────────────────
+    if _is_silent_audio(audio_bytes):
+        raise ValueError("no speech detected")
 
     model, _, error = get_transcriber()
     if model is None:
         raise RuntimeError(f"transcription unavailable: {error}")
 
-    # ── 动态超时：tiny 模型 CPU 推理 ~0.3-0.6x 实时率，加 20s 基础缓冲 ──
+    # ── 动态超时：SenseVoice CPU RTF ~17.2x，公式 max(15, 0.15*d+10) ──
     if duration_sec is not None:
-        transcription_timeout = max(30.0, duration_sec * 0.8 + 20.0)
+        transcription_timeout = max(15.0, duration_sec * 0.15 + 10.0)
     else:
         # 无法估算时长（<1s 或非 WAV 格式），使用保守默认值
-        transcription_timeout = 30.0
+        transcription_timeout = 15.0
 
     start_time = time.monotonic()
 
@@ -254,7 +256,7 @@ async def transcribe(audio_bytes: bytes) -> str:
                 len(audio_bytes),
                 transcription_timeout,
             )
-            segments, info = await asyncio.wait_for(
+            text = await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(
                     _dedicated_executor,
                     _do_transcribe,
@@ -266,26 +268,13 @@ async def transcribe(audio_bytes: bytes) -> str:
 
             elapsed = int((time.monotonic() - start_time) * 1000)
             logger.info(
-                "[VoiceTranscription] Transcription complete: %dms lang=%s",
+                "[VoiceTranscription] Transcription complete: %dms",
                 elapsed,
-                info.language,
             )
 
-            # 拼接所有 segment 文本
-            text = " ".join(s.text.strip() for s in segments if s.text.strip())
-
-            # 繁体→简体转换（zhconv 确保输出简体中文）
-            try:
-                from zhconv import convert
-                text = convert(text, "zh-cn")
-            except ImportError:
-                pass
-
-            if not text:
-                # 纯静音检测（兼容不同 faster-whisper 版本，no_speech_prob 可能不存在）
-                if getattr(info, "no_speech_prob", 0) > 0.9:
-                    raise ValueError("no speech detected")
-                return ""
+            # 静音检测：SenseVoice 对纯静音可能返回空字符串
+            if not text or not text.strip():
+                raise ValueError("no speech detected")
 
             return text
 
@@ -296,6 +285,39 @@ async def transcribe(audio_bytes: bytes) -> str:
             elapsed,
         )
         raise RuntimeError("transcription timeout")
+
+
+def _is_silent_audio(audio_bytes: bytes, threshold: int = 200) -> bool:
+    """检查 16-bit WAV 音频是否为纯静音（振幅极低）。非 WAV 格式返回 False。"""
+    import struct
+
+    if len(audio_bytes) < 44 or audio_bytes[:4] != b"RIFF":
+        return False
+    try:
+        channels = struct.unpack_from("<H", audio_bytes, 22)[0]
+        bits_per_sample = struct.unpack_from("<H", audio_bytes, 34)[0]
+        data_size = struct.unpack_from("<I", audio_bytes, 40)[0]
+        data_start = min(44, len(audio_bytes))
+        data = audio_bytes[data_start:data_start + data_size]
+        if not data:
+            return True
+        if bits_per_sample == 16:
+            import array
+            samples = array.array("h")
+            samples.frombytes(data[:min(len(data), 48000 * channels * 2)])
+            if not samples:
+                return True
+            max_ampl = max(abs(s) for s in samples)
+            return max_ampl < threshold
+        elif bits_per_sample == 8:
+            max_ampl = max(abs(s - 128) for s in data[:len(data)])
+            return max_ampl < (threshold // 256)
+    except (struct.error, IndexError, ZeroDivisionError, ValueError):
+        pass
+    return False
+
+
+# ── 同步转录函数 ────────────────────────────────────────────────────────────
 
 
 def _estimate_audio_duration_sec(audio_bytes: bytes) -> float | None:
@@ -322,19 +344,33 @@ def _estimate_audio_duration_sec(audio_bytes: bytes) -> float | None:
         except (struct.error, IndexError, ZeroDivisionError):
             pass
 
-    # ── 粗略估算（压缩格式） ────────────────────────────────────────
-    # 保守假设 128kbps = 16KB/s，实际 WebM/Opus 通常更低
-    if len(audio_bytes) < 16000:  # <1s，太短无法估算
+    # ── 粗略估算（压缩格式 WebM/MP3/OGG 等） ──────────────────────
+    # 压缩格式保守假设 32kbps = 4KB/s（WebM Opus 典型 16-32kbps），
+    # 宁可高估不要低估，确保 30s 上限不会被绕过。
+    # 旧值 128kbps=16KB/s 导致 WebM 时长被低估 4-8 倍，
+    # 61s WebM(32kbps=244KB) 被估为 15.6s 漏过检查。
+    if len(audio_bytes) < 4000:  # <1s，太短无法估算
         return None
-    return len(audio_bytes) / 16000.0
+    return len(audio_bytes) / 4000.0
 
 
-def _do_transcribe(model: "WhisperModel", audio_bytes: bytes):
-    """同步转录函数，在独立线程池中运行。"""
+def _do_transcribe(model: "AutoModel", audio_bytes: bytes) -> str:
+    """同步转录函数，在独立线程池中运行。
+
+    使用 model.generate() + rich_transcription_postprocess 剥离富文本标签。
+
+    Returns:
+        纯文本（已剥离富文本标签），纯静音返回空字符串。
+
+    Note:
+        SenseVoice generate() 极短音频或纯静音可能返回 []，
+        此时返回空字符串由上层 transcribe() 做静音检测。
+    """
     import tempfile
 
-    # 根据 magic bytes 检测音频格式，faster-whisper 靠文件后缀判断编解码器
-    # WebM/EBML: 1A 45 DF A3,  WAV/RIFF: 52 49 46 46
+    from funasr.utils.postprocess_utils import rich_transcription_postprocess
+
+    # 根据 magic bytes 检测音频格式，支持 WAV 和 WebM
     if len(audio_bytes) >= 4 and audio_bytes[:4] == b"\x1a\x45\xdf\xa3":
         suffix = ".webm"
     else:
@@ -343,12 +379,17 @@ def _do_transcribe(model: "WhisperModel", audio_bytes: bytes):
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=True) as tmp:
         tmp.write(audio_bytes)
         tmp.flush()
-        segments, info = model.transcribe(
-            tmp.name,
-            temperature=0,
-            beam_size=5,
+        result = model.generate(
+            input=tmp.name,
             language="zh",
-            initial_prompt="以下是简体中文的转录结果：",
+            use_itn=True,
+            ban_emo_unk=True,
         )
-        # 必须消费 segments 生成器——转为 list 确保在 tmp 关闭前完成
-        return list(segments), info
+        # 空列表防御：极短音频或纯静音可能返回 []
+        if not result:
+            return ""
+        raw_text = result[0].get("text", "") if isinstance(result[0], dict) else str(result[0])
+        if not raw_text:
+            return ""
+        # 剥离 SenseVoice 富文本标签（如 <|startoftrans|><|zh|><|NEUTRAL|>...）
+        return rich_transcription_postprocess(raw_text)
