@@ -354,3 +354,117 @@ test.describe("Chat workspace", () => {
     expect(suggestionsFetched).toBe(false);
   });
 });
+
+/**
+ * Input suggestions group labels & visibility E2E tests.
+ * Dependencies: mockLangGraphAPI(page) must mock auth/me with needs_setup: false,
+ * and thread history returning empty [] for new threads.
+ */
+
+test.describe("Input suggestion group config", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockLangGraphAPI(page);
+  });
+
+  const baseConfig = {
+    appName: "Test",
+    appAbbreviation: "Test",
+    welcome: { greeting: "Hello", description: "Desc" },
+    loginPage: { title: "Test" },
+    inputSuggestions: [
+      { id: "a", label: "Main-A", prompt: "A", icon: "Monitor", group: "main" },
+      { id: "b", label: "Create-B", prompt: "B", icon: "Bug", group: "create" },
+    ],
+  };
+
+  // E2E-1: 默认 label 为 undefined → 回退 i18n t.common.create（中文 "创建"）
+  test("shows i18n fallback '创建' when no label configured", async ({ page }) => {
+    await page.route("**/site.config.json", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(baseConfig) }),
+    );
+    await page.goto("/workspace/chats/new");
+    await expect(page.getByPlaceholder(/how can i assist/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "创建" })).toBeVisible({ timeout: 10_000 });
+  });
+
+  // E2E-2: 自定义 label
+  test("shows custom label when configured", async ({ page }) => {
+    await page.route("**/site.config.json", (route) =>
+      route.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({ ...baseConfig, suggestionGroups: { create: { label: "更多", visible: true } } }),
+      }),
+    );
+    await page.goto("/workspace/chats/new");
+    await expect(page.getByPlaceholder(/how can i assist/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "更多" })).toBeVisible({ timeout: 10_000 });
+  });
+
+  // E2E-3: visible=false → 下拉隐藏
+  test("hides dropdown when visible=false", async ({ page }) => {
+    await page.route("**/site.config.json", (route) =>
+      route.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({ ...baseConfig, suggestionGroups: { create: { visible: false } } }),
+      }),
+    );
+    await page.goto("/workspace/chats/new");
+    await expect(page.getByPlaceholder(/how can i assist/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Main-A" })).toBeVisible({ timeout: 10_000 });
+    // 下拉按钮完全不在 DOM 中
+    await expect(page.getByRole("button", { name: "创建" })).toHaveCount(0);
+  });
+
+  // E2E-4: visible=true 显式配置
+  test("shows dropdown when visible=true (explicit)", async ({ page }) => {
+    await page.route("**/site.config.json", (route) =>
+      route.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({ ...baseConfig, suggestionGroups: { create: { label: "More", visible: true } } }),
+      }),
+    );
+    await page.goto("/workspace/chats/new");
+    await expect(page.getByPlaceholder(/how can i assist/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "More" })).toBeVisible({ timeout: 10_000 });
+  });
+
+  // E2E-5: 空字符串 label → 回退 i18n
+  test("falls back to i18n when label is empty string", async ({ page }) => {
+    await page.route("**/site.config.json", (route) =>
+      route.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({ ...baseConfig, suggestionGroups: { create: { label: "" } } }),
+      }),
+    );
+    await page.goto("/workspace/chats/new");
+    await expect(page.getByPlaceholder(/how can i assist/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "创建" })).toBeVisible({ timeout: 10_000 });
+  });
+
+  // E2E-6: fetch 失败 → 不崩溃，使用默认
+  test("does not crash when site.config fetch fails", async ({ page }) => {
+    await page.route("**/site.config.json", (route) => route.abort("internetdisconnected"));
+    await page.goto("/workspace/chats/new");
+    await expect(page.getByPlaceholder(/how can i assist/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("body")).toBeVisible();
+  });
+
+  // E2E-7: HTTP 500 → 不崩溃
+  test("does not crash on HTTP 500", async ({ page }) => {
+    await page.route("**/site.config.json", (route) =>
+      route.fulfill({ status: 500, contentType: "text/plain", body: "Error" }),
+    );
+    await page.goto("/workspace/chats/new");
+    await expect(page.getByPlaceholder(/how can i assist/i)).toBeVisible({ timeout: 15_000 });
+  });
+
+  // E2E-8: 畸形 JSON → 不崩溃
+  test("does not crash on malformed JSON", async ({ page }) => {
+    await page.route("**/site.config.json", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: "{not valid!!!" }),
+    );
+    await page.goto("/workspace/chats/new");
+    await expect(page.getByPlaceholder(/how can i assist/i)).toBeVisible({ timeout: 15_000 });
+  });
+});
+

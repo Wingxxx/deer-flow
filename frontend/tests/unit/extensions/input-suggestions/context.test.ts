@@ -7,6 +7,7 @@ import {
 import {
   loadInputSuggestionsConfig,
   clearInputSuggestionsCache,
+  extractSuggestionGroups,
 } from "../../../../extensions/input-suggestions/config";
 
 // ─── 辅助 ──────────────────────────────────────────────────
@@ -78,14 +79,14 @@ describe("InputSuggestionsProvider integration (config → registry)", () => {
     const restoreFetch = mockFetchOk({ inputSuggestions: items });
     try {
       const configs = await loadInputSuggestionsConfig();
-      expect(configs).toHaveLength(7);
+      expect(configs.configs).toHaveLength(7);
 
       // 模拟 Provider 行为：clear → register
       clearInputSuggestions();
       const { Monitor, Bug, GitMerge, FileText, FileCode, Search, BarChart3 } = await import("lucide-react");
       const iconMap: Record<string, unknown> = { Monitor, Bug, GitMerge, FileText, FileCode, Search, BarChart3 };
 
-      for (const c of configs) {
+      for (const c of configs.configs) {
         const icon = iconMap[c.icon];
         if (icon) {
           const { registerInputSuggestion } = await import(
@@ -109,7 +110,7 @@ describe("InputSuggestionsProvider integration (config → registry)", () => {
     const restoreFetch = mockFetchOk({ inputSuggestions: [] });
     try {
       const configs = await loadInputSuggestionsConfig();
-      expect(configs).toEqual([]);
+      expect(configs.configs).toEqual([]);
     } finally {
       restoreFetch();
     }
@@ -120,7 +121,7 @@ describe("InputSuggestionsProvider integration (config → registry)", () => {
     const restoreFetch = mockFetchOk({});
     try {
       const configs = await loadInputSuggestionsConfig();
-      expect(configs).toEqual([]);
+      expect(configs.configs).toEqual([]);
     } finally {
       restoreFetch();
     }
@@ -131,7 +132,7 @@ describe("InputSuggestionsProvider integration (config → registry)", () => {
     const restoreFetch = mockFetchError();
     try {
       const configs = await loadInputSuggestionsConfig();
-      expect(configs).toEqual([]);
+      expect(configs.configs).toEqual([]);
       expect(warnCalls.length).toBeGreaterThan(0);
     } finally {
       restoreFetch();
@@ -172,7 +173,7 @@ describe("InputSuggestionsProvider integration (config → registry)", () => {
       if (!cancelled) {
         clearInputSuggestions();
         const { Monitor } = await import("lucide-react");
-        for (const c of configs) {
+        for (const c of configs.configs) {
           const { registerInputSuggestion } = await import(
             "../../../../extensions/input-suggestions/registry"
           );
@@ -216,7 +217,7 @@ describe("InputSuggestionsProvider integration (config → registry)", () => {
       clearInputSuggestions();
       const { Monitor, Bug, GitMerge, FileText, FileCode, Search, BarChart3 } = await import("lucide-react");
       const iconMap: Record<string, unknown> = { Monitor, Bug, GitMerge, FileText, FileCode, Search, BarChart3 };
-      for (const c of configs) {
+      for (const c of configs.configs) {
         const { registerInputSuggestion } = await import(
           "../../../../extensions/input-suggestions/registry"
         );
@@ -233,5 +234,82 @@ describe("InputSuggestionsProvider integration (config → registry)", () => {
     } finally {
       restoreFetch();
     }
+  });
+});
+
+describe("Provider groupConfig integration", () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    try { const { clearInputSuggestionsCache } = require("../../../../extensions/input-suggestions/config"); clearInputSuggestionsCache(); } catch {}
+    try { const { clearInputSuggestions } = require("../../../../extensions/input-suggestions/registry"); clearInputSuggestions(); } catch {}
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  // PT9-PT12: extractSuggestionGroups 端到端 (覆盖 Provider 中实际调用路径)
+  test("PT9: extractSuggestionGroups from full site.config JSON yields correct groups", () => {
+    const json = { inputSuggestions: [], suggestionGroups: { create: { label: "创建", visible: false } } };
+    expect(extractSuggestionGroups(json)).toEqual({ create: { label: "创建", visible: false } });
+  });
+
+  test("PT10: extractSuggestionGroups from JSON without key yields defaults", () => {
+    expect(extractSuggestionGroups({ inputSuggestions: [] })).toEqual({ create: { label: undefined, visible: true } });
+  });
+
+  test("PT11: extractSuggestionGroups with empty string label yields undefined", () => {
+    const json = { suggestionGroups: { create: { label: "" } } };
+    expect(extractSuggestionGroups(json)).toEqual({ create: { label: undefined, visible: true } });
+  });
+
+  test("PT12: extractSuggestionGroups with label=undefined yields undefined (not string)", () => {
+    const json = { suggestionGroups: { create: { label: undefined as any } } };
+    expect(extractSuggestionGroups(json)).toEqual({ create: { label: undefined, visible: true } });
+  });
+
+  // PT13-PT16: 合并 fetch → groupConfig 数据流
+  test("PT13: loadInputSuggestionsConfig returns configs AND raw", async () => {
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({ inputSuggestions: [{ id: "a", label: "A", prompt: "P", icon: "Monitor", group: "main" }], suggestionGroups: { create: { label: "X", visible: false } } }),
+    }) as any;
+    const { loadInputSuggestionsConfig: loadCfg } = await import("../../../../extensions/input-suggestions/config");
+    const result = await loadCfg();
+    expect(result.configs).toHaveLength(1);
+    expect(extractSuggestionGroups(result.raw)).toEqual({ create: { label: "X", visible: false } });
+  });
+
+  test("PT14: loadInputSuggestionsConfig on fetch fail returns empty configs + empty raw", async () => {
+    globalThis.fetch = async () => ({ ok: false, status: 500 } as Response);
+    const { loadInputSuggestionsConfig: loadCfg } = await import("../../../../extensions/input-suggestions/config");
+    const result = await loadCfg();
+    expect(result.configs).toEqual([]);
+    expect(result.raw).toEqual({});
+    expect(extractSuggestionGroups(result.raw)).toEqual({ create: { label: undefined, visible: true } });
+  });
+
+  test("PT15: loadInputSuggestionsConfig on JSON parse fail returns empty", async () => {
+    globalThis.fetch = async () => ({ ok: true, json: async () => { throw new Error("Parse fail"); } }) as any;
+    const { loadInputSuggestionsConfig: loadCfg } = await import("../../../../extensions/input-suggestions/config");
+    const result = await loadCfg();
+    expect(result.configs).toEqual([]);
+    expect(result.raw).toEqual({});
+  });
+
+  test("PT16: StrictMode double-call deduplicates via _pending", async () => {
+    let callCount = 0;
+    globalThis.fetch = async () => {
+      callCount++;
+      await new Promise(r => setTimeout(r, 10));
+      return { ok: true, json: async () => ({ inputSuggestions: [] }) } as Response;
+    };
+    const { loadInputSuggestionsConfig: loadCfg } = await import("../../../../extensions/input-suggestions/config");
+    const [r1, r2] = await Promise.all([loadCfg(), loadCfg()]);
+    expect(r1.configs).toEqual([]);
+    expect(r2.configs).toEqual([]);
+    expect(callCount).toBe(1);  // 只发出一次 fetch
   });
 });

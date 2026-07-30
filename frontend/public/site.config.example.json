@@ -11,53 +11,53 @@
   },
   "inputSuggestions": [
     {
-      "id": "product-consult",
-      "label": "产品咨询",
-      "prompt": "咨询关于ADS桌面云的[具体问题]",
-      "icon": "Monitor",
+      "id": "batch-create",
+      "label": "批量创建",
+      "prompt": "批量创建[数量]台终端",
+      "icon": "FilePlus",
       "group": "main"
     },
     {
-      "id": "tech-support",
-      "label": "技术支持",
-      "prompt": "排查[具体技术问题]的原因和解决方案",
-      "icon": "Bug",
+      "id": "batch-edit",
+      "label": "批量修改",
+      "prompt": "批量修改[终端]的配置参数",
+      "icon": "FileEdit",
       "group": "main"
     },
     {
       "id": "deployment",
       "label": "关联模板",
-      "prompt": "使用终端关联模板 skill，处理[关联场景]的终端配置",
+      "prompt": "配置[部门/终端]的关联模板",
       "icon": "GitMerge",
       "group": "main"
     },
     {
-      "id": "ops-report",
-      "label": "运维报告",
-      "prompt": "生成关于[主题]的系统运维分析报告",
-      "icon": "FileText",
+      "id": "power-on",
+      "label": "统一开机",
+      "prompt": "对[终端列表]执行统一开机操作",
+      "icon": "Power",
       "group": "create"
     },
     {
-      "id": "config-script",
-      "label": "配置脚本",
-      "prompt": "生成[场景]的ADS批量配置脚本",
-      "icon": "FileCode",
+      "id": "power-off",
+      "label": "统一关机",
+      "prompt": "对[终端列表]执行统一关机操作",
+      "icon": "PowerOff",
       "group": "create"
     },
     {
-      "id": "knowledge-search",
-      "label": "知识检索",
-      "prompt": "从知识库检索[主题]的相关资料并总结",
-      "icon": "Search",
-      "group": "create"
-    },
-    {
-      "id": "data-analysis",
-      "label": "数据分析",
-      "prompt": "分析[数据文件/主题]并生成可视化图表",
-      "icon": "BarChart3",
+      "id": "restart",
+      "label": "统一重启",
+      "prompt": "对[终端列表]执行统一重启操作",
+      "icon": "RefreshCw",
       "group": "create"
     }
-  ]
+  ],
+  "suggestionGroups": {
+    "_section": "自定义分组。create.label=下拉按钮文字(默认回退i18n)，create.visible=true/false(默认true)",
+    "create": {
+      "label": "更多",
+      "visible": true
+    }
+  }
 }

@@ -4,56 +4,62 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import {
   clearInputSuggestions,
   registerInputSuggestion,
-  getInputSuggestions,
 } from "./registry";
 import type { InputSuggestion } from "./registry";
-import { loadInputSuggestionsConfig, resolveIcon } from "./config";
+import { loadInputSuggestionsConfig, resolveIcon, extractSuggestionGroups } from "./config";
+import type { SuggestionGroupConfig } from "./config";
 
 // ─── Context ────────────────────────────────────────────────
 
-const InputSuggestionsContext = createContext<InputSuggestion[]>([]);
+interface InputSuggestionsContextValue {
+  suggestions: InputSuggestion[];
+  groupConfig: SuggestionGroupConfig;  // 扁平化：只取 create 组
+}
+
+const InputSuggestionsContext = createContext<InputSuggestionsContextValue>({
+  suggestions: [],
+  groupConfig: { label: undefined, visible: true },
+});
 
 // ─── Provider ──────────────────────────────────────────────
 
-export function InputSuggestionsProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  const [suggestions, setSuggestions] = useState<InputSuggestion[]>([]);
+export function InputSuggestionsProvider({ children }: { children: ReactNode }) {
+  const [value, setValue] = useState<InputSuggestionsContextValue>({
+    suggestions: [],
+    groupConfig: { label: undefined, visible: true },
+  });
 
   useEffect(() => {
     let cancelled = false;
 
     loadInputSuggestionsConfig()
-      .then((configs) => {
+      .then(({ configs, raw }) => {
         if (cancelled) return;
         clearInputSuggestions();
         for (const c of configs) {
           const icon = resolveIcon(c.icon);
           if (icon) {
             registerInputSuggestion({ ...c, icon });
-          } else {
-            console.warn(
-              `[input-suggestions] Icon "${c.icon}" not found for suggestion "${c.id}". ` +
-                `Add it to iconMap in config.ts or check the icon name.`,
-            );
           }
         }
-        // 触发 state 更新 → Context 消费者重渲染 → input-box.tsx 读取已填充的 registry
-        setSuggestions(getInputSuggestions());
+        const groups = extractSuggestionGroups(raw);
+        setValue({
+          suggestions: configs.map((c) => {
+            const icon = resolveIcon(c.icon);
+            return { ...c, icon: icon! };  // icon 已在上面验证
+          }),
+          groupConfig: groups.create,
+        });
       })
       .catch((err) => {
         console.warn("[input-suggestions] Failed to load config:", err);
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   return (
-    <InputSuggestionsContext.Provider value={suggestions}>
+    <InputSuggestionsContext.Provider value={value}>
       {children}
     </InputSuggestionsContext.Provider>
   );
@@ -61,6 +67,6 @@ export function InputSuggestionsProvider({
 
 // ─── Hook ──────────────────────────────────────────────────
 
-export function useInputSuggestionsReady(): InputSuggestion[] {
+export function useInputSuggestionsReady(): InputSuggestionsContextValue {
   return useContext(InputSuggestionsContext);
 }

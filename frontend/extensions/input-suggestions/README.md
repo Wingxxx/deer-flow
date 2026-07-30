@@ -20,13 +20,15 @@ input-suggestions/
 site.config.json
      │ fetch
      ▼
-config.ts ── loadInputSuggestionsConfig() ── 校验 ── 返回 InputSuggestionConfig[]
+config.ts ── loadInputSuggestionsConfig() ── 校验 ── 返回 { configs, raw }
      │                                          ▲
      │ resolveIcon(iconName) ── iconMap ────────┘
+     │                                          
+     │ extractSuggestionGroups(raw)
      ▼
 context.tsx ── InputSuggestionsProvider ── clear + register ── registry.ts
      │                       │
-     │                 useState(InputSuggestion[])
+     │               useState({ suggestions, groupConfig })
      ▼                       │
 useInputSuggestionsReady ─────┘
      │
@@ -100,22 +102,25 @@ interface InputSuggestion {
 
 React Context Provider + Hook 层：
 
-- `InputSuggestionsProvider`：在 useEffect 中 fetch site.config.json → 校验 → 解析 icon → 注册到 registry → 通过 `useState` 触发自动重渲染
-- `useInputSuggestionsReady()`：消费端 Hook，订阅 Context 状态变化
-- `cancelled` 守卫防止 StrictMode 双挂载或组件卸载后写全局状态
+- `InputSuggestionsContextValue`：扁平化 Context，包含 `suggestions`（完整建议列表）和 `groupConfig`（分组配置）
+- `InputSuggestionsProvider`：在 useEffect 中 fetch site.config.json → 校验 → 解析 icon → 注册到 registry → 提取 `suggestionGroups` 配置 → setState 触发重渲染
+- `useInputSuggestionsReady()`：消费端 Hook，返回 `{ suggestions, groupConfig }`
+- `cancelled` 守卫防止卸载后写状态
 
 ## 配置方式
 
-输入建议通过 `public/site.config.json` 的 `inputSuggestions` 数组配置（**JSON 是唯一且强制的配置源**）：
+输入建议通过 `public/site.config.json` 的 `inputSuggestions` 数组和 `suggestionGroups` 对象配置（**JSON 是唯一且强制的配置源**）：
+
+### 建议项配置
 
 ```json
 {
   "inputSuggestions": [
     {
-      "id": "product-consult",
-      "label": "产品咨询",
-      "prompt": "咨询关于[具体问题]",
-      "icon": "Monitor",
+      "id": "batch-create",
+      "label": "批量创建",
+      "prompt": "批量创建[终端/桌面]的配置和资源",
+      "icon": "FilePlus",
       "group": "main"
     }
   ]
@@ -123,6 +128,28 @@ React Context Provider + Hook 层：
 ```
 
 **配置缺失时行为**：`inputSuggestions` 不存在、非数组或为空 → 前端不显示任何建议按钮，零渲染。
+
+### 分组配置
+
+`suggestionGroups` 控制分组行为（标签 + 可见性）：
+
+```json
+{
+  "suggestionGroups": {
+    "create": {
+      "label": "更多",
+      "visible": true
+    }
+  }
+}
+```
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `suggestionGroups.create.label` | string | `undefined`（回退 i18n） | 下拉按钮文字。undefined 时使用系统 i18n（中文"创建"/英文"Create"） |
+| `suggestionGroups.create.visible` | boolean | `true` | `false` 时完全隐藏下拉菜单。不影响 main 组。 |
+
+**注意：** main 组平铺展示，无需配置。
 
 **添加新图标步骤**：
 1. 在 `public/site.config.json` 中添加配置项，`icon` 使用 lucide-react 导出名（去 `Icon` 后缀）
@@ -144,14 +171,20 @@ React Context Provider + Hook 层：
 **main 组（主功能区）：**
 | ID | 标签 | 提示词模板 | 图标 |
 |----|------|-----------|------|
-| product-consult | 产品咨询 | 咨询关于ADS桌面云的[具体问题] | Monitor |
-| tech-support | 技术支持 | 排查[具体技术问题]的原因和解决方案 | Bug |
-| deployment | 关联模板 | 使用终端关联模板 skill，处理[关联场景]的终端配置 | GitMerge |
+| batch-create | 批量创建 | 在部门[部门名称]下批量创建[数量]台终端 | FilePlus |
+| batch-edit | 批量修改 | 批量修改[终端/桌面]的配置参数 | FileEdit |
+| deployment | 关联模板 | 配置[部门/终端]的关联模板 | GitMerge |
 
 **create 组（创作区）：**
 | ID | 标签 | 提示词模板 | 图标 |
 |----|------|-----------|------|
-| ops-report | 运维报告 | 生成关于[主题]的系统运维分析报告 | FileText |
-| config-script | 配置脚本 | 生成[场景]的ADS批量配置脚本 | FileCode |
-| knowledge-search | 知识检索 | 从知识库检索[主题]的相关资料并总结 | Search |
+| power-on | 统一开机 | 对[终端列表]执行统一开机操作 | Power |
+| power-off | 统一关机 | 对[终端列表]执行统一关机操作 | PowerOff |
+| restart | 统一重启 | 对[终端列表]执行统一重启操作 | RefreshCw |
+
+**分组控制：**
+| key | 说明 |
+|-----|------|
+| `suggestionGroups.create.label` | 下拉触发按钮文字，默认回退系统 i18n |
+| `suggestionGroups.create.visible` | 下拉菜单可见性，`false` 时完全隐藏 |
 

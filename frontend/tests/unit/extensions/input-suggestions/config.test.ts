@@ -4,6 +4,7 @@ import {
   loadInputSuggestionsConfig,
   resolveIcon,
   clearInputSuggestionsCache,
+  extractSuggestionGroups,
 } from "../../../../extensions/input-suggestions/config";
 
 // ─── 辅助函数 ──────────────────────────────────────────────
@@ -104,9 +105,9 @@ describe("loadInputSuggestionsConfig", () => {
     const restore = mockFetchOk({ inputSuggestions: VALID_7 });
     try {
       const result = await loadInputSuggestionsConfig();
-      expect(result).toHaveLength(7);
-      expect(result[0]!.id).toBe("a");
-      expect(result[6]!.id).toBe("g");
+      expect(result.configs).toHaveLength(7);
+      expect(result.configs[0]!.id).toBe("a");
+      expect(result.configs[6]!.id).toBe("g");
     } finally {
       restore();
     }
@@ -117,7 +118,7 @@ describe("loadInputSuggestionsConfig", () => {
     const restore = mockFetchOk({ appName: "test" });
     try {
       const result = await loadInputSuggestionsConfig();
-      expect(result).toEqual([]);
+      expect(result.configs).toEqual([])
     } finally {
       restore();
     }
@@ -128,7 +129,7 @@ describe("loadInputSuggestionsConfig", () => {
     const restore = mockFetchOk({ inputSuggestions: "bad" });
     try {
       const result = await loadInputSuggestionsConfig();
-      expect(result).toEqual([]);
+      expect(result.configs).toEqual([])
       expect(warnCalls.length).toBeGreaterThan(0);
     } finally {
       restore();
@@ -140,7 +141,7 @@ describe("loadInputSuggestionsConfig", () => {
     const restore = mockFetchOk({ inputSuggestions: [] });
     try {
       const result = await loadInputSuggestionsConfig();
-      expect(result).toEqual([]);
+      expect(result.configs).toEqual([])
     } finally {
       restore();
     }
@@ -151,7 +152,7 @@ describe("loadInputSuggestionsConfig", () => {
     const restore = mockFetchError();
     try {
       const result = await loadInputSuggestionsConfig();
-      expect(result).toEqual([]);
+      expect(result.configs).toEqual([])
       expect(warnCalls.length).toBeGreaterThan(0);
     } finally {
       restore();
@@ -163,7 +164,7 @@ describe("loadInputSuggestionsConfig", () => {
     const restore = mockFetchNotOk(404);
     try {
       const result = await loadInputSuggestionsConfig();
-      expect(result).toEqual([]);
+      expect(result.configs).toEqual([])
       expect(warnCalls.length).toBeGreaterThan(0);
     } finally {
       restore();
@@ -175,7 +176,7 @@ describe("loadInputSuggestionsConfig", () => {
     const restore = mockFetchJsonError();
     try {
       const result = await loadInputSuggestionsConfig();
-      expect(result).toEqual([]);
+      expect(result.configs).toEqual([])
       expect(warnCalls.length).toBeGreaterThan(0);
     } finally {
       restore();
@@ -192,8 +193,8 @@ describe("loadInputSuggestionsConfig", () => {
     });
     try {
       const result = await loadInputSuggestionsConfig();
-      expect(result).toHaveLength(1);
-      expect(result[0]!.id).toBe("valid-2");
+      expect(result.configs).toHaveLength(1);
+      expect(result.configs[0]!.id).toBe("valid-2");
       expect(warnCalls.length).toBeGreaterThan(0);
     } finally {
       restore();
@@ -210,8 +211,8 @@ describe("loadInputSuggestionsConfig", () => {
     });
     try {
       const result = await loadInputSuggestionsConfig();
-      expect(result).toHaveLength(1);
-      expect(result[0]!.id).toBe("valid-2");
+      expect(result.configs).toHaveLength(1);
+      expect(result.configs[0]!.id).toBe("valid-2");
       expect(warnCalls.length).toBeGreaterThan(0);
     } finally {
       restore();
@@ -228,8 +229,8 @@ describe("loadInputSuggestionsConfig", () => {
     });
     try {
       const result = await loadInputSuggestionsConfig();
-      expect(result).toHaveLength(1);
-      expect(result[0]!.id).toBe("valid-2");
+      expect(result.configs).toHaveLength(1);
+      expect(result.configs[0]!.id).toBe("valid-2");
       expect(warnCalls.length).toBeGreaterThan(0);
     } finally {
       restore();
@@ -246,11 +247,11 @@ describe("loadInputSuggestionsConfig", () => {
     };
     try {
       const first = await loadInputSuggestionsConfig();
-      expect(first).toHaveLength(1);
+      expect(first.configs).toHaveLength(1);
       expect(callCount).toBe(1);
 
       const second = await loadInputSuggestionsConfig();
-      expect(second).toHaveLength(1);
+      expect(second.configs).toHaveLength(1);
       // 第二次应使用缓存，fetch 不增加调用次数
       expect(callCount).toBe(1);
     } finally {
@@ -266,15 +267,15 @@ describe("loadInputSuggestionsConfig", () => {
       ({ ok: true, json: async () => ({ inputSuggestions: [validSuggestion(fetchReturn)] }) }) as Response;
     try {
       const first = await loadInputSuggestionsConfig();
-      expect(first).toHaveLength(1);
-      expect(first[0]!.id).toBe("first");
+      expect(first.configs).toHaveLength(1);
+      expect(first.configs[0]!.id).toBe("first");
 
       clearInputSuggestionsCache();
       fetchReturn = { id: "second" };
 
       const second = await loadInputSuggestionsConfig();
-      expect(second).toHaveLength(1);
-      expect(second[0]!.id).toBe("second");
+      expect(second.configs).toHaveLength(1);
+      expect(second.configs[0]!.id).toBe("second");
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -312,3 +313,73 @@ describe("resolveIcon", () => {
     expect(typeof icon).toBe("object");
   });
 });
+
+describe("extractSuggestionGroups", () => {
+  // GS1: 字段缺失 → 默认 { label: undefined, visible: true }
+  test("GS1: returns default when key absent", () => {
+    expect(extractSuggestionGroups({})).toEqual({ create: { label: undefined, visible: true } });
+  });
+  // GS2: null
+  test("GS2: returns default when value is null", () => {
+    expect(extractSuggestionGroups({ suggestionGroups: null })).toEqual({ create: { label: undefined, visible: true } });
+  });
+  // GS3: 字符串
+  test("GS3: returns default when value is string", () => {
+    expect(extractSuggestionGroups({ suggestionGroups: "bad" })).toEqual({ create: { label: undefined, visible: true } });
+  });
+  // GS4: 数组
+  test("GS4: returns default when value is array", () => {
+    expect(extractSuggestionGroups({ suggestionGroups: [{ create: {} }] })).toEqual({ create: { label: undefined, visible: true } });
+  });
+  // GS5: create 为空对象 → 默认
+  test("GS5: returns default when create is empty object", () => {
+    expect(extractSuggestionGroups({ suggestionGroups: { create: {} } })).toEqual({ create: { label: undefined, visible: true } });
+  });
+  // GS6: 有效 label + 有效 visible
+  test("GS6: returns custom label and visible", () => {
+    expect(extractSuggestionGroups({ suggestionGroups: { create: { label: "创建", visible: false } } }))
+      .toEqual({ create: { label: "创建", visible: false } });
+  });
+  // GS7: label 为空字符串 → undefined（i18n 回退）
+  test("GS7: returns undefined label when empty string", () => {
+    expect(extractSuggestionGroups({ suggestionGroups: { create: { label: "" } } }))
+      .toEqual({ create: { label: undefined, visible: true } });
+  });
+  // GS8: label 为纯空白 → undefined
+  test("GS8: returns undefined label when whitespace-only", () => {
+    expect(extractSuggestionGroups({ suggestionGroups: { create: { label: "   " } } }))
+      .toEqual({ create: { label: undefined, visible: true } });
+  });
+  // GS9: label 为数字 → undefined
+  test("GS9: returns undefined label when label is number", () => {
+    expect(extractSuggestionGroups({ suggestionGroups: { create: { label: 123 } } }))
+      .toEqual({ create: { label: undefined, visible: true } });
+  });
+  // GS10: label 为 boolean → undefined
+  test("GS10: returns undefined label when label is boolean", () => {
+    expect(extractSuggestionGroups({ suggestionGroups: { create: { label: true } } }))
+      .toEqual({ create: { label: undefined, visible: true } });
+  });
+  // GS11: visible 为 0 → true（非 boolean）
+  test("GS11: returns default visible when 0", () => {
+    expect(extractSuggestionGroups({ suggestionGroups: { create: { visible: 0 } } }))
+      .toEqual({ create: { label: undefined, visible: true } });
+  });
+  // GS12: visible 为 1 → true
+  test("GS12: returns default visible when 1", () => {
+    expect(extractSuggestionGroups({ suggestionGroups: { create: { visible: 1 } } }))
+      .toEqual({ create: { label: undefined, visible: true } });
+  });
+  // GS13: visible 为 "true" → true（非 boolean）
+  test("GS13: returns default visible when string 'true'", () => {
+    expect(extractSuggestionGroups({ suggestionGroups: { create: { visible: "true" } } }))
+      .toEqual({ create: { label: undefined, visible: true } });
+  });
+  // GS14: 极长 label 保留
+  test("GS14: preserves extremely long label", () => {
+    const long = "A".repeat(10_000);
+    expect(extractSuggestionGroups({ suggestionGroups: { create: { label: long } } }))
+      .toEqual({ create: { label: long, visible: true } });
+  });
+});
+

@@ -65,7 +65,6 @@ import { textOfMessage } from "@/core/threads/utils";
 import { cn } from "@/lib/utils";
 
 // --- EXTENSION IMPORT: input suggestions ---
-import { getInputSuggestions } from "../../../extensions/input-suggestions/registry";
 import { useInputSuggestionsReady } from "../../../extensions/input-suggestions/context";
 // --- EXTENSION IMPORT: end ---
 
@@ -911,6 +910,7 @@ export function InputBox({
 }
 
 function SuggestionList() {
+  const { suggestions: allSuggestions, groupConfig } = useInputSuggestionsReady();
   const { t } = useI18n();
   const { textInput } = usePromptInputController();
   const handleSuggestionClick = useCallback(
@@ -934,16 +934,12 @@ function SuggestionList() {
     [textInput],
   );
 
-  // 订阅 Context：Provider 加载完成后触发重渲染
-  useInputSuggestionsReady();
-
-  const allSuggestions = getInputSuggestions();
   const mainSuggestions = allSuggestions.filter(s => s.group === "main");
   const createSuggestions = allSuggestions.filter(s => s.group === "create");
+  const createLabel = groupConfig.label ?? t.common.create;
 
   return (
     <Suggestions className="min-h-16 w-fit items-start">
-      {/* ── 新代码：从扩展注册表动态加载按钮 ── */}
       {mainSuggestions.map((s) => (
         <Suggestion
           key={s.id}
@@ -952,10 +948,10 @@ function SuggestionList() {
           onClick={() => handleSuggestionClick(s.prompt)}
         />
       ))}
-      {createSuggestions.length > 0 && (
+      {createSuggestions.length > 0 && groupConfig.visible && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Suggestion icon={PlusIcon} suggestion={t.common.create} />
+            <Suggestion icon={PlusIcon} suggestion={createLabel} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             <DropdownMenuGroup>
