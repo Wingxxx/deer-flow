@@ -6,6 +6,11 @@ import {
   FileCodeIcon,
   SearchIcon,
   BarChart3Icon,
+  FilePlusIcon,
+  FileEditIcon,
+  PowerIcon,
+  PowerOffIcon,
+  RefreshCwIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { InputSuggestionConfig } from "./types";
@@ -20,6 +25,11 @@ const iconMap: Record<string, LucideIcon> = {
   FileCode: FileCodeIcon,
   Search: SearchIcon,
   BarChart3: BarChart3Icon,
+  FilePlus: FilePlusIcon,
+  FileEdit: FileEditIcon,
+  Power: PowerIcon,
+  PowerOff: PowerOffIcon,
+  RefreshCw: RefreshCwIcon,
 };
 
 // ─── 原型链污染防护 ────────────────────────────────────────

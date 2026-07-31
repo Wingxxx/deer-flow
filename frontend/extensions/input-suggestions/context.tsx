@@ -44,10 +44,10 @@ export function InputSuggestionsProvider({ children }: { children: ReactNode }) 
         }
         const groups = extractSuggestionGroups(raw);
         setValue({
-          suggestions: configs.map((c) => {
-            const icon = resolveIcon(c.icon);
-            return { ...c, icon: icon! };  // icon 已在上面验证
-          }),
+          suggestions: configs
+            .map((c) => ({ ...c, icon: resolveIcon(c.icon) }))
+            .filter((s) => s.icon !== undefined)
+            .map((s) => ({ ...s, icon: s.icon! })),
           groupConfig: groups.create,
         });
       })
