@@ -6,7 +6,7 @@
 #
 # Arguments:
 #   port             - TCP port to wait for (required)
-#   timeout_seconds  - Max seconds to wait (default: 60)
+#   timeout_seconds  - Max seconds to wait (default: 120)
 #   service_name     - Display name for messages (default: "Service")
 #
 # Exit codes:
@@ -14,7 +14,7 @@
 #   1 - Timed out waiting
 
 PORT="${1:?Usage: wait-for-port.sh <port> [timeout] [service_name]}"
-TIMEOUT="${2:-60}"
+TIMEOUT="${2:-120}"
 SERVICE="${3:-Service}"
 
 case "$PORT" in
