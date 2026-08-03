@@ -218,7 +218,7 @@ env DEER_FLOW_CONFIG_PATH="$DEER_FLOW_CONFIG_PATH" \
     ./backend-bin/deerflow-gateway \
     > logs/gateway.log 2>&1 &
 
-"$SCRIPTS_DIR/wait-for-port.sh" 8001 30 "Gateway" || {
+"$SCRIPTS_DIR/wait-for-port.sh" 8001 120 "Gateway" || {
     echo "✗ Gateway 启动失败，查看日志: tail -30 logs/gateway.log"
     exit 1
 }
