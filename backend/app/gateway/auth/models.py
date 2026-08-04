@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 def _utc_now() -> datetime:
@@ -18,7 +18,10 @@ class User(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID = Field(default_factory=uuid4, description="Primary key")
-    email: EmailStr = Field(..., description="Unique email address")
+    # Login identifier: kept as plain str so local login can use a bare
+    # username (e.g. 'admin'); registration/profile updates still validate
+    # a proper email address via RegisterRequest/UpdateProfileRequest.
+    email: str = Field(..., description="Unique login identifier (email or username)")
     password_hash: str | None = Field(None, description="bcrypt hash, nullable for OAuth users")
     system_role: Literal["admin", "user"] = Field(default="user")
     created_at: datetime = Field(default_factory=_utc_now)

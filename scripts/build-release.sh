@@ -154,6 +154,18 @@ if [ "$SKIP_BACKEND" = false ]; then
     rm -rf .venv
     uv sync
 
+    # ── 补齐 faster-whisper 语音依赖 ───────────────────────────────
+    echo "  安装 faster-whisper..."
+    uv pip install faster-whisper --quiet
+
+    # 验证 faster-whisper 可导入
+    if ! .venv/bin/python -c 'from faster_whisper import WhisperModel; print("  ✓ faster-whisper 可用")' &>/dev/null; then
+        echo "  ✗ faster-whisper 导入失败，构建中止"
+        exit 1
+    fi
+
+    echo "  ✓ faster-whisper 依赖已安装"
+
     echo "  安装 PyInstaller 到项目 .venv..."
     uv pip install pyinstaller --quiet
 
@@ -305,12 +317,14 @@ if [ "$SKIP_BACKEND" = false ]; then
         --collect-all=langchain_core \
         --collect-all=langgraph \
         --collect-submodules=deerflow \
-        --collect-all=funasr \
-        --collect-all=modelscope \
+        --collect-all=ctranslate2 \
+        --collect-all=faster_whisper \
         --collect-all=torch \
         --collect-all=transformers \
         --collect-all=soundfile \
         --collect-all=huggingface_hub \
+        --collect-all=numpy \
+        --collect-all=websocket_client \
         \
         --hidden-import=deerflow_extensions.voice_transcription \
         --hidden-import=deerflow_extensions.voice_transcription.startup \
@@ -322,6 +336,15 @@ if [ "$SKIP_BACKEND" = false ]; then
         --exclude-module=tkinter \
         --exclude-module=matplotlib \
         \
+        # 彻底排除 funasr 语音链（transcriber.py 顶部 import 会触发 PyInstaller 自动收集；
+        # 半收集状态（缺数据文件）在 frozen 下抛 FileNotFoundError 导致 voice 端点 500）
+        --exclude-module=funasr \
+        --exclude-module=modelscope \
+        --exclude-module=editdistance \
+        --exclude-module=kaldi_native_fbank \
+        --exclude-module=torchaudio \
+        --exclude-module=torchcodec \
+        \
         deerflow_entry.py 2>&1
 
     echo "  复制编译产物到 release/backend-bin/..."
@@ -331,45 +354,9 @@ if [ "$SKIP_BACKEND" = false ]; then
     rm -rf "$REPO_ROOT/backend/dist" "$REPO_ROOT/backend/build" "$REPO_ROOT/backend/deerflow-gateway.spec"
 
 elif [ "$PREPARE_SERVER_BUILD" = true ]; then
-    # ── 准备服务器编译：从本地缓存拷贝 Wheel ──────────────────────────
-    echo "[4/10] 准备服务器编译依赖 (Wheel + 源码)..."
-    cd "$REPO_ROOT/backend"
-
-    echo "  安装后端依赖 (uv sync)..."
-    rm -rf .venv
-    uv sync
-
-    echo "  导出依赖清单..."
-    uv pip freeze | grep -v "^-e" > /tmp/requirements-server-$$.txt
-
-    # 本地 Wheel 缓存：backend/wheels/（已 gitignore）
-    LOCAL_WHEEL_DIR="$REPO_ROOT/backend/wheels"
-    WHEEL_CACHE_COUNT=$(find "$LOCAL_WHEEL_DIR" -name '*.whl' 2>/dev/null | wc -l)
-
-    if [ "$WHEEL_CACHE_COUNT" -eq 0 ]; then
-        echo "  本地 Wheel 缓存为空，下载到 backend/wheels/..."
-        mkdir -p "$LOCAL_WHEEL_DIR"
-        uv pip install pip --quiet
-        .venv/bin/pip download -r /tmp/requirements-server-$$.txt \
-            --dest "$LOCAL_WHEEL_DIR" \
-            --quiet
-        echo "  清理 pip..."
-        uv pip uninstall pip --quiet 2>/dev/null || true
-    else
-        echo "  ✓ 使用本地缓存 backend/wheels/（$WHEEL_CACHE_COUNT 个 Wheel）"
-    fi
-
-    # 拷贝到 release/source/
-    echo "  拷贝 Wheel 到 release/source/wheels/..."
-    mkdir -p "$RELEASE_DIR/source/wheels"
-    cp "$LOCAL_WHEEL_DIR"/*.whl "$RELEASE_DIR/source/wheels/"
-    cp /tmp/requirements-server-$$.txt "$RELEASE_DIR/source/requirements.txt"
-    # 同时写一份到 backend/，rsync 到服务器 source/ 时会一起携带
-    cp /tmp/requirements-server-$$.txt "$REPO_ROOT/backend/requirements.txt"
-    rm -f /tmp/requirements-server-$$.txt
-
-    WHEEL_COUNT=$(find "$RELEASE_DIR/source/wheels" -name '*.whl' 2>/dev/null | wc -l)
-    echo "  ✓ 已就绪 $WHEEL_COUNT 个 Wheel 文件"
+    # ── 准备服务器编译（依赖由服务器通过清华源在线安装）──────────────
+    echo "[4/10] 准备服务器编译依赖..."
+    echo "  依赖安装: 服务器端通过清华镜像源在线安装（uv sync），无需本地 wheels"
 
     echo "  拷贝服务器编译脚本到 source/scripts/..."
     mkdir -p "$RELEASE_DIR/source/scripts"
@@ -387,22 +374,22 @@ elif [ "$PREPARE_SERVER_BUILD" = true ]; then
 else
     # ── 跳过后端（纯前端）─────────────────────────────────────────────
     echo "[4/10] ⏩ 跳过后端编译 (--skip-backend)"
-    echo "  提醒: 在服务器上执行 backend/scripts/build-backend-on-server.sh 编译后端"
-    echo "        然后将 backend-bin/ 传回 release/ 目录"
+    echo "  提醒: 服务器编译时通过清华源在线安装依赖"
+    echo "        cd /usr/xccloud/deerflow/source && bash scripts/build-backend-on-server.sh"
     mkdir -p "$RELEASE_DIR/backend-bin"
 fi
 
 cd "$REPO_ROOT"
 
-# ── 复制 SenseVoice 模型（离线推理用，第一次下载后永不重复下载）───────────
+# ── 复制 Whisper small 模型（faster-whisper 后端）─────────────────────
 
-echo "[4.5/10] 复制 SenseVoice 模型..."
-if [ -d "$REPO_ROOT/models/sensevoice" ]; then
-    mkdir -p "$RELEASE_DIR/models/sensevoice"
-    cp -r "$REPO_ROOT/models/sensevoice/"* "$RELEASE_DIR/models/sensevoice/"
-    echo "  ✓ SenseVoice 模型已复制 ($(du -sh "$REPO_ROOT/models/sensevoice" | cut -f1))"
+echo "[4.5/10] 复制 Whisper small 模型..."
+if [ -d "$REPO_ROOT/models/whisper/small" ]; then
+    mkdir -p "$RELEASE_DIR/models/whisper"
+    cp -r "$REPO_ROOT/models/whisper/small/" "$RELEASE_DIR/models/whisper/small/"
+    echo "  ✓ Whisper small 模型已复制 ($(du -sh "$REPO_ROOT/models/whisper/small" | cut -f1))"
 else
-    echo "  ⚠️  models/sensevoice 不存在，跳过（首次运行将自动下载）"
+    echo "  ⚠️  models/whisper/small 不存在，跳过（请先下载: HF_ENDPOINT=https://hf-mirror.com python3 -c \"from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-small', local_dir='models/whisper/small')\"）"
 fi
 
 # ── 复制 Skills ─────────────────────────────────────────────────────────────

@@ -14,6 +14,27 @@ import os
 _installed = False
 
 
+def _trigger_preload():
+    """Trigger model preloading in background. Does NOT block Gateway boot.
+
+    If preload fails, the first API request will trigger retry (with cooldown).
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    try:
+        from deerflow_extensions.voice_transcription.transcriber import get_transcriber
+
+        logger.info("[VoiceTranscription] Preloading model in background...")
+        model, model_id, error = get_transcriber()
+        if model is not None:
+            logger.info("[VoiceTranscription] Model preloaded: %s", model_id)
+        else:
+            logger.warning("[VoiceTranscription] Model preload skipped: %s", error)
+    except Exception as e:
+        logger.warning("[VoiceTranscription] Model preload failed: %s", e)
+
+
 def install_voice_transcription(app=None):
     global _installed
     if _installed:
@@ -39,9 +60,19 @@ def install_voice_transcription(app=None):
         app.include_router(router)
         _installed = True
 
+        import threading
+
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info("[VoiceTranscription] Router installed at /api/voice")
+
+        # ── Preload model in background (eliminates 8.6s cold-start latency) ──
+        threading.Thread(
+            target=lambda: _trigger_preload(),
+            name="voice-preload",
+            daemon=True,
+        ).start()
 
     except Exception as _e:
         import logging

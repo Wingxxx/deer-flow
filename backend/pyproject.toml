@@ -24,7 +24,9 @@ dependencies = [
     "pyahocorasick>=2.3.1",
     "filelock>=3.0.0",
     "torch>=2.0.0",
+    "torchaudio>=2.0.0",  # funasr 运行时硬性 import torchaudio（其依赖元数据未声明）
     "funasr>=1.3.26",
+    "faster-whisper>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -49,11 +51,21 @@ markers = [
 [tool.uv]
 index-url = "https://pypi.org/simple"
 
+# PyTorch CPU 专用索引：避免无 GPU 环境下载 2GB+ 的 CUDA 依赖（nvidia-* 包）
+# 服务器（SSE2 CPU-only）与本地开发均使用 CPU 版 torch（约 200MB）
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.uv.workspace]
 members = ["packages/harness"]
 
 [tool.uv.sources]
 deerflow-harness = { workspace = true }
+# torch/torchaudio 从 CPU 索引获取（funasr 硬性依赖 torchaudio 且要求与 torch 同版本）
+torch = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
 
 [tool.setuptools.packages.find]
 include = ["app*", "app.*"]

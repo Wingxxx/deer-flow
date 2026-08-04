@@ -11,6 +11,8 @@ import tempfile
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile
 
+from deerflow_extensions.voice_transcription import transcriber
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
@@ -45,7 +47,6 @@ async def voice_transcribe(request: Request, file: UploadFile):
     - Content-Length 完整性校验
     - 临时文件 try/finally 清理
     """
-    from deerflow_extensions.voice_transcription.transcriber import transcribe
 
     # ── Content-Length 预校验 ───────────────────────────────────────────
     content_length = request.headers.get("content-length")
@@ -111,16 +112,32 @@ async def voice_transcribe(request: Request, file: UploadFile):
 
     # ── 转录 ────────────────────────────────────────────────────────────
     try:
-        text = await transcribe(audio_bytes)
+        text = await transcriber.transcribe(audio_bytes)
     except ValueError as e:
         msg = str(e)
         if "no speech" in msg:
             raise HTTPException(status_code=204, detail="未检测到语音内容")
+        if "audio too long" in msg:
+            raise HTTPException(status_code=400, detail="音频时长超过上限，请重试")
         raise HTTPException(status_code=400, detail=msg)
     except RuntimeError as e:
         msg = str(e)
         if "timeout" in msg:
             raise HTTPException(status_code=504, detail="转录超时，请重试")
+        # H1: zombie 恢复中 → 503 快速失败（future 追踪检测到上一转写未完成）
+        if "recovering" in msg:
+            raise HTTPException(
+                status_code=503,
+                detail="语音转写服务繁忙，请稍后重试",
+                headers={"Retry-After": str(int(transcriber._RECOVERING_RETRY_AFTER_SEC))},
+            )
+        if "queue busy" in msg:
+            # Retry-After 动态取自排队上限，与后端语义一致（前端消费该头对齐冷却）
+            raise HTTPException(
+                status_code=503,
+                detail="语音转写服务繁忙，请稍后重试",
+                headers={"Retry-After": str(int(transcriber._QUEUE_WAIT_TIMEOUT_SEC))},
+            )
         if "unavailable" in msg or "not installed" in msg or "cooling" in msg:
             raise HTTPException(
                 status_code=503,
