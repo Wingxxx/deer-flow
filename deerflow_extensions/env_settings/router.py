@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -10,7 +11,7 @@ from pathlib import Path
 import yaml
 from dotenv import dotenv_values, find_dotenv, set_key
 from fastapi import APIRouter, HTTPException, Request
-from filelock import FileLock
+from filelock import FileLock, Timeout
 from httpx import AsyncClient, HTTPStatusError, TimeoutException
 from pydantic import BaseModel, Field
 
@@ -261,14 +262,16 @@ def _get_config_path() -> str | None:
 
 
 def _slugify(name: str) -> str:
-    """将模型名转为 slug（小写字母数字和短横线）。"""
+    """将模型名转为 slug（小写字母数字和短横线）。空字符串回退到 hex。"""
     slug = re.sub(r"[^a-zA-Z0-9]", "-", name).lower()
     slug = re.sub(r"-+", "-", slug).strip("-")
+    if not slug:
+        slug = f"unnamed-{hashlib.md5(name.encode()).hexdigest()[:8]}"
     return slug
 
 
 def _register_model_to_config(provider_id: str, model_name: str, base_url: str) -> str | None:
-    """向 config.yaml 追加模型条目。返回注册的 name 或 None。"""
+    """向 config.yaml 注册模型条目（替换语义：先清除同厂商旧条目再追加新条目）。返回注册的 name 或 None。"""
     config_path = _get_config_path()
     logger.info("_register_model_to_config: config_path=%s, provider_id=%s, model_name=%s, base_url=%s",
                  config_path, provider_id, model_name, base_url)
@@ -288,49 +291,69 @@ def _register_model_to_config(provider_id: str, model_name: str, base_url: str) 
 
     model_slug = _slugify(model_name)
     entry_name = f"{provider_id}-{model_slug}"
+    prefix = f"{provider_id}-"
 
-    try:
-        with open(config_path) as f:
-            cfg = yaml.safe_load(f) or {}
-    except Exception as e:
-        logger.error("Failed to read config.yaml: %s", e, exc_info=True)
-        return None
+    with _get_config_lock(config_path):
+        try:
+            with open(config_path) as f:
+                cfg = yaml.safe_load(f) or {}
+        except Exception as e:
+            logger.error("Failed to read config.yaml: %s", e, exc_info=True)
+            return None
 
-    # 防御：config.yaml 结构异常时跳过模型注册，不阻断 Key 保存
-    if not isinstance(cfg, dict):
-        logger.warning("config.yaml 顶层结构异常（type=%s），跳过模型注册", type(cfg).__name__)
-        return None
-    models = cfg.get("models", [])
-    if not isinstance(models, list):
-        logger.warning("config.yaml models 不是列表（type=%s），跳过模型注册", type(models).__name__)
-        return None
-    logger.info("Current models in config.yaml: %d entries", len(models))
+        # 防御：config.yaml 结构异常时跳过模型注册，不阻断 Key 保存
+        if not isinstance(cfg, dict):
+            logger.warning("config.yaml 顶层结构异常（type=%s），跳过模型注册", type(cfg).__name__)
+            return None
+        models = cfg.get("models", [])
+        if not isinstance(models, list):
+            logger.warning("config.yaml models 不是列表（type=%s），跳过模型注册", type(models).__name__)
+            return None
+        logger.info("Current models in config.yaml: %d entries", len(models))
 
-    if any(isinstance(m, dict) and m.get("name") == entry_name for m in models):
-        logger.info("Model %s already in config.yaml, skipping", entry_name)
-        return entry_name
+        # 替换语义：过滤掉同厂商所有旧条目
+        filtered = [m for m in models if not (isinstance(m, dict) and isinstance(m.get("name"), str) and m.get("name").startswith(prefix))]
 
-    new_entry = {
-        "name": entry_name,
-        "display_name": f"{model_name} ({meta['name']})",
-        "use": template["use"],
-        "model": model_name,
-        "api_key": f"${meta['env_prefix']}_API_KEY",
-    }
-    if base_url:
-        new_entry["base_url"] = base_url
-    new_entry.update(template["extra"])
+        # 构造新条目
+        new_entry = {
+            "name": entry_name,
+            "display_name": f"{model_name} ({meta['name']})",
+            "use": template["use"],
+            "model": model_name,
+            "api_key": f"${meta['env_prefix']}_API_KEY",
+        }
+        if base_url:
+            new_entry["base_url"] = base_url
+        new_entry.update(template["extra"])
 
-    models.append(new_entry)
-    cfg["models"] = models
+        # 幂等优化：若新条目已存在且为同厂商唯一模型，跳过写入
+        # (列表顺序敏感的比较 candidate == models 会因 filtered 打乱
+        #  原顺序而导致伪阴性——不必要的 YAML 写入丢失注释)
+        provider_entries = sum(
+            1 for m in models
+            if isinstance(m, dict)
+            and isinstance(m.get("name"), str)
+            and m.get("name").startswith(prefix)
+        )
+        if provider_entries == 1 and any(
+            isinstance(m, dict) and m.get("name") == entry_name for m in models
+        ):
+            logger.info(
+                "Model %s already in config.yaml (idempotent, no change), skipping write",
+                entry_name,
+            )
+            return entry_name
 
-    try:
-        with open(config_path, "w") as f:
-            yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        logger.info("Registered model %s to config.yaml (total models: %d)", entry_name, len(models))
-    except Exception as e:
-        logger.error("Failed to write config.yaml: %s", e, exc_info=True)
-        return None
+        cfg["models"] = filtered + [new_entry]
+
+        try:
+            with open(config_path, "w") as f:
+                yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+            logger.info("Registered model %s to config.yaml (total models: %d, removed old: %d)",
+                        entry_name, len(filtered) + 1, len(models) - len(filtered))
+        except Exception as e:
+            logger.error("Failed to write config.yaml: %s", e, exc_info=True)
+            return None
 
     return entry_name
 
@@ -345,38 +368,39 @@ def _remove_models_from_config(provider_id: str) -> int:
 
     prefix = f"{provider_id}-"
 
-    try:
-        with open(config_path) as f:
-            cfg = yaml.safe_load(f) or {}
-    except Exception as e:
-        logger.error("Failed to read config.yaml for removal: %s", e, exc_info=True)
-        return 0
+    with _get_config_lock(config_path):
+        try:
+            with open(config_path) as f:
+                cfg = yaml.safe_load(f) or {}
+        except Exception as e:
+            logger.error("Failed to read config.yaml for removal: %s", e, exc_info=True)
+            return 0
 
-    # 防御：config.yaml 结构异常时跳过模型移除，不阻断配置清除
-    if not isinstance(cfg, dict):
-        logger.warning("config.yaml 顶层结构异常（type=%s），跳过模型移除", type(cfg).__name__)
-        return 0
-    models = cfg.get("models", [])
-    if not isinstance(models, list):
-        logger.warning("config.yaml models 不是列表（type=%s），跳过模型移除", type(models).__name__)
-        return 0
-    before = len(models)
-    logger.info("Before removal: %d models in config.yaml", before)
-    models = [m for m in models if not (isinstance(m, dict) and m.get("name", "").startswith(prefix))]
-    removed = before - len(models)
+        # 防御：config.yaml 结构异常时跳过模型移除，不阻断配置清除
+        if not isinstance(cfg, dict):
+            logger.warning("config.yaml 顶层结构异常（type=%s），跳过模型移除", type(cfg).__name__)
+            return 0
+        models = cfg.get("models", [])
+        if not isinstance(models, list):
+            logger.warning("config.yaml models 不是列表（type=%s），跳过模型移除", type(models).__name__)
+            return 0
+        before = len(models)
+        logger.info("Before removal: %d models in config.yaml", before)
+        models = [m for m in models if not (isinstance(m, dict) and isinstance(m.get("name"), str) and m.get("name").startswith(prefix))]
+        removed = before - len(models)
 
-    if removed == 0:
-        logger.info("No models to remove for provider %s", provider_id)
-        return 0
+        if removed == 0:
+            logger.info("No models to remove for provider %s", provider_id)
+            return 0
 
-    cfg["models"] = models
-    try:
-        with open(config_path, "w") as f:
-            yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        logger.info("Removed %d model(s) for %s from config.yaml (remaining: %d)", removed, provider_id, len(models))
-    except Exception as e:
-        logger.error("Failed to write config.yaml after removal: %s", e, exc_info=True)
-        return 0
+        cfg["models"] = models
+        try:
+            with open(config_path, "w") as f:
+                yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+            logger.info("Removed %d model(s) for %s from config.yaml (remaining: %d)", removed, provider_id, len(models))
+        except Exception as e:
+            logger.error("Failed to write config.yaml after removal: %s", e, exc_info=True)
+            return 0
 
     return removed
 
@@ -394,6 +418,21 @@ def _get_env_path() -> Path:
 
 def _get_env_lock() -> FileLock:
     lock_path = _ENV_LOCK_PATH or str(_get_env_path().with_suffix(".lock"))
+    return FileLock(lock_path, timeout=5)
+
+
+def _get_config_lock(config_path: str | None = None) -> FileLock:
+    """config.yaml 写操作互斥锁。
+
+    Args:
+        config_path: 显式传入的 config.yaml 路径。若为 None 则内部调用
+                     _get_config_path()（向后兼容无参调用场景）。
+    """
+    if config_path is None:
+        config_path = _get_config_path()
+    if not config_path:
+        raise RuntimeError("config.yaml not found, cannot acquire lock")
+    lock_path = Path(config_path).with_suffix(".config.lock")
     return FileLock(lock_path, timeout=5)
 
 
@@ -786,58 +825,59 @@ def _set_channel_enabled_in_config(channel_id: str, enabled: bool) -> bool:
         logger.warning("config.yaml not found, skip channel enabled toggle")
         return False
 
-    try:
-        with open(config_path) as f:
-            cfg = yaml.safe_load(f) or {}
-    except Exception as e:
-        logger.error("Failed to read config.yaml: %s", e, exc_info=True)
-        return False
+    with _get_config_lock(config_path):
+        try:
+            with open(config_path) as f:
+                cfg = yaml.safe_load(f) or {}
+        except Exception as e:
+            logger.error("Failed to read config.yaml: %s", e, exc_info=True)
+            return False
 
-    # 防御：config.yaml 结构异常时跳过渠道开关设置，不阻断主流程
-    if not isinstance(cfg, dict):
-        logger.warning("config.yaml 顶层结构异常（type=%s），跳过渠道开关设置", type(cfg).__name__)
-        return False
-    channels = cfg.setdefault("channels", {})
-    if not isinstance(channels, dict):
-        logger.warning("config.yaml channels 结构异常（type=%s），跳过渠道开关设置", type(channels).__name__)
-        return False
-    channel_cfg = channels.setdefault(channel_id, {})
-    if not isinstance(channel_cfg, dict):
-        logger.warning("config.yaml channels.%s 结构异常（type=%s），重置为空配置",
-                       channel_id, type(channel_cfg).__name__)
-        channel_cfg = {}
+        # 防御：config.yaml 结构异常时跳过渠道开关设置，不阻断主流程
+        if not isinstance(cfg, dict):
+            logger.warning("config.yaml 顶层结构异常（type=%s），跳过渠道开关设置", type(cfg).__name__)
+            return False
+        channels = cfg.setdefault("channels", {})
+        if not isinstance(channels, dict):
+            logger.warning("config.yaml channels 结构异常（type=%s），跳过渠道开关设置", type(channels).__name__)
+            return False
+        channel_cfg = channels.setdefault(channel_id, {})
+        if not isinstance(channel_cfg, dict):
+            logger.warning("config.yaml channels.%s 结构异常（type=%s），重置为空配置",
+                           channel_id, type(channel_cfg).__name__)
+            channel_cfg = {}
+            channels[channel_id] = channel_cfg
+
+        if channel_cfg.get("enabled") == enabled:
+            changed = False
+        else:
+            channel_cfg["enabled"] = enabled
+            changed = True
+
+        # 禁用渠道时，清理已有的凭据引用字段以避免 Gateway 启动时
+        # resolve_env_variables() 因 $VAR 未设置而报错。
+        # 启用渠道时仅写 enabled = true（凭据由 runtime-config.json 管理）。
+        meta = _CHANNEL_META.get(channel_id)
+        if meta and not enabled:
+            for field in meta["credential_fields"]:
+                key = field["key"]
+                if key in channel_cfg:
+                    del channel_cfg[key]
+                    changed = True
+
+        if not changed:
+            return True
+
         channels[channel_id] = channel_cfg
+        cfg["channels"] = channels
 
-    if channel_cfg.get("enabled") == enabled:
-        changed = False
-    else:
-        channel_cfg["enabled"] = enabled
-        changed = True
-
-    # 禁用渠道时，清理已有的凭据引用字段以避免 Gateway 启动时
-    # resolve_env_variables() 因 $VAR 未设置而报错。
-    # 启用渠道时仅写 enabled = true（凭据由 runtime-config.json 管理）。
-    meta = _CHANNEL_META.get(channel_id)
-    if meta and not enabled:
-        for field in meta["credential_fields"]:
-            key = field["key"]
-            if key in channel_cfg:
-                del channel_cfg[key]
-                changed = True
-
-    if not changed:
-        return True
-
-    channels[channel_id] = channel_cfg
-    cfg["channels"] = channels
-
-    try:
-        with open(config_path, "w") as f:
-            yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        logger.info("[Audit] config.yaml channels.%s.enabled set to %s", channel_id, enabled)
-    except Exception as e:
-        logger.error("Failed to write config.yaml: %s", e, exc_info=True)
-        return False
+        try:
+            with open(config_path, "w") as f:
+                yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+            logger.info("[Audit] config.yaml channels.%s.enabled set to %s", channel_id, enabled)
+        except Exception as e:
+            logger.error("Failed to write config.yaml: %s", e, exc_info=True)
+            return False
 
     return True
 
@@ -929,7 +969,14 @@ async def delete_provider_settings(provider: str) -> DeleteResponse:
     providers = _get_providers()
     meta = providers[provider]
     prefix = meta["env_prefix"]
-    removed = _remove_models_from_config(provider)
+    try:
+        removed = _remove_models_from_config(provider)
+    except Timeout:
+        logger.warning("[Audit] provider.%s.delete | config lock timeout, skipping model removal", provider)
+        removed = 0
+    except RuntimeError:
+        logger.warning("[Audit] provider.%s.delete | config.yaml unavailable, skipping model removal", provider)
+        removed = 0
     try:
         with _get_env_lock():
             _unset_env_value(f"{prefix}_API_KEY")
@@ -1106,10 +1153,15 @@ async def update_channel_settings(request: ChannelUpdateRequest) -> EnvSettingsU
             logger.warning("[Audit] channel.%s.restart_failed | %s", channel_id, e)
 
         # 自动设置 config.yaml 中 channels.<channel_id>.enabled = true
-        if _set_channel_enabled_in_config(channel_id, True):
-            msg += "，已修改 config.yaml"
-        else:
-            msg += "（config.yaml 写入失败，如需开机自启请手动设置）"
+        try:
+            if _set_channel_enabled_in_config(channel_id, True):
+                msg += "，已修改 config.yaml"
+            else:
+                msg += "（config.yaml 写入失败，如需开机自启请手动设置）"
+        except Timeout:
+            msg += "（config.yaml 写入超时，请稍后重试）"
+        except RuntimeError:
+            msg += "（config.yaml 不可用，开机自启设置未保存）"
 
         return EnvSettingsUpdateResponse(success=True, message=msg)
     except HTTPException:
@@ -1159,8 +1211,13 @@ async def delete_channel_settings(channel: str) -> DeleteResponse:
 
     logger.info("[Audit] channel.%s.delete", channel)
 
-    _set_channel_enabled_in_config(channel, False)
-    msg += "，已禁用开机自启"
+    try:
+        _set_channel_enabled_in_config(channel, False)
+        msg += "，已禁用开机自启"
+    except Exception as e:
+        logger.warning("[Audit] channel.%s.delete | config.yaml update failed: %s", channel, e)
+        msg += ("（config.yaml 写入失败，如需禁用开机自启请手动设置"
+                " channels.%s.enabled: false）" % channel)
 
     return DeleteResponse(success=True, message=msg)
 

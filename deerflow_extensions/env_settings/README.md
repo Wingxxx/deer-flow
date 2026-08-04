@@ -46,8 +46,8 @@ FastAPI 路由模块，挂载于 `/api/env-settings` 前缀：
 核心逻辑：
 
 - **厂商元数据** — `providers.json` 文件配置 7 家厂商的 ID、名称、环境变量前缀、默认 API 地址、预置模型列表，通过 `_get_providers()` 延迟加载（JSON 缺失时返回空 dict 降级）
-- **模型注册** — `_register_model_to_config()` 将用户选择的模型追加到 `config.yaml` 的 `models` 列表，使用各厂商对应的 LangChain/LangGraph 类路径
-- **模型清理** — `_remove_models_from_config()` 删除该厂商在 `config.yaml` 中注册的所有模型
+- **模型注册** — `_register_model_to_config()` 采用**替换语义**：保存时自动清除同厂商在 `config.yaml` 中的所有旧条目，再追加新条目。每位厂商在引擎列表中最多占 1 个模型
+- **模型清理** — `_remove_models_from_config()` 删除该厂商在 `config.yaml` 中注册的所有模型（使用 config 锁保护）
 - **环境变量读写** — 通过 `dotenv_values()` / `set_key()` 操作 `.env` 文件，Key 名格式为 `{PREFIX}_API_KEY`、`{PREFIX}_BASE_URL`、`{PREFIX}_MODEL`
 - **连通性验证** — 调用各厂商兼容的 `/models` 端点，根据 HTTP 状态码判断 Key 有效性（200/404 视为有效，401/403/429 视为无效）
 - **渠道启用管理** — PUT 渠道凭据时自动设置 `config.yaml` 的 `channels.<id>.enabled: true`，DELETE 时自动设为 `false`，无需手动编辑 config.yaml
@@ -78,7 +78,9 @@ FastAPI 路由模块，挂载于 `/api/env-settings` 前缀：
 
 ### 文件锁
 
-所有 `.env` 写操作使用 `filelock` 保护，防止并发写入导致数据覆盖。锁超时 5 秒。
+所有 `.env` 写操作使用 `filelock` 保护，防止并发写入导致数据覆盖（锁文件 `.lock`，超时 5 秒）。
+
+`config.yaml` 的模型注册/删除操作使用独立的 `config.lock` 文件保护（不与 `.lock` 冲突），锁范围涵盖模型注册、模型删除和渠道启用/禁用（`_set_channel_enabled_in_config`）。
 
 ### DeepRAG .env 同步
 
@@ -110,6 +112,17 @@ FastAPI 路由模块，挂载于 `/api/env-settings` 前缀：
 |------|------|------|
 | GET | `/api/env-settings/deeprag/current-provider` | 获取 DeepRAG 当前使用的厂商（返回 `API_PROVIDER` 值） |
 | PUT | `/api/env-settings/deeprag/switch-provider` | 切换 DeepRAG 当前厂商（body: `{"provider": "moonshot"}`） |
+
+### 已知限制
+
+- **provider_id 前缀约束**：模型过滤使用 `isinstance(name, str) and name.startswith("{provider_id}-")` 前缀匹配（仅当 name 为字符串类型时才进行前缀比较，非字符串 name 不会被过滤但也不会崩溃），要求各 provider_id 互不为前缀关系。当前 7 家厂商的 provider_id 无前缀冲突，新增厂商时需检查此约束
+- **PUT/DELETE 之间无跨操作全局锁**：config.yaml 内 models/channels 区块各自有锁保护，但 `.env` 与 `config.yaml` 的跨文件一致性无事务保证。极端并发场景下两个文件的写入可能不完整，概率极低，通过刷新页面重新操作即可恢复
+
+### 迁移注意事项
+
+- 升级后首次保存某厂商配置，会**清除该厂商在 `config.yaml` 中的所有旧条目**（仅保留新注册的一个模型）
+- `yaml.safe_load` / `yaml.dump` 不保留 YAML 注释 — 用户在 config.yaml 中手写的注释会丢失
+- **NFS 环境**：filelock 在 NFS 上的行为不可靠（依赖 OS 级文件锁），不支持在多机共享 `config.yaml` 的部署场景
 
 ### startup.py
 
