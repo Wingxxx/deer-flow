@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -209,8 +210,9 @@ _CHANNEL_META: dict[str, dict] = {
 def _find_project_root(start_path: Path | None = None) -> Path | None:
     """通过向上遍历查找项目根目录。
 
-    以 deepRag/ 子目录作为锚点（该目录在 dev 和 frozen 部署下
-    均位于项目根下，不会被 PyInstaller 打包进 _internal/）。
+    以 deepRag/ 子目录作为锚点（dev 部署下位于项目根下）。
+    frozen 部署下 PyInstaller 会将 deepRag/ 打包进 _internal/，
+    遍历时跳过 _internal 目录避免误判。
     回退：查找 config.yaml 或 backend/config.yaml。
 
     Args:
@@ -218,7 +220,13 @@ def _find_project_root(start_path: Path | None = None) -> Path | None:
                     测试时可传入临时目录模拟 frozen 目录结构。
     """
     current = Path(os.path.abspath(start_path or Path(__file__).resolve())).parent
+    frozen = getattr(sys, 'frozen', False)
     for _ in range(8):  # 8 级覆盖 frozen 最深嵌套 + 3 级余量
+        # frozen 模式下，PyInstaller 将 deepRag/ 打包进 _internal/，
+        # 跳过此目录避免将 _internal/ 误判为项目根
+        if frozen and current.name == "_internal":
+            current = current.parent
+            continue
         if (current / "deepRag").is_dir():
             return current
         if (current / "config.yaml").is_file():
