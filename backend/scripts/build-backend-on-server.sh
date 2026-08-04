@@ -43,12 +43,10 @@
 #      rm -rf /usr/xccloud/deerflow/backend-bin
 #      cp -r dist/deerflow-gateway /usr/xccloud/deerflow/backend-bin/
 #
-#   6. （可选）复制 SenseVoice 模型（语音转录）:
-#      若项目根有 models/sensevoice/，复制到 release 同级:
-#      build-release.sh 已自动执行此步骤（见 [4.5/10] 复制 SenseVoice 模型）
-#      手动方式:
-#      mkdir -p /usr/xccloud/deerflow/models/sensevoice
-#      cp -r source/models/sensevoice/* /usr/xccloud/deerflow/models/sensevoice/
+#   6. （可选）复制 Whisper 模型（语音转录）:
+#      若项目根有 models/whisper/small/，复制到 release 同级:
+#      mkdir -p /usr/xccloud/deerflow/models/whisper/small
+#      cp -r source/models/whisper/small/* /usr/xccloud/deerflow/models/whisper/small/
 #
 
 set -e
@@ -180,13 +178,7 @@ fi
 # 确保后续所有命令能找到 libpython3.12.so
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
-# glibc 版本检查 (torch 需要 glibc >= 2.28)
-GLIBC_VER=$(ldd --version | head -1 | grep -oP '\d+\.\d+$')
-if [ "$(printf '%s\n' 2.28 "$GLIBC_VER" | sort -V | head -1)" != "2.28" ]; then
-    echo "✗ glibc $GLIBC_VER < 2.28; PyTorch 需要 glibc >= 2.28"
-    exit 1
-fi
-echo "  ✓ glibc $GLIBC_VER >= 2.28 (PyTorch 兼容)"
+echo "  ✓ glibc $(ldd --version | head -1 | grep -oP '\d+\.\d+$')"
 
 # ── 2. 创建虚拟环境 ───────────────────────────────────────────────────────
 
@@ -413,8 +405,6 @@ fi
     --collect-submodules=deerflow \
     --collect-all=ctranslate2 \
     --collect-all=faster_whisper \
-    --collect-all=torch \
-    --collect-all=transformers \
     --collect-all=soundfile \
     --collect-all=huggingface_hub \
     --collect-all=numpy \
@@ -432,10 +422,13 @@ fi
     \
     --exclude-module=funasr \
     --exclude-module=modelscope \
-    --exclude-module=editdistance \
-    --exclude-module=kaldi_native_fbank \
+    --exclude-module=torch \
     --exclude-module=torchaudio \
     --exclude-module=torchcodec \
+    --exclude-module=transformers \
+    --exclude-module=editdistance \
+    --exclude-module=kaldi_native_fbank \
+    --exclude-module=speech_recognition \
     \
     deerflow_entry.py 2>&1
 

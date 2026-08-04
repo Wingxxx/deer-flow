@@ -319,8 +319,6 @@ if [ "$SKIP_BACKEND" = false ]; then
         --collect-submodules=deerflow \
         --collect-all=ctranslate2 \
         --collect-all=faster_whisper \
-        --collect-all=torch \
-        --collect-all=transformers \
         --collect-all=soundfile \
         --collect-all=huggingface_hub \
         --collect-all=numpy \
@@ -340,10 +338,13 @@ if [ "$SKIP_BACKEND" = false ]; then
         # 半收集状态（缺数据文件）在 frozen 下抛 FileNotFoundError 导致 voice 端点 500）
         --exclude-module=funasr \
         --exclude-module=modelscope \
-        --exclude-module=editdistance \
-        --exclude-module=kaldi_native_fbank \
+        --exclude-module=torch \
         --exclude-module=torchaudio \
         --exclude-module=torchcodec \
+        --exclude-module=transformers \
+        --exclude-module=editdistance \
+        --exclude-module=kaldi_native_fbank \
+        --exclude-module=speech_recognition \
         \
         deerflow_entry.py 2>&1
 
