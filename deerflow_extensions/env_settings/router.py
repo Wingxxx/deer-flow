@@ -206,11 +206,45 @@ _CHANNEL_META: dict[str, dict] = {
 }
 
 
+def _find_project_root(start_path: Path | None = None) -> Path | None:
+    """通过向上遍历查找项目根目录。
+
+    以 deepRag/ 子目录作为锚点（该目录在 dev 和 frozen 部署下
+    均位于项目根下，不会被 PyInstaller 打包进 _internal/）。
+    回退：查找 config.yaml 或 backend/config.yaml。
+
+    Args:
+        start_path: 起始搜索路径，默认从 router.py 位置出发。
+                    测试时可传入临时目录模拟 frozen 目录结构。
+    """
+    current = Path(os.path.abspath(start_path or Path(__file__).resolve())).parent
+    for _ in range(8):  # 8 级覆盖 frozen 最深嵌套 + 3 级余量
+        if (current / "deepRag").is_dir():
+            return current
+        if (current / "config.yaml").is_file():
+            return current
+        if (current / "backend" / "config.yaml").is_file():
+            return current  # Docker 场景：config 在 backend/ 子目录
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return None
+
+
 def _get_config_path() -> str | None:
     """查找 config.yaml 文件路径（与 DeerFlow 优先级一致）。"""
     env_path = os.environ.get("DEER_FLOW_CONFIG_PATH")
     if env_path and os.path.isfile(env_path):
         return env_path
+    # 向上遍历查找包含 config.yaml 的项目根
+    project_root = _find_project_root()
+    if project_root is not None:
+        for candidate in ("config.yaml", "backend/config.yaml"):
+            candidate_path = project_root / candidate
+            if candidate_path.is_file():
+                return str(candidate_path)
+    # 回退（极端情况，保持向后兼容）
     for candidate in ("config.yaml", "backend/config.yaml"):
         candidate_path = os.path.join(os.path.dirname(__file__), "..", "..", candidate)
         if os.path.isfile(candidate_path):
@@ -254,7 +288,14 @@ def _register_model_to_config(provider_id: str, model_name: str, base_url: str) 
         logger.error("Failed to read config.yaml: %s", e, exc_info=True)
         return None
 
-    models: list = cfg.get("models", [])
+    # 防御：config.yaml 结构异常时跳过模型注册，不阻断 Key 保存
+    if not isinstance(cfg, dict):
+        logger.warning("config.yaml 顶层结构异常（type=%s），跳过模型注册", type(cfg).__name__)
+        return None
+    models = cfg.get("models", [])
+    if not isinstance(models, list):
+        logger.warning("config.yaml models 不是列表（type=%s），跳过模型注册", type(models).__name__)
+        return None
     logger.info("Current models in config.yaml: %d entries", len(models))
 
     if any(isinstance(m, dict) and m.get("name") == entry_name for m in models):
@@ -303,7 +344,14 @@ def _remove_models_from_config(provider_id: str) -> int:
         logger.error("Failed to read config.yaml for removal: %s", e, exc_info=True)
         return 0
 
-    models: list = cfg.get("models", [])
+    # 防御：config.yaml 结构异常时跳过模型移除，不阻断配置清除
+    if not isinstance(cfg, dict):
+        logger.warning("config.yaml 顶层结构异常（type=%s），跳过模型移除", type(cfg).__name__)
+        return 0
+    models = cfg.get("models", [])
+    if not isinstance(models, list):
+        logger.warning("config.yaml models 不是列表（type=%s），跳过模型移除", type(models).__name__)
+        return 0
     before = len(models)
     logger.info("Before removal: %d models in config.yaml", before)
     models = [m for m in models if not (isinstance(m, dict) and m.get("name", "").startswith(prefix))]
@@ -327,13 +375,17 @@ def _remove_models_from_config(provider_id: str) -> int:
 
 def _get_env_path() -> Path:
     env_path = find_dotenv()
-    if not env_path:
-        raise FileNotFoundError(".env file not found in project tree")
-    return Path(env_path)
+    if env_path:
+        return Path(env_path)
+    # 回退：哨兵定位项目根（frozen 部署下 cwd 无 .env 时兜底，写操作自动创建文件）
+    project_root = _find_project_root()
+    if project_root is not None:
+        return project_root / ".env"
+    raise FileNotFoundError(".env file not found in project tree")
 
 
 def _get_env_lock() -> FileLock:
-    lock_path = _ENV_LOCK_PATH or str(_get_env_path().with_suffix(".env.lock"))
+    lock_path = _ENV_LOCK_PATH or str(_get_env_path().with_suffix(".lock"))
     return FileLock(lock_path, timeout=5)
 
 
@@ -376,18 +428,25 @@ def _get_deeprag_env_path() -> Path:
 
     优先级:
     1. 环境变量 DEEPRAG_ENV_PATH
-    2. 默认 <项目根>/deepRag/.env
+    2. 向上遍历查找包含 deepRag/ 的项目根
+    3. 回退到硬编码路径（极端情况）
     """
     env_path = os.environ.get("DEEPRAG_ENV_PATH")
     if env_path:
         return Path(env_path)
-    project_root = Path(__file__).resolve().parents[2]
-    return project_root / "deepRag" / ".env"
+    project_root = _find_project_root()
+    if project_root is not None:
+        return project_root / "deepRag" / ".env"
+    logger.warning(
+        "无法通过哨兵定位项目根目录，回退到硬编码路径。"
+        "建议设置 DEEPRAG_ENV_PATH 环境变量。"
+    )
+    return Path(__file__).resolve().parents[2] / "deepRag" / ".env"
 
 
 def _get_deeprag_env_lock() -> FileLock:
     """DeepRAG .env 独立文件锁（与 deer-flow 锁隔离）。"""
-    lock_path = str(_get_deeprag_env_path().with_suffix(".env.lock"))
+    lock_path = str(_get_deeprag_env_path().with_suffix(".lock"))
     return FileLock(lock_path, timeout=5)
 
 
@@ -425,6 +484,9 @@ def _sync_to_deeprag_env(provider_id: str, action: str) -> None:
                         set_key(str(deeprag_env_path), deeprag_key, value, quote_mode="always")
                         logger.info("[DeepRAG] Wrote %s to %s", deeprag_key, deeprag_env_path)
         elif action == "delete":
+            if not deeprag_env_path.is_file():
+                logger.info("[DeepRAG] %s 不存在，跳过 delete 同步", deeprag_env_path)
+                return
             with _get_deeprag_env_lock():
                 for suffix in suffixes:
                     deeprag_key = f"{deeprag_prefix}_{suffix}"
@@ -690,6 +752,9 @@ def _sanitize_channel_credentials(
         raw = credentials.get(key, "")
         if isinstance(raw, str):
             raw = raw.strip()
+        elif raw is not None:
+            # 防御：非 str 值统一转字符串（防 _mask_value(len) TypeError 链）
+            raw = str(raw).strip()
         if not raw:
             raise HTTPException(
                 status_code=422,
@@ -720,8 +785,20 @@ def _set_channel_enabled_in_config(channel_id: str, enabled: bool) -> bool:
         logger.error("Failed to read config.yaml: %s", e, exc_info=True)
         return False
 
+    # 防御：config.yaml 结构异常时跳过渠道开关设置，不阻断主流程
+    if not isinstance(cfg, dict):
+        logger.warning("config.yaml 顶层结构异常（type=%s），跳过渠道开关设置", type(cfg).__name__)
+        return False
     channels = cfg.setdefault("channels", {})
+    if not isinstance(channels, dict):
+        logger.warning("config.yaml channels 结构异常（type=%s），跳过渠道开关设置", type(channels).__name__)
+        return False
     channel_cfg = channels.setdefault(channel_id, {})
+    if not isinstance(channel_cfg, dict):
+        logger.warning("config.yaml channels.%s 结构异常（type=%s），重置为空配置",
+                       channel_id, type(channel_cfg).__name__)
+        channel_cfg = {}
+        channels[channel_id] = channel_cfg
 
     if channel_cfg.get("enabled") == enabled:
         changed = False
@@ -922,6 +999,8 @@ async def switch_deeprag_provider(request: Request) -> dict:
     try:
         body = await request.json()
     except Exception:
+        raise HTTPException(status_code=400, detail="请求体格式错误")
+    if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="请求体格式错误")
 
     provider_id = (body.get("provider") or "").strip()

@@ -20,6 +20,8 @@ Thumbs.db
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+pytest-of-wing/
 
 # Virtual environments
 .venv

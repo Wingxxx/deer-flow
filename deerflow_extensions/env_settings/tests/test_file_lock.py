@@ -50,7 +50,7 @@ def env_file(tmp_path):
 @pytest.fixture
 def env_lock_path(env_file):
     """返回预期的 .env.lock 路径（由 _get_env_lock 自动生成）。"""
-    return env_file.with_suffix(".env.lock")
+    return env_file.with_suffix(".lock")
 
 
 # ---------------------------------------------------------------------------

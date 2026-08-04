@@ -87,7 +87,11 @@ FastAPI 路由模块，挂载于 `/api/env-settings` 前缀：
 - **触发时机**：`PUT /api/env-settings/providers`（保存）和 `DELETE /api/env-settings/providers/{provider}`（删除）
 - **同步内容**：对于已配置厂商，将其 `{PREFIX}_API_KEY`、`{PREFIX}_BASE_URL`、`{PREFIX}_MODEL` 三个变量同步写入 DeepRAG `.env`
 - **厂商 ID 映射**：DeerFlow 的内部 `provider_id` / `env_prefix` 可能不同于 DeepRAG 期望的值（如 DeerFlow 用 `MOONSHOT_API_KEY` → DeepRAG 期望 `KIMI_API_KEY`），通过 PROVIDERS 中的 `deeprag_provider_id` / `deeprag_prefix` 字段处理映射
-- **路径配置**：通过环境变量 `DEEPRAG_ENV_PATH` 指定 DeepRAG `.env` 路径；未设置时默认使用 `<项目根>/deepRag/.env`
+- **路径配置**：通过环境变量 `DEEPRAG_ENV_PATH` 指定 DeepRAG `.env` 路径；未设置时，通过 `_find_project_root()` 向上遍历目录树，以 `deepRag/` 子目录作为锚点自动定位项目根
+- **部署兼容性**：`_find_project_root()` 遍历最多 8 级父目录，覆盖以下场景：
+  - **dev**：`deerflow_extensions/env_settings/router.py` → 根（2 级）
+  - **frozen**：`backend-bin/_internal/deerflow_extensions/env_settings/router.py` → 根（4 级，deepRag/ 不被打包进 _internal/）
+  - **Docker**：`backend/config.yaml` 哨兵回退（无 deepRag/ 目录时）
 - **失败处理**：DeepRAG `.env` 不存在或写入失败仅记录 warning 日志，不影响 DeerFlow 主流程
 - **文件锁**：DeepRAG `.env` 使用独立的 `.env.lock` 文件，与 DeerFlow 的锁相互隔离
 
