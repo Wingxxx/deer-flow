@@ -143,6 +143,11 @@ export function useVoice(options: UseVoiceOptions = {}): UseVoiceReturn {
     onError,
   } = options;
 
+  // 提前硬截断宽限（秒）：比例封顶——maxDuration=30 时为 1s（录制 ~29.2s，
+  // 永不触达后端 30s 上限，与后端 2s 容差双保险）；短录音场景等比缩小。
+  // 倒计时显示（VoiceButton 基于 maxDuration 计算）自动满足"数到 1 时停"。
+  const stopEarlyGraceSec = Math.min(1, Math.max(0.3, maxDuration * 0.1));
+
   const [phase, setPhase] = useState<VoicePhase>("IDLE");
   const [error, setError] = useState<VoiceError | null>(null);
   const [duration, setDuration] = useState(0);
@@ -157,6 +162,7 @@ export function useVoice(options: UseVoiceOptions = {}): UseVoiceReturn {
   const startTimeRef = useRef<number>(0);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoRecoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const onCompleteRef = useRef(onTranscriptionComplete);
   const onErrorRef = useRef(onError);
@@ -172,7 +178,13 @@ export function useVoice(options: UseVoiceOptions = {}): UseVoiceReturn {
   // ── Error helper ──────────────────────────────────────────────────────
 
   const setErrorState = useCallback(
-    (code: VoiceError["code"], message: string, recoverable: boolean) => {
+    (code: VoiceError["code"], message: string, recoverable: boolean, recoverDelayMs = 3000) => {
+      // 清除上一个错误的自动恢复定时器，防止旧 timer 错误清除新 error
+      if (autoRecoverTimerRef.current) {
+        clearTimeout(autoRecoverTimerRef.current);
+        autoRecoverTimerRef.current = null;
+      }
+
       const err: VoiceError = { code, message, recoverable };
       setError(err);
       errorRef.current = err;
@@ -181,15 +193,16 @@ export function useVoice(options: UseVoiceOptions = {}): UseVoiceReturn {
       onErrorRef.current?.(err);
 
       if (recoverable) {
-        // Auto-recover after 3s
-        setTimeout(() => {
+        // Auto-recover（默认 3s；503 场景由 Retry-After 决定冷却时长）
+        autoRecoverTimerRef.current = setTimeout(() => {
+          autoRecoverTimerRef.current = null;
           if (errorRef.current?.code === code) {
             setError(null);
             errorRef.current = null;
             setPhase("IDLE");
             phaseRef.current = "IDLE";
           }
-        }, 3000);
+        }, recoverDelayMs);
       }
     },
     [],
@@ -231,6 +244,12 @@ export function useVoice(options: UseVoiceOptions = {}): UseVoiceReturn {
       cooldownRef.current = null;
     }
 
+    // Clear auto-recover timer（H2 修复：防止旧 timer 泄露清除新 error）
+    if (autoRecoverTimerRef.current) {
+      clearTimeout(autoRecoverTimerRef.current);
+      autoRecoverTimerRef.current = null;
+    }
+
     // Abort fetch
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -245,11 +264,11 @@ export function useVoice(options: UseVoiceOptions = {}): UseVoiceReturn {
     durationTimerRef.current = setInterval(() => {
       const elapsed = (Date.now() - startTimeRef.current) / 1000;
       setDuration(elapsed);
-      if (elapsed >= maxDuration) {
+      if (elapsed >= maxDuration - stopEarlyGraceSec) {
         stop();
       }
     }, 250);
-  }, [maxDuration]);
+  }, [maxDuration, stopEarlyGraceSec]);
 
   // ── SpeechRecognition path ────────────────────────────────────────────
 
@@ -377,7 +396,13 @@ export function useVoice(options: UseVoiceOptions = {}): UseVoiceReturn {
         abortControllerRef.current = controller;
 
         try {
-          const timeoutId = setTimeout(() => controller.abort(), 12000);
+          // 转录超时判断由后端负责：后端按音频时长动态计算转写超时（最长 70s），
+          // 超时返回 504，UI 提示"转录超时，请重试"。前端不依赖任何机器性能估算
+          // （部署机器性能未知），仅设置 180s 网络兜底：2× 后端最长超时 + 排队余量，
+          // 保证后端能在自身超时内返回的请求前端一定等得到；真正无响应的请求
+          // （网络黑洞/代理挂死）3 分钟兜底中断。
+          // 排队超时（15s）+ 锁内转写（最长 ~74s @32s 音频）+ ffprobe（10s）= ~99s < 180s ✓
+          const timeoutId = setTimeout(() => controller.abort(), 180_000);
 
           const resp = await fetch(
             `${getBackendBaseURL()}/api/voice/transcribe`,
@@ -409,6 +434,12 @@ export function useVoice(options: UseVoiceOptions = {}): UseVoiceReturn {
               errorCode = "TRANSCRIPTION_TIMEOUT";
             } else if (resp.status === 503) {
               errorCode = "TRANSCRIPTION_FAILED";
+              // 对齐后端 Retry-After：繁忙冷却期内不自动恢复，避免用户重试再吃 503
+              const retryAfter = Number(resp.headers.get("retry-after"));
+              if (Number.isFinite(retryAfter) && retryAfter > 0) {
+                setErrorState(errorCode, detail, true, Math.max(3000, retryAfter * 1000));
+                return;
+              }
             } else if (resp.status === 413) {
               errorCode = "TRANSCRIPTION_FAILED";
             } else {

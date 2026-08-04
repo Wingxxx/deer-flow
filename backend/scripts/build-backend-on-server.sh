@@ -29,10 +29,12 @@
 #
 #   3. 将 backend + deerflow_extensions + models 传到服务器:
 #      sudo rsync -avz --progress --no-g --no-o -e 'ssh -p 2222' \
+#        --exclude='wheels/' --exclude='requirements.txt' \
 #        /home/wing/wing/emto/2026/2026.3/DeerFlow/deer-flow/backend/ \
 #        /home/wing/wing/emto/2026/2026.3/DeerFlow/deer-flow/deerflow_extensions \
 #        /home/wing/wing/emto/2026/2026.3/DeerFlow/deer-flow/models \
 #        root@192.168.1.56:/usr/xccloud/deerflow/source/
+#      注意: 项目依赖由服务器通过清华源在线安装，无需携带 wheels/
 #
 #   4. SSH 到服务器，编译后端:
 #      cd /usr/xccloud/deerflow/source && bash scripts/build-backend-on-server.sh
@@ -202,28 +204,31 @@ echo "  ✓ uv 已安装"
 
 # ── 4. 安装项目依赖 ──────────────────────────────────────────────────────
 
-echo "[4/6] 安装项目依赖..."
+echo "[4/6] 安装项目依赖（清华镜像源）..."
 
-# 检测本地 Wheel（离线模式）
-if [ -d "./wheels" ] && [ -f "./requirements.txt" ]; then
-    echo "  ✓ 检测到本地 Wheel，使用离线模式安装..."
-    uv pip install --no-index --find-links ./wheels/ -r ./requirements.txt
-    # numpy 2.x 预编译 wheel 需要 x86-64-v2，服务器旧 CPU 不支持
-    # 降级到 numpy 1.x（无此要求）
-    echo "  降级 numpy 到 1.x（兼容旧 CPU）..."
-    uv pip install "numpy<2" --force-reinstall --quiet
-else
-    # 在线模式：从 PyPI 拉取
-    echo "  ⚠ 未检测到本地 Wheel，回退在线模式 (uv sync)..."
-    # 告诉 uv 使用 .venv-server 而非默认的 .venv
-    export UV_PROJECT_ENVIRONMENT=.venv-server
-    uv sync
-    # numpy 2.x 预编译 wheel 需要 x86-64-v2，服务器旧 CPU 不支持
-    # 降级到 numpy 1.x（无此要求）
-    echo "  降级 numpy 到 1.x（兼容旧 CPU）..."
-    uv pip install "numpy<2" --force-reinstall --quiet
+# 使用清华镜像源在线安装，无需本地 wheels
+export UV_PROJECT_ENVIRONMENT=.venv-server
+export UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+
+echo "  uv sync (pypi.tuna.tsinghua.edu.cn)..."
+uv sync
+
+# numpy 2.x 预编译 wheel 需要 x86-64-v2，服务器旧 CPU 不支持
+# 降级到 numpy 1.x（无此要求）
+echo "  降级 numpy 到 1.x（兼容旧 CPU）..."
+uv pip install "numpy<2" --force-reinstall --quiet
+
+# ── 4.1 补齐 faster-whisper 语音依赖 ─────────────────────────────────
+echo "  安装 faster-whisper..."
+uv pip install faster-whisper --quiet
+
+# 验证 faster-whisper 可导入
+if ! .venv-server/bin/python -c 'from faster_whisper import WhisperModel; print("  ✓ faster-whisper 可用")' &>/dev/null; then
+    echo "  ✗ faster-whisper 导入失败，构建中止"
+    exit 1
 fi
-echo "  ✓ 依赖已安装"
+
+echo "  ✓ faster-whisper 依赖已安装"
 
 # ── 5. 安装 PyInstaller ─────────────────────────────────────────────────────
 
@@ -250,6 +255,8 @@ else
     echo "  ⚠️  未找到 deerflow_extensions，跳过附加数据目录"
 fi
 
+# 彻底排除 funasr 语音链（transcriber.py 顶部 import 会触发 PyInstaller 自动收集；
+# 半收集状态（缺数据文件）在 frozen 下抛 FileNotFoundError 导致 voice 端点 500）
 .venv-server/bin/python -m PyInstaller --onedir --noconfirm \
     --name deerflow-gateway \
     --paths . \
@@ -404,12 +411,14 @@ fi
     --collect-all=langgraph \
     --collect-all=firecrawl \
     --collect-submodules=deerflow \
-    --collect-all=funasr \
-    --collect-all=modelscope \
+    --collect-all=ctranslate2 \
+    --collect-all=faster_whisper \
     --collect-all=torch \
     --collect-all=transformers \
     --collect-all=soundfile \
     --collect-all=huggingface_hub \
+    --collect-all=numpy \
+    --collect-all=websocket_client \
     \
     --hidden-import=deerflow_extensions.voice_transcription \
     --hidden-import=deerflow_extensions.voice_transcription.startup \
@@ -420,6 +429,13 @@ fi
     --exclude-module=docs \
     --exclude-module=tkinter \
     --exclude-module=matplotlib \
+    \
+    --exclude-module=funasr \
+    --exclude-module=modelscope \
+    --exclude-module=editdistance \
+    --exclude-module=kaldi_native_fbank \
+    --exclude-module=torchaudio \
+    --exclude-module=torchcodec \
     \
     deerflow_entry.py 2>&1
 
