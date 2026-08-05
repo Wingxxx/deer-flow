@@ -229,7 +229,18 @@ echo ""
 echo "启动 Frontend (端口 3000)..."
 # 必须显式 HOSTNAME=0.0.0.0：server.js 默认读取环境变量 HOSTNAME（Linux shell 恒为主机名），
 # 不设置会绑定到主机名解析地址（如 127.0.1.1），导致 nginx 127.0.0.1:3000 反代 502
-cd frontend && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js \
+# node 解析降级：优先 PATH 中的 node；找不到则尝试一次硬编码 nvm 路径
+# （部署机交互 shell 的 PATH 可能不含 node，需显式指定完整路径）
+NODE_BIN="$(command -v node 2>/dev/null || true)"
+if [ -z "$NODE_BIN" ]; then
+    echo "  ⚠️  PATH 中未找到 node，尝试硬编码路径 /root/.nvm/versions/node/v22.22.3/bin/node"
+    NODE_BIN="/root/.nvm/versions/node/v22.22.3/bin/node"
+fi
+if [ ! -x "$NODE_BIN" ]; then
+    echo "✗ node 不可用（$NODE_BIN），无法启动 Frontend"
+    exit 1
+fi
+cd frontend && HOSTNAME=0.0.0.0 PORT=3000 "$NODE_BIN" .next/standalone/server.js \
     > ../logs/frontend.log 2>&1 &
 cd ..
 
