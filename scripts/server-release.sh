@@ -227,7 +227,9 @@ echo "✓ Gateway 已就绪 (localhost:8001)"
 # ── 3. 启动 Frontend ───────────────────────────────────────────────────────
 echo ""
 echo "启动 Frontend (端口 3000)..."
-cd frontend && PORT=3000 node .next/standalone/server.js \
+# 必须显式 HOSTNAME=0.0.0.0：server.js 默认读取环境变量 HOSTNAME（Linux shell 恒为主机名），
+# 不设置会绑定到主机名解析地址（如 127.0.1.1），导致 nginx 127.0.0.1:3000 反代 502
+cd frontend && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js \
     > ../logs/frontend.log 2>&1 &
 cd ..
 

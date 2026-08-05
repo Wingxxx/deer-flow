@@ -284,6 +284,22 @@ cp -r dist/deerflow-gateway/* /usr/xccloud/deerflow/backend-bin/
 
 服务器编译脚本 `@./backend/scripts/build-backend-on-server.sh` 头部已包含完整注意事项。
 
+### 5.3 前端启动必须显式设置 `HOSTNAME=0.0.0.0`（Next.js standalone 陷阱）
+
+**症状**：所有服务启动、日志显示 `Ready`，但 `https://<IP>:2026/` 返回 502；`ss -tlnp` 显示前端监听在 `127.0.1.1:3000` 而非 `0.0.0.0:3000`，nginx 反代 `127.0.0.1:3000` 失败。
+
+**根因**：Next.js standalone 的 `server.js` 使用 `const hostname = process.env.HOSTNAME || '0.0.0.0'` 作为监听地址。Linux 交互 shell 中 `HOSTNAME` 环境变量恒等于主机名（如 kylin-pc），`/etc/hosts` 将其解析为 `127.0.1.1`（Kylin/Ubuntu 默认），前端因此只监听回环地址。systemd/supervisor 等环境无 `HOSTNAME` 变量，故不踩坑。
+
+**判定依据**：前端日志显示 `Local: http://<主机名>:3000`（正常应为 `localhost:3000`）。
+
+**修复**：
+
+```bash
+cd frontend && HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js
+```
+
+**防复发**：`deerflow.sh`/`server-release.sh` 的启动命令已内置 `HOSTNAME=0.0.0.0`，任何机器、任何 shell 环境部署均不会再踩坑。
+
 ---
 
 **最后更新**：2026-06-02

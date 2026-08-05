@@ -204,8 +204,10 @@ INFO:     Uvicorn running on http://0.0.0.0:8001
 
 ```bash
 cd /path/to/release/frontend
-PORT=3000 node .next/standalone/server.js
+HOSTNAME=0.0.0.0 PORT=3000 node .next/standalone/server.js
 ```
+
+> ⚠️ **必须显式设置 `HOSTNAME=0.0.0.0`**：Next.js standalone 的 server.js 默认读取环境变量 `HOSTNAME` 作为监听地址，Linux 交互 shell 中该变量恒等于主机名（如 kylin-pc），会导致前端绑定到 `127.0.1.1` 而非 `0.0.0.0`，外部与 nginx 反代均无法访问（502）。
 
 启动成功日志：
 
