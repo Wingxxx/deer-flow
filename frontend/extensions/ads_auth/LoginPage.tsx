@@ -123,7 +123,8 @@ export default function ADSLoginPage() {
       />
       {/* 半透明遮罩 */}
       <div className="absolute inset-0 z-0 bg-black/40" />
-      <div className="border-border/20 bg-white/90 w-full max-w-md space-y-6 rounded-3xl border p-8 backdrop-blur-sm">
+      {/* 登录表单卡片：relative + 顶格 z-index 防御扩展注入的全屏遮罩层（如 360 安全检测层）遮挡 */}
+      <div className="border-border/20 bg-white/90 relative z-[2147483647] w-full max-w-md space-y-6 rounded-3xl border p-8 backdrop-blur-sm">
         <div className="text-center">
           {/* <h1 className="text-foreground font-serif text-3xl">DeerFlow</h1> */}
           <p className="text-black font-medium mt-2 text-2xl">{branding.loginPage?.title ?? "账号登录"}</p>
