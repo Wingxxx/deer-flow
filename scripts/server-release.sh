@@ -207,6 +207,23 @@ echo "  DeerFlow 启动中"
 echo "=========================================="
 echo ""
 
+# ── 0. Node.js PATH 兜底（Gateway MCP 与 Frontend 共用）────────────────────
+# 部署机在登录前自启（systemd/cron @reboot 等）时，nvm 安装的 node 尚未注入 PATH，
+# 而 Gateway 的 MCP（stdio, command=node）与 Frontend standalone 均依赖 node。
+# 此处解析一次 node 并注入 PATH，使 Gateway 的 MCP 子进程也能继承。
+# 解析失败仅告警不阻断：与现状一致，服务可起但 MCP 工具不可用。
+NODE_BIN="$(command -v node 2>/dev/null || true)"
+if [ -z "$NODE_BIN" ]; then
+    echo "  ⚠️  PATH 中未找到 node，尝试硬编码路径 /root/.nvm/versions/node/v22.22.3/bin/node"
+    NODE_BIN="/root/.nvm/versions/node/v22.22.3/bin/node"
+fi
+if [ -n "$NODE_BIN" ] && [ -x "$NODE_BIN" ]; then
+    export PATH="$(dirname "$NODE_BIN"):$PATH"
+    echo "  ✓ node: $NODE_BIN"
+else
+    echo "  ⚠️  node 不可用（${NODE_BIN:-未找到}），MCP 服务与 Frontend 将无法使用"
+fi
+
 # ── 1. 启动 DeepRAG ────────────────────────────────────────────────────────
 start_deeprag
 
@@ -229,13 +246,7 @@ echo ""
 echo "启动 Frontend (端口 3000)..."
 # 必须显式 HOSTNAME=0.0.0.0：server.js 默认读取环境变量 HOSTNAME（Linux shell 恒为主机名），
 # 不设置会绑定到主机名解析地址（如 127.0.1.1），导致 nginx 127.0.0.1:3000 反代 502
-# node 解析降级：优先 PATH 中的 node；找不到则尝试一次硬编码 nvm 路径
-# （部署机交互 shell 的 PATH 可能不含 node，需显式指定完整路径）
-NODE_BIN="$(command -v node 2>/dev/null || true)"
-if [ -z "$NODE_BIN" ]; then
-    echo "  ⚠️  PATH 中未找到 node，尝试硬编码路径 /root/.nvm/versions/node/v22.22.3/bin/node"
-    NODE_BIN="/root/.nvm/versions/node/v22.22.3/bin/node"
-fi
+# NODE_BIN 已在前部解析并注入 PATH（见 "Node.js PATH 兜底" 段）
 if [ ! -x "$NODE_BIN" ]; then
     echo "✗ node 不可用（$NODE_BIN），无法启动 Frontend"
     exit 1
