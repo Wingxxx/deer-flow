@@ -3,7 +3,6 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
-import { Loader2Icon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { FlickeringGrid } from "@/components/ui/flickering-grid";
@@ -26,7 +25,10 @@ export default function ADSLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  // 表单前置渲染（2026-08-06）：
+  // SSR 直接输出完整登录表单，不再依赖客户端 fetch 完成后才显示。
+  // 浏览器内核过老 / 扩展注入冲突 / 后端响应慢时，登录框依然立即可见；
+  // 已登录用户的自动跳转仍由下方 useEffect 完成。
   const nextPath = validateNext(searchParams.get("next")) ?? "/workspace";
 
   useEffect(() => {
@@ -36,7 +38,7 @@ export default function ADSLoginPage() {
     // rewrite, we MUST NOT bounce the user back to workspace — the
     // whole point is to show the login form.
     if (searchParams.get("csrf_forced") === "1") {
-      setIsLoading(false);
+      // CSRF 强制跳转：保持表单（表单已由 SSR 直出，无需任何状态变更）
       return;
     }
 
@@ -69,19 +71,15 @@ export default function ADSLoginPage() {
         if (r.ok && hasAccessToken) {
           // Both session and access_token are valid — safe to
           // auto-redirect to workspace.
-          setIsLoading(false);
           router.push(nextPath);
-        } else {
-          // Session expired, access_token missing, or CSRF-forced:
-          // show the login form so the user can re-authenticate.
-          setIsLoading(false);
         }
+        // 其余情况（session 过期 / token 缺失 / CSRF 强制）：
+        // 表单已由 SSR 直出，保持现状即可，无需任何状态变更。
       })
       .catch(() => {
         clearTimeout(timeout);
-        // Fetch failed (timeout, network error, etc.) — always show
-        // the login form rather than letting the user stare at a spinner.
-        setIsLoading(false);
+        // Fetch failed (timeout, network error, etc.) — 保持表单（SSR 已直出），
+        // 不存在"永久 spinner"的可能性。
       });
   }, [router, nextPath, searchParams]);
 
@@ -110,14 +108,6 @@ export default function ADSLoginPage() {
   };
 
   const actualTheme = theme === "system" ? resolvedTheme : theme;
-
-  if (isLoading) {
-    return (
-      <div className="bg-background flex min-h-screen items-center justify-center">
-        <Loader2Icon className="size-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
 
   return (
     <div className="bg-background flex min-h-screen items-center justify-center">
