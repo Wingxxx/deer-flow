@@ -163,11 +163,11 @@ DEPRECATED_MODEL_MAP: dict[str, str] = {
 # Each provider's config.yaml model entry template.
 # Key: provider_id → (use class path, extra fields dict)
 PROVIDER_CONFIG_TEMPLATE = {
-    "deepseek":      {"use": "langchain_deepseek:ChatDeepSeek",                              "extra": {}},
+    "deepseek":      {"use": "deerflow.models.patched_deepseek:PatchedChatDeepSeek",         "extra": {"supports_thinking": True}},
     "moonshot":      {"use": "langchain_openai:ChatOpenAI",                                  "extra": {}},
     "volcengine":    {"use": "deerflow.models.patched_deepseek:PatchedChatDeepSeek",         "extra": {}},
     "dashscope":     {"use": "langchain_openai:ChatOpenAI",                                  "extra": {}},
-    "minimax":       {"use": "langchain_openai:ChatOpenAI",                                  "extra": {}},
+    "minimax":       {"use": "deerflow.models.patched_minimax:PatchedChatMiniMax",         "extra": {}},
     "zhipuai":       {"use": "langchain_openai:ChatOpenAI",                                  "extra": {}},
     "siliconflow":   {"use": "langchain_openai:ChatOpenAI",                                  "extra": {}},
 }
