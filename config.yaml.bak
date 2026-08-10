@@ -9,6 +9,9 @@ models:
   model: deepseek-v4-flash
   api_key: $DEEPSEEK_API_KEY
   base_url: https://api.deepseek.com
+  supports_thinking: true
+  thinking:
+    type: enabled
 tool_groups:
 - name: web
 - name: file:read
