@@ -15,6 +15,7 @@
 | [topic_guardrail](./topic_guardrail/README.md) | 回答范围限制，L1-L4 四层纵深防御 | topic_guardrail_provider.py, topics.yaml | 无 |
 | [human_intervention](./human_intervention/README.md) | 交互式人工介入增强，ClarificationMiddleware 子类化注入 widget_hints | clarification_middleware_ext.py, patch.py, startup.py | [frontend/extensions/human-intervention/](../frontend/extensions/human-intervention/README.md) |
 | [tool_output_enrichment](./tool_output_enrichment/README.md) | JSON 数组自动字段分析，采样推断替代硬编码字段枚举 | auto_json_analyzer.py, startup.py | 无 |
+| [mcp_instructions](./mcp_instructions/README.md) | MCP initialize 握手 instructions 注入 system prompt（双点 monkey-patch） | fetcher.py, startup.py | 无 |
 
 ## 安装方式
 

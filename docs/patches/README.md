@@ -21,6 +21,7 @@
 | **CSS/Hydration 修复** | `dialog.tsx` + `globals.css` | ✅ 极低 | **2 个核心** |
 | **per-user 隔离简化** | `sandbox/tools.py` | 🟡 中 | **1 个核心** |
 | **配置精简** | `config.example.yaml` | 🟢 低 | **1 个核心** |
+| **mcp_instructions**（MCP instructions 注入） | `boot.py`（扩展注册，核心源码 0 改动） | ✅ 低 | **0 个核心 + 1 个扩展** |
 
 两条原则：
 1. 所有注入代码都是 `try/except ImportError` 包起来的——即使扩展不可用，DeerFlow 正常运行
@@ -32,7 +33,7 @@
 
 | 模块 | 文件 | 包含补丁 | 说明 |
 |------|------|---------|------|
-| **后端** | [backend.md](backend.md) | D1, A1, A2, A3, A3b, A10, T1, T5, T6, T7, FIX2, **H1** | `app.py`、`auth_middleware.py`、`csrf_middleware.py`、`routers/auth.py`、`deps.py`、`deerflow_entry.py`、`boot.py`、`sandbox/tools.py` |
+| **后端** | [backend.md](backend.md) | D1, A1, A2, A3, A3b, A10, T1, T5, T6, T7, FIX2, **H1**, **M1** | `app.py`、`auth_middleware.py`、`csrf_middleware.py`、`routers/auth.py`、`deps.py`、`deerflow_entry.py`、`boot.py`、`sandbox/tools.py` |
 | **前端** | [frontend.md](frontend.md) | A6, A7, A8, A10, A11, A12, S1, S2, S3, S4, S5, IS1, WS, G1, B1, FIX1, FIX3, **H2, H3** | `next.config.js`、`middleware.ts`、`types.ts`、`server.ts`、`workspace-content.tsx`、`query-client-provider.tsx`、`settings-dialog.tsx`、`registry.ts`、`workspace-nav-menu.tsx`、`account-settings-page.tsx`、`input-box.tsx`、`globals.css`、`layout.tsx`、`workspace-header.tsx`、`welcome.tsx`、`dialog.tsx`、`fetcher.ts`、`env-settings/`、`message-list.tsx` |
 | **Docker** | [docker.md](docker.md) | D2, D3, A4 | `docker-compose-dev.yaml`、`docker-compose.yaml` |
 | **脚本** | [scripts.md](scripts.md) | D4 | `entrypoint.sh` |

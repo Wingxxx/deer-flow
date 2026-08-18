@@ -27,6 +27,7 @@ _EXTENSIONS = [
     ("voice_transcription", True), # app.include_router() — funasr SenseVoice-Small speech-to-text
     ("topic_guardrail",  False),   # apply_all() — own _APPLIED guard
     ("tool_output_enrichment", False),  # monkey-patch _enrich_result
+    ("mcp_instructions", False),  # monkey-patch instructions 注入 system prompt
 ]
 
 
@@ -131,3 +132,8 @@ def _boot_one(name: str, app=None, ext_internal=None):
             install_tool_output_enrichment,
         )
         install_tool_output_enrichment()
+    elif name == "mcp_instructions":
+        from deerflow_extensions.mcp_instructions.startup import (
+            install_mcp_instructions,
+        )
+        install_mcp_instructions()

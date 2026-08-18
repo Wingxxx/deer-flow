@@ -1133,3 +1133,56 @@ except ImportError:
 **新实现位置**: `deerflow_extensions/tool_output_enrichment/` (Level 3 monkey-patch)
 
 **原因**: 消除硬编码字段名, 采用零侵入 Level 3 模式 (对标 data_collection/topic_guardrail), 性能提升 10-15x (全量遍历→采样)。
+
+---
+
+## M1：`boot.py` — mcp_instructions 扩展注册
+
+**文件**: `deerflow_extensions/boot.py`
+**行号**: L30 + L135-L139
+**风险**: ✅ 低（与 tool_output_enrichment / data_collection 完全相同的注入模式；monkey-patch 无路由注册，核心源码零改动）
+
+### M1a — _EXTENSIONS 元组新增条目（L30）
+
+```python
+    ("mcp_instructions", False),  # monkey-patch instructions 注入 system prompt
+```
+
+### M1b — _boot_one 分发新增分支（L135-L139）
+
+```python
+    elif name == "mcp_instructions":
+        from deerflow_extensions.mcp_instructions.startup import (
+            install_mcp_instructions,
+        )
+        install_mcp_instructions()
+```
+
+**原因**: 读取 MCP server 在 initialize 握手响应中声明的 `instructions`（如 mcp-agent-mcp 的 SERVER_INSTRUCTIONS），经 Level 3 monkey-patch 注入 agent system prompt，让 LLM 遵循服务器声明的实体标识使用规则。needs_app=False——只做模块属性替换（双点 patch：`tool_search` 与 `prompt` 的 `get_deferred_tools_prompt_section`），无需注册路由器。
+
+**核心源码改动**: 0 个（`backend/` 下 grep `mcp_instructions` 零命中；仅扩展目录自身 + boot.py 注册条目）
+
+**验证命令**:
+```bash
+PYTHONPATH=backend/packages/harness:backend:. backend/.venv/bin/python -c \
+  "from deerflow_extensions.mcp_instructions import install_mcp_instructions; install_mcp_instructions()" \
+  2>&1 | grep patched
+# 应输出两行 [MCPInstructions] patched ...（tool_search + prompt）
+```
+
+### M1c — 暴力测试修复（fetcher 并发上限 + 抓取侧截断）
+
+**文件**: `deerflow_extensions/mcp_instructions/fetcher.py` + `startup.py`
+**风险**: ✅ 低（纯扩展内部行为收窄，不改接口/默认值语义不变）
+
+**发现**: 深入暴力测试（50 假服务器并发探针）实锤两个隐藏缺陷：
+1. `asyncio.gather` 无并发上限 — 50 个 stdio 服务器会同时 spawn 50 个子进程（进程风暴）
+2. 1MB 超大 instructions 全文存入 registry（内存全文驻留），渲染时才截断为时已晚
+
+**修复**:
+1. fetcher 加 `_MAX_CONCURRENCY`（默认 4，env `MCP_INSTRUCTIONS_MAX_CONCURRENCY` 可覆盖），`asyncio.Semaphore` 包住 fetch_one 整个生命周期（含 `create_session`/`__aenter__`，即子进程 spawn 点）
+2. fetcher 抓取侧即按 `_PER_SERVER_LIMIT` 截断（`text.strip()[:_PER_SERVER_LIMIT]`）；startup/fetcher 各自独立读同一 env（不跨模块耦合），渲染侧再截为第二道闸
+
+**测试**: 新增 2 用例（并发峰值 ≤ 上限 / 1MB 截断到 limit）→ 21 个全绿；端到端 sanity（真实 install + 渲染第二道闸）通过。
+
+**核心源码改动**: 仍为 0 个（改动全部在扩展目录内）

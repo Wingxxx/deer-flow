@@ -1,5 +1,19 @@
 # 后端变更
 
+## 2026-08-18: M1 — mcp_instructions 扩展（MCP instructions 注入 system prompt）
+
+**新建** `deerflow_extensions/mcp_instructions/` — fetcher.py（并发握手抓取 per-server instructions）+ startup.py（双点 monkey-patch：`tool_search` / `prompt`  的 `get_deferred_tools_prompt_section`）+ __init__.py + README.md + tests/（21  个用例，TDD 全绿）
+
+**修改** `deerflow_extensions/boot.py` — `_EXTENSIONS` 元组加 `("mcp_instructions", False)`（L30）+ `_boot_one` 加 elif 分支（L135-L139）
+
+**核心源码改动**: 0 个 — 纯 Level 3 monkey-patch，运行时模块属性替换；`backend/` 下 grep `mcp_instructions` 零命中。
+
+**真实验证**（真实编译产物 mcp-agent-mcp，`node ./mcp-agent-mcp/dist/index.js`）: stdio initialize 握手成功提取 SERVER_INSTRUCTIONS 三条实体标识规则（"用户口述的是可读标识…工具参数才是主键"），注入 `<mcp-instructions>` prompt 块；单 server 失败不阻塞其余（deeprag http 不可达时静默降级）。
+
+**关键修复**（真实握手暴露）: fetcher 清理链曾用 `asyncio.shield(cm.__aexit__(...))` 换 task 执行 `__aexit__`，违反 anyio cancel scope 同 task 约束 → `RuntimeError: Attempted to exit cancel scope in a different task`；改为同一 task 内直接 await（`wait_for` 超时只取消内部 task，fetch_one 自身不受影响）。
+
+**暴力测试修复**（深入+暴力测试实锤 2 个隐藏缺陷）: ① 无并发上限 — 50 假服务器探针实测峰值 50，stdio 服务器会同时 spawn 子进程风暴 → 加 `asyncio.Semaphore`（`_MAX_CONCURRENCY` 默认 4，env `MCP_INSTRUCTIONS_MAX_CONCURRENCY` 覆盖）；② 内存全文驻留 — 1MB instructions 全文进 registry、渲染才截断 → 抓取侧即按 `_PER_SERVER_LIMIT` 截断（startup/fetcher 各自读同一 env，不跨模块耦合），渲染侧为第二道闸。新增 2 用例（并发峰值≤上限 / 1MB 截断）。其余攻击面（注入安全/时序竞争/幂等/预算边界/资源泄漏）代码级复查无缺陷。核心源码改动仍为 0。
+
 ## 0. 🔒 封存 human_intervention 扩展（2026-07-03）
 
 **删除**: `deerflow_extensions/boot.py` 中 human_intervention 注册条目（_EXTENSIONS 元组 + _boot_one 分支）
