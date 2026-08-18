@@ -25,6 +25,10 @@ if not _logger.hasHandlers() and not logging.getLogger().hasHandlers():
     _logger.addHandler(_handler)
     _logger.setLevel(logging.INFO)
 
+# 敏感词中间件开关：默认关闭（2026-08-18 主子决策，远程 frozen 产物一直未装上、
+# 业务使用无影响；本地同步关闭避免误杀）。设 TOPIC_GUARDRAIL_SENSITIVE_WORD=1 可恢复。
+_SENSITIVE_WORD_ENABLED = os.getenv("TOPIC_GUARDRAIL_SENSITIVE_WORD", "0") != "0"
+
 # ═══════════════════════════════════════════════════════════════════
 # Shared helpers
 # ═══════════════════════════════════════════════════════════════════
@@ -219,11 +223,15 @@ def apply_all(ext_internal: str | None = None):
         return
 
     results = {}
-    for name, patch_fn in [
-        ("sensitive_word", lambda: _patch_sensitive_word()),
+    patches = [
         ("immutable", lambda: _patch_immutable_constraint()),
         ("role", lambda: _patch_role(ext_internal)),
-    ]:
+    ]
+    if _SENSITIVE_WORD_ENABLED:
+        patches.insert(0, ("sensitive_word", lambda: _patch_sensitive_word()))
+    else:
+        _logger.info("[TopicGuardrail/sensitive_word] Disabled (TOPIC_GUARDRAIL_SENSITIVE_WORD != 1)")
+    for name, patch_fn in patches:
         try:
             patch_fn()
             results[name] = "✅"
