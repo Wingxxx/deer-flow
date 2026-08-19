@@ -333,9 +333,6 @@ if [ "$SKIP_BACKEND" = false ]; then
         --exclude-module=docs \
         --exclude-module=tkinter \
         --exclude-module=matplotlib \
-        \
-        # 彻底排除 funasr 语音链（transcriber.py 顶部 import 会触发 PyInstaller 自动收集；
-        # 半收集状态（缺数据文件）在 frozen 下抛 FileNotFoundError 导致 voice 端点 500）
         --exclude-module=funasr \
         --exclude-module=modelscope \
         --exclude-module=torch \
@@ -347,6 +344,10 @@ if [ "$SKIP_BACKEND" = false ]; then
         --exclude-module=speech_recognition \
         \
         deerflow_entry.py 2>&1
+
+    # 彻底排除 funasr 语音链（transcriber.py 顶部 import 会触发 PyInstaller 自动收集；
+    # 半收集状态（缺数据文件）在 frozen 下抛 FileNotFoundError 导致 voice 端点 500）
+    # 注：注释必须放在命令之后——续行链中间插注释会把 # 拼进命令并截断 scriptname
 
     echo "  复制编译产物到 release/backend-bin/..."
     mkdir -p "$RELEASE_DIR/backend-bin"
