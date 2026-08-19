@@ -1,5 +1,25 @@
 # 后端变更
 
+## 2026-08-19: MCP per-server 隔离加载（mcp_resilience 扩展）
+
+**新建** `deerflow_extensions/mcp_resilience/` — patch_manager.py（版本哨兵三通道 AND 语义 + `_patched_get_mcp_tools` per-server 并发隔离 + `_patched_initialize` 缓存防线）+ startup.py（`MCP_RESILIENCE_ENABLED` 开关，幂等永不抛）+ __init__.py + tests/（21 用例，TDD 全绿）
+
+**修改** `deerflow_extensions/boot.py` — `_EXTENSIONS` 加 `("mcp_resilience", False)`（L31）+ `_boot_one` 加 elif 分支（L139-L143）
+
+**核心源码改动**: 0 个 — 纯 Level 3 monkey-patch（运行时替换 `deerflow.mcp.tools.get_mcp_tools` + 包级 re-export + `cache.initialize_mcp_tools` 包级双处）；`backend/packages/harness/` 零改动。
+
+**修复缺陷**: 某 MCP server 连接失败 → 所有 server 全失败 + `cache.py` 无条件缓存空列表永久生效。新语义：per-server 独立加载（`asyncio.gather` 保序 + `wait_for` 超时，`MCP_RESILIENCE_PER_SERVER_TIMEOUT` 可调，默认 30s），单失败不影响其余；全失败结果 + 有失败 → 复位 `cache._cache_initialized`（+ 清 `_config_mtime`）下次调用重试。
+
+**版本哨兵**: 字节码（co_names 8 符号 + co_consts 2 常量，frozen 兼容）/ 辅助符号 min-args / 第三方 `get_tools` server_name keyword-only，AND 语义任一失败即跳过 patch（回退上游）；getsource 仅 dev 增强（获取失败降级通过）。
+
+**⚠️ 日志变更（监控告警规则需迁移）**: 上游整体失败行 `Failed to load MCP tools: ...`（exc_info）→ 仅保留整体异常（client 构造/OAuth 层）；per-server 失败改独立 ERROR 行 `[MCPResilience] <server> failed: <ExcType>(<msg>) [url=... cmd=...]`（无 exc_info）+ 失败汇总 WARN 行 `[MCPResilience] <failed>/<total> server(s) failed to load`；成功行前缀 `[MCPResilience] Successfully loaded <n> tool(s) from MCP servers`（全失败时不打印）。
+
+**暴力测试实锤（4 场景脚本 `.qoder/tests/test_mcp_resilience_brutal.sh`）**: ① 双失败各自独立记录 + 汇总 2/2 + 无整体失败行；② stdio spawn 失败不影响 deeprag 成功（6 tools）；③ 成功摘要行 + 混合 1/2 汇总；gateway 真实 boot 冒烟 patch applied 无 skipped。**环境事实记录**：deeprag 生产 SSE 现返回 400，streamable-http 可用（6 tools）——脚本 transport 自适应；mcp-server 依赖本地 Shiro（127.0.0.1:443），未运行时其失败属环境常态（既有 mcp_instructions 扩展同样连不上），场景 3 自动降级。
+
+**上游升级注意**: 哨兵基线为实测字节码快照（2026-08-19），上游 tools.py 改动后需重新实测更新基线（spec 5.1 有更新路径）；基线用例变红 = 先判断"基线过期"还是"真回归"。
+
+— WING
+
 ## 2026-08-18: M1 — mcp_instructions 扩展（MCP instructions 注入 system prompt）
 
 **新建** `deerflow_extensions/mcp_instructions/` — fetcher.py（并发握手抓取 per-server instructions）+ startup.py（双点 monkey-patch：`tool_search` / `prompt`  的 `get_deferred_tools_prompt_section`）+ __init__.py + README.md + tests/（21  个用例，TDD 全绿）

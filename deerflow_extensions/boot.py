@@ -28,6 +28,7 @@ _EXTENSIONS = [
     ("topic_guardrail",  False),   # apply_all() — own _APPLIED guard
     ("tool_output_enrichment", False),  # monkey-patch _enrich_result
     ("mcp_instructions", False),  # monkey-patch instructions 注入 system prompt
+    ("mcp_resilience",   False),  # per-server MCP 加载隔离（哨兵不过则跳过，回退上游）
 ]
 
 
@@ -137,3 +138,8 @@ def _boot_one(name: str, app=None, ext_internal=None):
             install_mcp_instructions,
         )
         install_mcp_instructions()
+    elif name == "mcp_resilience":
+        from deerflow_extensions.mcp_resilience.startup import (
+            install_mcp_resilience,
+        )
+        install_mcp_resilience()

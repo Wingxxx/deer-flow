@@ -889,7 +889,16 @@ async def test_http_transport_tools_not_pooled():
         patch("langchain_mcp_adapters.sessions.create_session", return_value=mock_cm),
     ):
         mock_client_instance = MockClient.return_value
-        mock_client_instance.get_tools = AsyncMock(return_value=[http_tool, stdio_tool])
+
+        async def _fake_get_tools(*, server_name=None):
+            # per-server 语义（mcp_resilience 扩展）按名分发；上游单次调用（无参）返回全部
+            if server_name == "myserver":
+                return [http_tool]
+            if server_name == "playwright":
+                return [stdio_tool]
+            return [http_tool, stdio_tool]
+
+        mock_client_instance.get_tools = AsyncMock(side_effect=_fake_get_tools)
 
         tools = await get_mcp_tools()
 
