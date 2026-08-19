@@ -146,7 +146,7 @@ data_collection:
 | `release/.env.example` → 创建 `.env` | ✅ | 根据模板创建，填入 API Key |
 | `release/config.yaml` | ✅ | 已自动配置 |
 | `release/extensions_config.json` | ✅ | 已自动配置 |
-| `release/backend-bin/deerflow-gateway/deerflow-gateway` | ✅ | 后端可执行文件 |
+| `release/backend-bin/deerflow-gateway` | ✅ | 后端可执行文件 |
 | `release/frontend/.next/` | ✅ | 前端构建 |
 | `release/deepRag/bin/deep-rag-backend/deep-rag-backend` | ⚠️ | 如不存在则 --skip-deeprag 启动 |
 
@@ -187,7 +187,7 @@ cd /path/to/release/
 
 ```bash
 cd /path/to/release/
-DEER_FLOW_CONFIG_PATH=$(pwd)/config.yaml ./backend-bin/deerflow-gateway/deerflow-gateway
+DEER_FLOW_CONFIG_PATH=$(pwd)/config.yaml ./backend-bin/deerflow-gateway
 ```
 
 启动成功日志：
@@ -392,7 +392,7 @@ models:
 
 ```bash
 DEER_FLOW_CONFIG_PATH=/path/to/release/config.yaml \
-  ./backend-bin/deerflow-gateway/deerflow-gateway
+  ./backend-bin/deerflow-gateway
 ```
 
 ### 10.5 前端启动报 "Cannot find module"

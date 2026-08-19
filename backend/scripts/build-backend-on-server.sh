@@ -16,7 +16,7 @@
 # ║       cp -r dist/deerflow-gateway/* ... ← ❌ 摊平结构，丢失路径            ║
 # ║                                                              ║
 # ║  3. server-release.sh 中路径为:                              ║
-# ║       ./backend-bin/deerflow-gateway/deerflow-gateway        ║
+# ║       ./backend-bin/deerflow-gateway                             ║
 # ║     目录结构必须为 backend-bin/deerflow-gateway/(二进制+_internal/)         ║
 # ╚══════════════════════════════════════════════════════════════╝
 #
